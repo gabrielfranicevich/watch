@@ -138,7 +138,7 @@ Install players and command-line tools with your operating system's package mana
 - [Contributing guide](docs/contributing.md)
 - [Rust migration notes](docs/rust-migration.md)
 - [Roadmap](docs/roadmap.md)
-- [Matrix community](docs/matrix.md)
+- [Upstream Matrix community (original maintainers)](docs/matrix.md)
 - [Open an issue](https://github.com/gabrielfranicevich/anime/issues)
 
 ## License
