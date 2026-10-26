@@ -13,6 +13,7 @@ ani-cli searches HiAnime, resolves available HLS streams, and hands playback or 
 <details>
 <summary>Contents</summary>
 
+- [Why ani-cli?](#why-ani-cli)
 - [Quick start](#quick-start)
 - [Examples](#examples)
 - [What it supports](#what-it-supports)
@@ -60,6 +61,10 @@ ani-cli --nextep-countdown "Frieren"
 
 Run `ani-cli --help` for the complete option list.
 
+## Why ani-cli?
+
+ani-cli is for terminal users who want to search for anime, choose episodes, resume from watch history, and download media through one command-line workflow. It coordinates these steps while leaving playback and media processing to tools installed on your system.
+
 ## What it supports
 
 - HiAnime title search and episode selection.
@@ -78,6 +83,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 | `-d, --download` | Download instead of playing. |
 | `-e, --episode RANGE`, `-r, --range RANGE` | Choose ranges like `1-3` or individual episodes like `1 3 5`. Use `0` for the first and `-1` for the last episode. |
 | `-q, --quality QUALITY` | Request `best`, `worst`, or a resolution such as `720p`. |
+| `-S, --select-nth N` | Select an entry by its one-based index. |
 | `--dub` | Select dubbed audio when available. |
 | `-v, --vlc` / `-s, --syncplay` | Select VLC or Syncplay. |
 | `--rofi` / `--dmenu` | Use an external selection menu. |
