@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod domain;
+pub mod infrastructure;
 
 /// Current package version, exposed for diagnostics and tests.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
