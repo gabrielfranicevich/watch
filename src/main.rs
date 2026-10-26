@@ -229,12 +229,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && command_available("flatpak")
         && flatpak_mpv_installed();
     let player = if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
-        Player::from_configuration(
-            cli.vlc,
-            cli.syncplay,
-            false,
-            env_player.as_deref(),
-        )
+        Player::from_configuration(cli.vlc, cli.syncplay, false, env_player.as_deref())
     } else if use_iina_default && command_available("iina") {
         Player::from_configuration(false, false, false, Some("iina"))
     } else if use_iina_default {
@@ -371,10 +366,7 @@ impl PlaybackConfig<'_> {
         }
 
         if self.download {
-            let filename = format!(
-                "{}.mp4",
-                episode_file_stem(&anime.title, &episode.number)
-            );
+            let filename = format!("{}.mp4", episode_file_stem(&anime.title, &episode.number));
             let destination = self.download_dir.join(filename);
             let status = MediaDownloader::download_with_extra(
                 &media.stream,

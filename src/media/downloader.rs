@@ -36,10 +36,7 @@ impl FfmpegDownloader {
         ]);
 
         if let Some(audio_url) = stream.audio_url.as_deref() {
-            args.extend([
-                OsString::from("-extension_picky"),
-                OsString::from("0"),
-            ]);
+            args.extend([OsString::from("-extension_picky"), OsString::from("0")]);
             if let Some(referer) = stream.referer.as_deref() {
                 args.extend([OsString::from("-referer"), OsString::from(referer)]);
             }
@@ -166,15 +163,18 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-referer" && pair[1] == "https://embed.example/"
-        ));
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-extension_picky" && pair[1] == "0"
-        ));
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-loglevel" && pair[1] == "error"
-        ));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-referer" && pair[1] == "https://embed.example/")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-extension_picky" && pair[1] == "0")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-loglevel" && pair[1] == "error")
+        );
         assert!(args.contains(&"-stats".to_owned()));
         assert!(args.windows(2).any(
             |pair| pair[0] == "-i" && pair[1] == "https://cdn.example/episode.m3u8?token=a&b=c"
@@ -256,10 +256,7 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(
-            &args[args.len() - 3..],
-            ["episode.mp4", "-preset", "fast"]
-        );
+        assert_eq!(&args[args.len() - 3..], ["episode.mp4", "-preset", "fast"]);
     }
 
     #[test]
