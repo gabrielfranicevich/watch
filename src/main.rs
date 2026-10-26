@@ -39,9 +39,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("no results found for '{query}'").into());
     }
 
-    let anime = if let Some(index) = cli.select_nth.checked_sub(1) {
-        results.get(index).cloned().ok_or("anime selection is out of range")?
-    } else if results.len() == 1 {
+    let anime = if results.len() == 1 {
         results[0].clone()
     } else {
         for (index, anime) in results.iter().enumerate() {
