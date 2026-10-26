@@ -48,10 +48,9 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["-headers", "Referer: https://embed.example/\r\n"])
-        );
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "-headers" && pair[1] == "Referer: https://embed.example/\r\n"
+        }));
         assert!(args.windows(2).any(
             |pair| pair[0] == "-i" && pair[1] == "https://cdn.example/episode.m3u8?token=a&b=c"
         ));
