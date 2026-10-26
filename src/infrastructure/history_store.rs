@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -50,18 +51,26 @@ impl HistoryStore {
         }
 
         let backup_path = suffix_path(&self.path, ".v4");
+        let existing_backup = match fs::read_to_string(&backup_path) {
+            Ok(content) => content.lines().map(str::to_owned).collect::<HashSet<_>>(),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => HashSet::new(),
+            Err(error) => return Err(error),
+        };
+        let mut backed_up_rows = existing_backup;
         let mut backup = OpenOptions::new()
             .create(true)
             .append(true)
             .open(backup_path)?;
         for entry in &legacy {
-            writeln!(
-                backup,
+            let row = format!(
                 "{}\t{}\t{}",
                 clean_field(&entry.episode_number),
                 clean_field(&entry.anime_id),
                 clean_field(&entry.anime_title)
-            )?;
+            );
+            if backed_up_rows.insert(row.clone()) {
+                writeln!(backup, "{row}")?;
+            }
         }
         backup.sync_all()?;
 
@@ -305,4 +314,26 @@ mod tests {
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
         remove_history_artifacts(&path);
     }
+    #[test]
+    fn retrying_legacy_backup_does_not_duplicate_existing_rows() {
+        let path = test_path();
+        let store = HistoryStore::new(&path);
+        let legacy = HistoryEntry::new("4", "12345", "Old title");
+
+        store.write(std::slice::from_ref(&legacy)).unwrap();
+        store.backup_legacy_entries().unwrap();
+
+        // Simulate recovery from an interrupted migration that made the
+        // legacy entry active again after its backup was already persisted.
+        store.write(std::slice::from_ref(&legacy)).unwrap();
+        store.backup_legacy_entries().unwrap();
+
+        assert_eq!(
+            fs::read_to_string(suffix_path(&path, ".v4")).unwrap(),
+            "4\t12345\tOld title\n"
+        );
+        assert!(store.read().unwrap().is_empty());
+        remove_history_artifacts(&path);
+    }
+
 }
