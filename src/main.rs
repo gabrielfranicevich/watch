@@ -154,7 +154,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     } else {
         let query = match search_query.as_deref() {
             Some(query) => query.to_owned(),
-            None => read_search_query()?,
+            None => read_search_query(&cli)?,
         };
         eprintln!("Searching HiAnime for: {query}");
         let mut results = provider.search(&query)?;
