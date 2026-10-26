@@ -1106,8 +1106,14 @@ mod tests {
         assert_eq!(effective_source(None, None).unwrap(), "search");
         assert_eq!(effective_source(None, Some("history")).unwrap(), "history");
         assert_eq!(effective_source(None, Some("nextep")).unwrap(), "nextep");
-        assert_eq!(effective_source(Some(History), Some("search")).unwrap(), "history");
-        assert_eq!(effective_source(Some(NextEpisode), Some("history")).unwrap(), "nextep");
+        assert_eq!(
+            effective_source(Some(History), Some("search")).unwrap(),
+            "history"
+        );
+        assert_eq!(
+            effective_source(Some(NextEpisode), Some("history")).unwrap(),
+            "nextep"
+        );
     }
 
     #[test]

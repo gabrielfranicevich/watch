@@ -93,7 +93,7 @@ impl Cli {
                 "-c" | "--continue" => {
                     cli.continue_history = true;
                     cli.source_override = Some(SourceOverride::History);
-                },
+                }
                 "-d" | "--download" => cli.download = true,
                 "-D" | "--delete" => cli.delete_history = true,
                 "-l" | "--logview" => cli.logview = true,
@@ -122,7 +122,7 @@ impl Cli {
                 "-N" | "--nextep-countdown" => {
                     cli.next_episode_countdown = true;
                     cli.source_override = Some(SourceOverride::NextEpisode);
-                },
+                }
                 "-U" | "--update" => cli.update = true,
                 "--dub" => cli.dubbed = true,
                 "--rofi" => cli.rofi = true,
