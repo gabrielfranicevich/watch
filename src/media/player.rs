@@ -116,7 +116,7 @@ impl Player {
     }
 
     pub fn arguments_with_extra(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -126,7 +126,7 @@ impl Player {
     }
 
     pub fn arguments_with_options(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -224,7 +224,7 @@ impl Player {
     }
 
     pub fn play(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -233,7 +233,7 @@ impl Player {
     }
 
     pub fn play_with_extra(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -243,7 +243,7 @@ impl Player {
     }
 
     pub fn play_with_options(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -258,7 +258,7 @@ impl Player {
     /// Start the player in the background, leaving the terminal available for
     /// ani-cli's episode controls.
     pub fn launch_detached(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -268,7 +268,7 @@ impl Player {
     }
 
     pub fn launch_detached_with_options(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -411,6 +411,31 @@ mod tests {
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
         );
+    }
+
+    #[test]
+    fn configured_player_uses_mpv_specific_arguments_when_named_mpv() {
+        let player = Player::from_configuration(false, false, false, Some("/opt/mpv/mpv.exe"));
+        assert_eq!(player.command_name(), "/opt/mpv/mpv.exe");
+        let args = player.arguments(&stream(), None, "Example");
+        assert!(args.iter().any(|arg| arg == "--referrer=https://embed.example/"));
+        assert!(args.iter().any(|arg| arg == "--force-media-title=Example"));
+    }
+
+    #[test]
+    fn configured_custom_player_receives_generic_flags_and_stream_url() {
+        let player = Player::from_configuration(false, false, false, Some("/usr/bin/custom-player"));
+        let args = player.arguments_with_extra(
+            &stream(),
+            None,
+            "Example",
+            &["--custom-flag".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args, vec!["--custom-flag", "https://cdn.example/video.m3u8"]);
     }
 
     #[test]
