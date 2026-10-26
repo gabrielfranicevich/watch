@@ -12,12 +12,12 @@ Options:
   -D, --delete             Delete history
   -l, --logview            Show logs
   -s, --syncplay            Use Syncplay
-  -S, --select-nth         Select the nth entry
+  -S, --select-nth N       Select the nth entry
   -q, --quality QUALITY    Specify video quality
   -v, --vlc                Use VLC
   -V, --version            Show version
   -h, --help               Show this help
-  -e, --episode RANGE      Select episode(s)
+  -e, --episode RANGE      Select episodes, e.g. 5-6 or "5 6"
   -r, --range RANGE        Alias for --episode
       --dub                Play dubbed version
       --rofi               Use rofi for selection
@@ -28,7 +28,7 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update ani-cli
 
-Current Rust support: searches HiAnime and lists episodes. Playback, downloads, history and several legacy options are still being migrated.
+Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, quality selection, external menu backends, downloads, subtitles and watch history. The automatic updater and next-episode countdown are not yet available.
 ";
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -103,7 +103,7 @@ impl Cli {
                 "-v" | "--vlc" => cli.vlc = true,
                 "-e" | "--episode" | "-r" | "--range" => {
                     index += 1;
-                    cli.episode_range = Some(required_value(&args, index, arg)?.clone());
+                    cli.episode_range = Some(required_episode_value(&args, index, arg)?.clone());
                 }
                 "-q" | "--quality" => {
                     index += 1;
@@ -137,6 +137,16 @@ impl Cli {
 
         Ok(cli)
     }
+}
+
+fn required_episode_value<'a>(
+    args: &'a [String],
+    index: usize,
+    option: &str,
+) -> Result<&'a String, ParseError> {
+    args.get(index)
+        .filter(|value| !value.starts_with('-') || value == "-1")
+        .ok_or_else(|| ParseError(format!("{option} requires a value")))
 }
 
 fn required_value<'a>(
@@ -181,6 +191,14 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("requires a value")
+        );
+    }
+
+    #[test]
+    fn parses_last_episode_sentinel() {
+        assert_eq!(
+            Cli::parse(["--episode", "-1"]).unwrap().episode_range.as_deref(),
+            Some("-1")
         );
     }
 

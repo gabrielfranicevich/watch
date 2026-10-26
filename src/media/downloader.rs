@@ -46,12 +46,61 @@ impl FfmpegDownloader {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct YtDlpDownloader;
+
+impl YtDlpDownloader {
+    pub fn arguments(stream: &Stream, destination: &Path) -> Vec<OsString> {
+        let mut args = Vec::new();
+        if let Some(referer) = stream.referer.as_deref() {
+            args.extend([OsString::from("--referer"), OsString::from(referer)]);
+        }
+        args.extend([
+            OsString::from(&stream.url),
+            OsString::from("--no-skip-unavailable-fragments"),
+            OsString::from("--fragment-retries"),
+            OsString::from("infinite"),
+            OsString::from("-N"),
+            OsString::from("16"),
+            OsString::from("-o"),
+            destination.as_os_str().to_owned(),
+        ]);
+        args
+    }
+
+    pub fn download(stream: &Stream, destination: &Path) -> io::Result<ExitStatus> {
+        Command::new("yt-dlp")
+            .args(Self::arguments(stream, destination))
+            .status()
+    }
+}
+
+/// Prefer yt-dlp for a single HLS source and fall back to FFmpeg. When a
+/// separate audio rendition exists, FFmpeg must mux the two inputs explicitly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MediaDownloader;
+
+impl MediaDownloader {
+    pub fn download(stream: &Stream, destination: &Path) -> io::Result<ExitStatus> {
+        if stream.audio_url.is_none() {
+            match YtDlpDownloader::download(stream, destination) {
+                Ok(status) if status.success() => return Ok(status),
+                Ok(_) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        FfmpegDownloader::download(stream, destination)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn forwards_referer_and_stream_as_distinct_arguments() {
+    fn ffmpeg_forwards_referer_and_stream_as_distinct_arguments() {
         let stream = Stream::new(
             "https://cdn.example/episode.m3u8?token=a&b=c",
             None,
@@ -99,9 +148,37 @@ mod tests {
     }
 
     #[test]
-    fn supports_streams_without_referer() {
+    fn ffmpeg_supports_streams_without_referer() {
         let stream = Stream::new("https://cdn.example/episode.m3u8", None, None);
         let args = FfmpegDownloader::arguments(&stream, Path::new("episode.mp4"));
         assert!(!args.iter().any(|arg| arg == "-headers"));
+    }
+
+    #[test]
+    fn yt_dlp_passes_referer_and_uses_fragment_retries() {
+        let stream = Stream::new(
+            "https://cdn.example/episode.m3u8?token=a&b=c",
+            None,
+            Some("https://embed.example/".into()),
+        );
+        let args = YtDlpDownloader::arguments(&stream, Path::new("episode.mp4"));
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "--referer" && pair[1] == "https://embed.example/"
+        ));
+        assert!(args.contains(&"--fragment-retries".to_owned()));
+        assert!(args.contains(&"infinite".to_owned()));
+        assert!(args.contains(&"-N".to_owned()));
+        assert_eq!(args.last().map(String::as_str), Some("episode.mp4"));
+    }
+
+    #[test]
+    fn yt_dlp_omits_referer_when_not_provided() {
+        let stream = Stream::new("https://cdn.example/episode.m3u8", None, None);
+        let args = YtDlpDownloader::arguments(&stream, Path::new("episode.mp4"));
+        assert!(!args.iter().any(|arg| arg == "--referer"));
     }
 }

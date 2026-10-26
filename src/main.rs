@@ -9,7 +9,7 @@ use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
 use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
-use ani_cli::media::downloader::FfmpegDownloader;
+use ani_cli::media::downloader::MediaDownloader;
 use ani_cli::media::player::Player;
 use ani_cli::providers::hianime::HiAnimeProvider;
 use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
@@ -93,9 +93,19 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     } else {
         let query = cli.query.as_deref().ok_or("a search query is required")?;
         eprintln!("Searching HiAnime for: {query}");
-        let results = provider.search(query)?;
+        let mut results = provider.search(query)?;
+        let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
+        if exact {
+            let normalized_query = normalize_title(query);
+            results.retain(|result| normalize_title(&result.title) == normalized_query);
+        }
         if results.is_empty() {
-            return Err(format!("no results found for '{query}'").into());
+            let message = if exact {
+                format!("no exact match found for '{query}'")
+            } else {
+                format!("no results found for '{query}'")
+            };
+            return Err(message.into());
         }
         let labels: Vec<String> = results.iter().map(|result| result.title.clone()).collect();
         let index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
@@ -275,7 +285,7 @@ impl PlaybackConfig<'_> {
                 safe_filename(&episode.number)
             );
             let destination = self.download_dir.join(filename);
-            let status = FfmpegDownloader::download(&media.stream, &destination)?;
+            let status = MediaDownloader::download(&media.stream, &destination)?;
             ensure_success(status, "ffmpeg")?;
             if let Some(subtitle) = media.subtitle.as_ref() {
                 let subtitle_path = destination.with_extension("vtt");
@@ -467,27 +477,92 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
 
 fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io::Result<()> {
     let mut entries = store.read()?;
-    if let Some(existing) = entries.iter_mut().find(|entry| entry.anime_id == anime.id) {
-        existing.episode_number = episode.number.clone();
-        existing.anime_title = anime.title.clone();
-    } else {
-        entries.push(HistoryEntry::new(
-            episode.number.clone(),
-            anime.id.clone(),
-            anime.title.clone(),
-        ));
-    }
+    entries.retain(|entry| entry.anime_id != anime.id);
+    entries.push(HistoryEntry::new(
+        episode.number.clone(),
+        anime.id.clone(),
+        anime.title.clone(),
+    ));
     store.write(&entries)
+}
+
+fn normalize_title(title: &str) -> String {
+    title
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn select_episode_range(
     episodes: Vec<Episode>,
     range: &str,
 ) -> Result<Vec<Episode>, Box<dyn std::error::Error>> {
-    let requested = parse_episode_range(range)?;
-    let selected: Vec<_> = episodes
+    if episodes.is_empty() {
+        return Err("cannot select episodes from an empty list".into());
+    }
+    let available_numbers: Vec<&str> = episodes
+        .iter()
+        .map(|episode| episode.number.as_str())
+        .collect();
+    let mut requested = Vec::<String>::new();
+
+    for token in range.split_whitespace() {
+        match token {
+            "0" => requested.push(available_numbers[0].to_owned()),
+            "-1" => requested.push(available_numbers[available_numbers.len() - 1].to_owned()),
+            _ if token.contains('-') => {
+                let (start, end) = token
+                    .split_once('-')
+                    .ok_or_else(|| format!("invalid episode selection '{token}'"))?;
+                let start = if start == "0" {
+                    available_numbers[0]
+                } else {
+                    start
+                };
+                let end = if end == "-1" {
+                    available_numbers[available_numbers.len() - 1]
+                } else {
+                    end
+                };
+                let start_number: f64 = start.parse().map_err(|_| {
+                    format!("invalid start episode '{start}' in selection '{token}'")
+                })?;
+                let end_number: f64 = end.parse().map_err(|_| {
+                    format!("invalid end episode '{end}' in selection '{token}'")
+                })?;
+                if end_number < start_number {
+                    return Err(format!("invalid episode range '{token}'").into());
+                }
+                let matched: Vec<String> = available_numbers
+                    .iter()
+                    .filter_map(|number| {
+                        number.parse::<f64>().ok().and_then(|number_value| {
+                            (number_value >= start_number && number_value <= end_number)
+                                .then(|| (*number).to_owned())
+                        })
+                    })
+                    .collect();
+                if matched.is_empty() {
+                    return Err(format!("episode range '{token}' did not match available episodes").into());
+                }
+                requested.extend(matched);
+            }
+            _ => {
+                if !available_numbers.contains(&token) {
+                    return Err(format!("episode '{token}' is not available").into());
+                }
+                requested.push(token.to_owned());
+            }
+        }
+    }
+
+    if requested.is_empty() {
+        return Err("no episode numbers were selected".into());
+    }
+    let selected: Vec<Episode> = episodes
         .into_iter()
-        .filter(|episode| requested.iter().any(|number| number == &episode.number))
+        .filter(|episode| requested.contains(&episode.number))
         .collect();
     if selected.is_empty() {
         return Err(format!("episode range '{range}' did not match available episodes").into());
@@ -563,22 +638,7 @@ fn safe_filename(value: &str) -> String {
         .to_owned()
 }
 
-fn parse_episode_range(range: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    if let Some((start, end)) = range.split_once('-') {
-        let start: u32 = start.parse()?;
-        let end: u32 = end.parse()?;
-        if start == 0 || end < start || end - start > 1000 {
-            return Err(format!("invalid episode range '{range}'").into());
-        }
-        Ok((start..=end).map(|number| number.to_string()).collect())
-    } else {
-        let number: u32 = range.parse()?;
-        if number == 0 {
-            return Err("episode numbers start at 1".into());
-        }
-        Ok(vec![number.to_string()])
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -590,27 +650,44 @@ mod tests {
     }
 
     #[test]
-    fn parses_single_episode_and_ranges() {
-        assert_eq!(parse_episode_range("4").unwrap(), vec!["4"]);
-        assert_eq!(parse_episode_range("2-4").unwrap(), vec!["2", "3", "4"]);
-        assert!(parse_episode_range("0").is_err());
-        assert!(parse_episode_range("4-2").is_err());
-    }
-
-    #[test]
-    fn filters_requested_episodes_in_provider_order() {
+    fn supports_multiple_episode_numbers_and_preserves_provider_order() {
         let episodes = vec![
             Episode::new("3", None, "three"),
             Episode::new("2", None, "two"),
             Episode::new("1", None, "one"),
         ];
-        let selected = select_episode_range(episodes, "1-2").unwrap();
+        let selected = select_episode_range(episodes, "1 3").unwrap();
         assert_eq!(
             selected
                 .iter()
                 .map(|episode| episode.number.as_str())
                 .collect::<Vec<_>>(),
-            vec!["2", "1"]
+            vec!["3", "1"]
         );
+    }
+
+    #[test]
+    fn supports_first_last_and_numeric_episode_ranges() {
+        let episodes = vec![
+            Episode::new("1", None, "one"),
+            Episode::new("1.5", None, "one and a half"),
+            Episode::new("2", None, "two"),
+            Episode::new("3", None, "three"),
+        ];
+        assert_eq!(
+            select_episode_range(episodes.clone(), "0 -1").unwrap()
+                .iter().map(|ep| ep.number.as_str()).collect::<Vec<_>>(),
+            vec!["1", "3"]
+        );
+        assert_eq!(
+            select_episode_range(episodes, "1-2").unwrap()
+                .iter().map(|ep| ep.number.as_str()).collect::<Vec<_>>(),
+            vec!["1", "1.5", "2"]
+        );
+    }
+
+    #[test]
+    fn normalizes_titles_for_exact_match() {
+        assert_eq!(normalize_title("  BLUE   lock\n"), "blue lock");
     }
 }

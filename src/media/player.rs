@@ -178,13 +178,7 @@ impl Player {
         media_flags: &[String],
     ) -> io::Result<Child> {
         Command::new(self.command_name())
-            .args(self.arguments_with_options(
-                stream,
-                subtitle,
-                title,
-                command_flags,
-                media_flags,
-            ))
+            .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
