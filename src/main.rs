@@ -126,7 +126,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 );
                 continue;
             };
-            candidates.push((entry, candidate_anime, candidate_episodes, next_episode.number.clone()));
+            let next_episode_number = next_episode.number.clone();
+            candidates.push((entry, candidate_anime, candidate_episodes, next_episode_number));
         }
         if candidates.is_empty() {
             return Err("no unwatched series in history".into());
