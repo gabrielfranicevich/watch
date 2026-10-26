@@ -301,6 +301,133 @@ mod tests {
         );
     }
 
+    fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>>) {
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        use base64::Engine;
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let base_url = format!("http://{address}");
+        let embed_url = format!("{base_url}/mal/12345/watch");
+        let server_hash = BASE64.encode(embed_url.as_bytes());
+
+        let config = serde_json::json!({
+            "src": format!("{base_url}/hls/master.m3u8"),
+            "subtitles": [{
+                "src": format!("{base_url}/subtitles/en.vtt"),
+                "default": true
+            }]
+        })
+        .to_string();
+        let encrypted: Vec<u8> = config
+            .bytes()
+            .enumerate()
+            .map(|(index, byte)| byte ^ XOR_KEY[index % XOR_KEY.len()])
+            .collect();
+        let embed_blob = BASE64.encode(encrypted);
+
+        let servers_body = format!(
+            r#"<div class="server-item" data-type="sub" data-server-name="ZokoAnime" data-hash="{server_hash}"></div>"#
+        );
+        let embed_body = format!(r#"<script>window.__P="{embed_blob}";</script>"#);
+        let playlist = String::from(
+            "#EXTM3U\n\
+             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360\n\
+             ../variants/360/index.m3u8\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n\
+             ../variants/720/index.m3u8\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080\n\
+             ../variants/1080/index.m3u8\n",
+        );
+
+        let worker = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for _ in 0..3 {
+                let (mut connection, _) = listener.accept().unwrap();
+                connection
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut buffer = [0_u8; 8192];
+                let count = connection.read(&mut buffer).unwrap();
+                let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
+                let request_path = request
+                    .lines()
+                    .next()
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .unwrap_or("/")
+                    .to_owned();
+                let (status, content_type, body) =
+                    if request_path.starts_with("/api/theme/episode/servers?episodeId=1001") {
+                        ("200 OK", "text/html; charset=utf-8", servers_body.as_str())
+                    } else if request_path == "/mal/12345/watch" {
+                        ("200 OK", "text/html; charset=utf-8", embed_body.as_str())
+                    } else if request_path == "/hls/master.m3u8" {
+                        (
+                            "200 OK",
+                            "application/vnd.apple.mpegurl",
+                            playlist.as_str(),
+                        )
+                    } else {
+                        ("404 Not Found", "text/plain; charset=utf-8", "not found")
+                    };
+                write!(
+                    connection,
+                    "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+                connection.flush().unwrap();
+                requests.push(format!("{request_path}\n{request}"));
+            }
+            requests
+        });
+
+        (base_url, worker)
+    }
+
+    #[test]
+    fn resolves_server_embed_hls_audio_subtitles_and_available_qualities() {
+        let (base_url, server) = mock_stream_resolver_server();
+        let resolver = HiAnimeStreamResolver::with_base_url(&base_url);
+        let episode = Episode::new(
+            "1",
+            None,
+            format!("{base_url}/watch/frieren-123?ep=1001"),
+        );
+
+        let resolved = resolver.resolve(&episode, false, "720p").unwrap();
+        let requests = server.join().unwrap();
+
+        assert_eq!(
+            resolved.stream.url,
+            format!("{base_url}/variants/720/index.m3u8")
+        );
+        assert_eq!(
+            resolved.stream.audio_url.as_deref(),
+            Some(format!("{base_url}/audio/en.m3u8").as_str())
+        );
+        assert_eq!(
+            resolved.subtitle.as_ref().map(|subtitle| subtitle.url.as_str()),
+            Some(format!("{base_url}/subtitles/en.vtt").as_str())
+        );
+        assert_eq!(resolved.mal_id.as_deref(), Some("12345"));
+        assert_eq!(
+            resolved
+                .qualities
+                .iter()
+                .map(|option| option.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["1080p", "720p", "360p"]
+        );
+        assert!(requests[0].starts_with("/api/theme/episode/servers?episodeId=1001\n"));
+        assert!(requests[1].starts_with("/mal/12345/watch\n"));
+        assert!(requests[2].starts_with("/hls/master.m3u8\n"));
+    }
+
     #[test]
     fn removes_json_escape_backslashes_before_parsing_server_html() {
         let body = r#"<div class=\"server-item\" data-type=\"sub\" data-server-name=\"ZokoAnime\" data-hash=\"YWJj\"></div>"#;
