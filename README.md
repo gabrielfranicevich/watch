@@ -1,150 +1,125 @@
-> **Rust migration (`develop`):** the shell version on `main` remains the reference implementation while compatibility is validated. To build locally, check out `develop` and run `cargo run --release -- "anime name"`. To install the experimental Rust binary with Cargo, run `cargo install --git https://github.com/gabrielfranicevich/anime --branch develop`. This branch is not yet a claim of full package-manager parity; see [migration notes](docs/rust-migration.md).
+# ani-cli
 
-<p align=center>
-<br>
-<a href="http://makeapullrequest.com"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg"></a>
-<a href="#Linux"><img src="https://img.shields.io/badge/os-linux-brightgreen">
-<a href="#MacOS"><img src="https://img.shields.io/badge/os-mac-brightgreen">
-<a href="#Windows"><img src="https://img.shields.io/badge/os-windows-yellowgreen">
-<a href="#Android"><img src="https://img.shields.io/badge/os-android-yellow">
-<a href="#Steam-deck"><img src="https://img.shields.io/badge/os-steamdeck-yellow">
-<a href="#iOS"><img src="https://img.shields.io/badge/os-ios-red">
-<br>
-<a href="https://stats.coolans.dev/endpoints/website_ani-cli"><img src="https://stats.coolans.dev/api/v1/endpoints/website_ani-cli/health/badge.svg"></a>
-<a href="https://stats.coolans.dev/endpoints/website_ani-cli"><img src="https://stats.coolans.dev/api/v1/endpoints/website_ani-cli/uptimes/7d/badge.svg"></a>
-<br>
-<p align=center>
-<a href="https://discord.gg/aqu7GpqVmR"><img src="https://invidget.switchblade.xyz/aqu7GpqVmR"></a>
-<a href="matrix.md"><img src="/.assets/matrix-logo.svg" height=110></a>
-<br>
-<a href="https://discord.gg/aqu7GpqVmR">Discord</a>
-<a href="https://github.com/pystardust/ani-cli/blob/master/matrix.md">Matrix</a>
-</p>
-<a href="https://github.com/port19x"><img src="https://img.shields.io/badge/lead-port19x-lightblue"></a>
-<a href="https://github.com/CoolnsX"><img src="https://img.shields.io/badge/maintainer-CoolnsX-blue"></a>
-<a href="https://github.com/justchokingaround"><img src="https://img.shields.io/badge/maintainer-justchokingaround-blue"></a>
-<a href="https://github.com/Derisis13"><img src="https://img.shields.io/badge/maintainer-Derisis13-blue"></a>
-<a href="https://github.com/71zenith"><img src="https://img.shields.io/badge/maintainer-71zenith-blue"></a>
-<a href="https://github.com/vorlie"><img src="https://img.shields.io/badge/maintainer-vorlie-blue"></a>
+Search anime, select episodes, and stream or download them from your terminal.
 
-</p>
+[![Rust CI](https://github.com/gabrielfranicevich/anime/actions/workflows/rust.yml/badge.svg?branch=develop)](https://github.com/gabrielfranicevich/anime/actions/workflows/rust.yml)
+[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
-<h3 align="center">
-A cli to browse and watch anime (alone AND with friends). This tool scrapes the site <a href="https://hianime.at/">hianime.</a>
-</h3>
+ani-cli searches HiAnime, resolves available HLS streams, and hands playback or downloads to tools installed on your machine. It does not host video files.
 
-<h1 align="center">
-	Showcase
-</h1>
+> **Project status:** the Rust implementation is developed on `develop`. Prebuilt binaries and updated third-party packages are not published yet; some package managers may still provide the historical shell version from `main`.
 
-[ani-cli-demo.webm](https://user-images.githubusercontent.com/44473782/224679247-0856e652-f187-4865-bbcf-5a8e5cf830da.webm)
+## Quick start
 
-## Table of Contents
+Install stable Rust 1.85 or newer and Git, then install the CLI and search for a title:
 
-- [Install the Rust CLI](#install)
-- [Dependencies](#dependencies)
-- [Ani-Skip](#ani-skip)
-- [FAQ](#faq)
-- [Related projects](#homies)
-- [Contribution Guidelines](./CONTRIBUTING.md)
-- [Disclaimer](./disclaimer.md)
-
-## Install
-
-This branch contains the Rust implementation. The `main` branch remains the reference for the historical shell implementation while the migration continues to be validated. Prebuilt binary releases are not published yet.
-
-### Install with Cargo
-
-Requires a stable Rust toolchain (Rust 1.85 or newer) and Git:
-
-```sh
+~~~sh
 cargo install --git https://github.com/gabrielfranicevich/anime --branch develop
-ani-cli --help
-```
+ani-cli "Frieren"
+~~~
 
-To update a Cargo installation, run `ani-cli --update` or reinstall from the same branch:
+Choose a result and an episode from the interactive menus. For playback, install a supported media player such as MPV. See the [tutorial](docs/tutorial.md) for setup and examples.
 
-```sh
-cargo install --force --git https://github.com/gabrielfranicevich/anime --branch develop
-```
+## Examples
 
-### Build from source
+~~~sh
+# Search and play interactively
+ani-cli "Frieren"
 
-```sh
-git clone --branch develop https://github.com/gabrielfranicevich/anime.git
-cd anime
-cargo build --release
-./target/release/ani-cli --help
-./target/release/ani-cli "Frieren"
-```
+# Prefer 720p when the source offers it
+ani-cli --quality 720p "Frieren"
 
-Download episodes with `--download`, for example:
-
-```sh
+# Download episodes 1 through 3
 ani-cli --download --episode 1-3 "Frieren"
-```
 
-### Runtime support
+# Download individual episodes
+ani-cli --download --episode "1 3 5" "Frieren"
 
-The Rust crate is checked in CI on Linux, macOS and Windows. CI verifies compilation, Clippy, unit/regression tests, CLI help/version and formatting; it does not guarantee that every external media player or live provider endpoint works on every OS.
+# Continue from watch history
+ani-cli --continue
 
-Playback requires a supported external player. MPV is the default where available; VLC is selectable with `--vlc`, Syncplay with `--syncplay`, and IINA can be selected on macOS. Install the player separately and ensure it is on `PATH`, except for platform integrations that launch the app explicitly.
+# Show the next-episode countdown
+ani-cli --nextep-countdown "Frieren"
+~~~
 
-For Windows, install Rust and a supported media player in the Windows environment. WSL needs an intentional player setup because a Linux process may not be able to launch the Windows player with Linux-style arguments. Android/Termux support depends on the player app and Android intent integration; it is not packaged as a native Android binary.
+Run `ani-cli --help` for the complete option list.
 
-The supported feature set includes HiAnime search, episode selection, HLS stream resolution, subtitles, playback, downloads, quality selection and compatible watch history. Provider markup, anti-bot challenges and stream hosts are external dependencies and may change.
+## What it supports
 
-### Legacy package-manager caveat
+- HiAnime title search and episode selection.
+- HLS stream resolution, quality selection, external audio, and subtitles.
+- Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
+- Downloads using yt-dlp when suitable, FFmpeg fallback, and FFmpeg muxing for separate audio/video streams.
+- Compatible watch history, continuation, log viewing, external menu backends, and a Cargo-based updater.
 
-Packages in third-party distribution repositories (APT, DNF, AUR, Scoop, Termux and similar) may still package the historical shell release. They are not guaranteed to install the Rust implementation from this branch. Until a release and packages are published for the Rust version, use the Cargo commands above.
+These paths depend on the provider, platform, media player, and external tools. An implemented feature does not guarantee that the live provider or every player will always be available.
 
-## Uninstall
+## Common options
 
-For a Cargo installation:
+| Option | Purpose |
+| --- | --- |
+| `-c, --continue` | Continue from watch history. |
+| `-d, --download` | Download instead of playing. |
+| `-e, --episode RANGE`, `-r, --range RANGE` | Choose ranges like `1-3` or individual episodes like `1 3 5`. Use `0` for the first and `-1` for the last episode. |
+| `-q, --quality QUALITY` | Request `best`, `worst`, or a resolution such as `720p`. |
+| `--dub` | Select dubbed audio when available. |
+| `-v, --vlc` / `-s, --syncplay` | Select VLC or Syncplay. |
+| `--rofi` / `--dmenu` | Use an external selection menu. |
+| `--skip` | Enable intro skipping where supported. |
+| `--no-detach` | Keep the player attached to the terminal. |
+| `--exit-after-play` | Return the player's exit code after playback. |
+| `-N, --nextep-countdown` | Show the next-episode countdown. |
+| `-D, --delete` / `-l, --logview` | Delete watch history or view logs. |
+| `-U, --update` | Update the Cargo installation from a Git branch. |
 
-```sh
-cargo uninstall ani-cli
-```
+## Runtime dependencies
 
-If you built from source, remove the resulting executable from the directory into which you installed it. This does not remove the watch-history file.
+| Tool | When it is needed |
+| --- | --- |
+| MPV, VLC, IINA, or Syncplay | Playing streams; availability depends on the platform. |
+| FFmpeg | Downloads and muxing separate audio/video streams. |
+| yt-dlp | Optional; preferred for supported single-stream downloads. |
+| fzf, rofi, or dmenu | Optional selection backends. |
+| ani-skip | Optional intro skipping for supported MPV/Syncplay setups. |
 
-## Dependencies
+Install players and command-line tools with your operating system's package manager. On Windows, install tools in the environment where you run ani-cli. WSL may need extra setup to launch a Windows player. Android/Termux support depends on the player app and intent integration; this project does not ship a native Android binary.
 
-- Rust and Cargo for installation/building.
-- A supported external media player (MPV, VLC, IINA or Syncplay, depending on the platform and selected options).
-- FFmpeg for downloads and for muxing separate audio/video streams.
-- yt-dlp is optional and preferred for single-stream downloads when installed.
-- fzf, rofi or dmenu are optional selection backends.
-- ani-skip is optional and only works with supported MPV/Syncplay setups.
+## Configuration
 
-### Ani-Skip
+| Variable | Purpose |
+| --- | --- |
+| `ANI_CLI_DEFAULT_SOURCE` | Default action: `search`, `history`, or `nextep`. |
+| `ANI_CLI_MODE` | Default audio mode: `sub` or `dub`. |
+| `ANI_CLI_QUALITY` | Default stream quality. |
+| `ANI_CLI_EXACT=1` | Require a normalized exact title match. |
+| `ANI_CLI_MENU` | Default menu backend: `fzf`, `rofi`, or `dmenu`. |
+| `ANI_CLI_MENU_FLAGS` | Extra arguments for the menu program. |
+| `ANI_CLI_PLAYER` | Player executable or supported player name. |
+| `ANI_CLI_PLAYER_FLAGS` | Extra player/downloader arguments. |
+| `ANI_CLI_DOWNLOAD_DIR` | Download destination directory. |
+| `ANI_CLI_HIST_DIR` | Directory for the compatible history file. |
+| `ANI_CLI_NO_DETACH=1` | Keep playback attached to the terminal. |
+| `ANI_CLI_EXIT_AFTER_PLAY=1` | Return the player exit status. |
+| `ANI_CLI_SKIP_INTRO=1` | Enable supported intro skipping. |
+| `ANI_CLI_LOG=0` | Disable system logger records. |
 
-Ani-skip is a script to automatically skip anime opening sequences, making it easier to watch your favorite shows without having to manually skip the intros each time (from the original [README](https://github.com/synacktraa/ani-skip/tree/master#a-script-to-automatically-skip-anime-opening-sequences-making-it-easier-to-watch-your-favorite-shows-without-having-to-manually-skip-the-intros-each-time)).
+## Caveats
 
-For install instructions visit [ani-skip](https://github.com/synacktraa/ani-skip).
+- HiAnime markup, stream hosts, and anti-bot responses can change without notice. CI does not guarantee live-provider availability.
+- Prebuilt release binaries are not published for the Rust port yet. See the [migration notes](docs/rust-migration.md) for platform caveats.
+- The client does not host or own the media it locates. You are responsible for complying with applicable laws and service terms; read the [disclaimer](docs/disclaimer.md).
 
-Ani-skip uses the external lua script function of mpv and as such – for now – only works with mpv.
+## Documentation and support
 
-**Warning:** For now, ani-skip does **not** seem to work under Windows.
+- [Step-by-step tutorial](docs/tutorial.md)
+- [Development guide](docs/development.md)
+- [Contributing guide](docs/contributing.md)
+- [Rust migration notes](docs/rust-migration.md)
+- [Roadmap](docs/roadmap.md)
+- [Matrix community](docs/matrix.md)
+- [Open an issue](https://github.com/gabrielfranicevich/anime/issues)
 
-## FAQ
+## License
 
-- **Can I change or disable subtitles?** Subtitles are passed to the external player. Use the player's controls to toggle the English track; other subtitle languages are not currently offered.
-- **Can I watch dubbed audio?** Use `--dub` when a dub stream is available.
-- **Can I change resolution?** Use `--quality 720p`, or select `best`/`worst`.
-- **How do I download episodes?** Use `--download`, optionally with `--episode 1-3`.
-- **Where are downloads saved?** Set `ANI_CLI_DOWNLOAD_DIR` to choose the output directory.
-- **Can I use VLC or another player?** Use `--vlc`, `--syncplay`, or set `ANI_CLI_PLAYER` to a supported player.
-- **How do I continue watching?** Use `--continue` to resume from compatible watch history.
-- **How do I update?** Use `--update` for the Cargo-based updater, or reinstall with `cargo install --force --git https://github.com/gabrielfranicevich/anime --branch develop`. Updating requires Cargo and network access.
-
-## Homies
-
-* [ani-cli-rs](https://github.com/vorlie/ani-cli-rs): A cross-platform Rust port of ani-cli with two independent Anikoto catalogs and native MegaPlay/KotoCDN playback. (Rust)
-* [jerry](https://github.com/justchokingaround/jerry): stream anime with anilist tracking and syncing, with discord presence (Shell)
-* [anipy-cli](https://github.com/sdaqo/anipy-cli): ani-cli rewritten in python (Python)
-* [mov-cli](https://github.com/mov-cli/mov-cli): Watch everything from your terminal. (Python)
-* [doccli](https://github.com/TowarzyszFatCat/doccli): [LINUX / WINDOWS] A CLI to watch anime with ENGLISH sub/dub or POLISH subtitles options, AniList integration, Discord RPC, and native Windows installer (Python)
-* [GoAnime](https://github.com/alvarorichard/GoAnime): A TUI tool to browse, play, and download anime in Portuguese and English, with Discord RPC, AniList integration, and intro skipping. (Go)
-* [Curd](https://github.com/Wraient/curd): A CLI tool to watch anime with Anilist, Discord RPC, Skip Intro/Outro/Filler/Recap (Go)
-* [ani-skip](https://github.com/synacktraa/ani-skip): Automatically skip opening and ending sequences for IINA on MacOS (Typescript, official IINA plugin API)
+ani-cli is distributed under **GPL-3.0-only**. See [LICENSE](LICENSE).
