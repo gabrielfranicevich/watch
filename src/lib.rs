@@ -2,8 +2,8 @@
 
 pub mod cli;
 pub mod domain;
-pub mod media;
 pub mod infrastructure;
+pub mod media;
 pub mod providers;
 
 /// Current package version, exposed for diagnostics and tests.

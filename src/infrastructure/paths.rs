@@ -25,7 +25,11 @@ pub fn data_dir() -> Option<PathBuf> {
             .map(PathBuf::from)
             .map(|path| path.join("ani-cli"))
     } else if cfg!(target_os = "macos") {
-        home_dir().map(|path| path.join("Library").join("Application Support").join("ani-cli"))
+        home_dir().map(|path| {
+            path.join("Library")
+                .join("Application Support")
+                .join("ani-cli")
+        })
     } else {
         std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)

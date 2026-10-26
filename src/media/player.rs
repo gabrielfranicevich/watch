@@ -22,7 +22,12 @@ impl Player {
         }
     }
 
-    pub fn arguments(self, stream: &Stream, subtitle: Option<&Subtitle>, title: &str) -> Vec<OsString> {
+    pub fn arguments(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+    ) -> Vec<OsString> {
         let mut args = Vec::new();
         match self {
             Self::Mpv => {
@@ -49,7 +54,12 @@ impl Player {
         args
     }
 
-    pub fn play(self, stream: &Stream, subtitle: Option<&Subtitle>, title: &str) -> io::Result<ExitStatus> {
+    pub fn play(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+    ) -> io::Result<ExitStatus> {
         Command::new(self.command_name())
             .args(self.arguments(stream, subtitle, title))
             .status()
@@ -61,25 +71,41 @@ mod tests {
     use super::*;
 
     fn stream() -> Stream {
-        Stream::new("https://cdn.example/video.m3u8", Some("1080p".into()), Some("https://embed.example/".into()))
+        Stream::new(
+            "https://cdn.example/video.m3u8",
+            Some("1080p".into()),
+            Some("https://embed.example/".into()),
+        )
     }
 
     #[test]
     fn mpv_arguments_preserve_stream_referer_and_subtitle() {
         let subtitle = Subtitle::new("https://cdn.example/sub.vtt", Some("English".into()));
         let args = Player::Mpv.arguments(&stream(), Some(&subtitle), "Example Anime");
-        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
         assert!(args.contains(&"--referrer=https://embed.example/".to_owned()));
         assert!(args.contains(&"--sub-file=https://cdn.example/sub.vtt".to_owned()));
-        assert_eq!(args.last().map(String::as_str), Some("https://cdn.example/video.m3u8"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("https://cdn.example/video.m3u8")
+        );
     }
 
     #[test]
     fn vlc_arguments_include_referer_when_required() {
         let args = Player::Vlc.arguments(&stream(), None, "Example Anime");
-        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
         assert!(args.contains(&"--http-referrer=https://embed.example/".to_owned()));
-        assert_eq!(args.last().map(String::as_str), Some("https://cdn.example/video.m3u8"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("https://cdn.example/video.m3u8")
+        );
     }
 
     #[test]

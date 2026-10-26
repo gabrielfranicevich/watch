@@ -29,7 +29,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         println!("ani-cli {}", ani_cli::version());
         return Ok(());
     }
-    if cli.delete_history || cli.logview || cli.update || cli.continue_history || cli.next_episode_countdown {
+    if cli.delete_history
+        || cli.logview
+        || cli.update
+        || cli.continue_history
+        || cli.next_episode_countdown
+    {
         return Err("this option is not implemented in the Rust migration yet".into());
     }
     if cli.syncplay || cli.skip_intro {
@@ -66,7 +71,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let selected: Vec<Episode> = if let Some(range) = cli.episode_range.as_deref() {
         let requested = parse_episode_range(range)?;
-        let selected: Vec<_> = episodes.into_iter()
+        let selected: Vec<_> = episodes
+            .into_iter()
             .filter(|episode| requested.iter().any(|number| number == &episode.number))
             .collect();
         if selected.is_empty() {
@@ -75,8 +81,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         selected
     } else {
         for (index, episode) in episodes.iter().enumerate() {
-            println!("{:>3}. Episode {}{}", index + 1, episode.number,
-                episode.title.as_deref().map(|title| format!(" — {title}")).unwrap_or_default());
+            println!(
+                "{:>3}. Episode {}{}",
+                index + 1,
+                episode.number,
+                episode
+                    .title
+                    .as_deref()
+                    .map(|title| format!(" — {title}"))
+                    .unwrap_or_default()
+            );
         }
         let index = read_index(episodes.len())?;
         vec![episodes[index].clone()]
@@ -85,11 +99,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let resolver = HiAnimeStreamResolver::new();
     let player = Player::from_vlc_flag(cli.vlc);
     for episode in &selected {
-        eprintln!("Resolving episode {} ({})...", episode.number, if cli.dubbed { "dub" } else { "sub" });
-        let media = resolver.resolve(episode, cli.dubbed, cli.quality.as_deref().unwrap_or("best"))?;
+        eprintln!(
+            "Resolving episode {} ({})...",
+            episode.number,
+            if cli.dubbed { "dub" } else { "sub" }
+        );
+        let media = resolver.resolve(
+            episode,
+            cli.dubbed,
+            cli.quality.as_deref().unwrap_or("best"),
+        )?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
         if cli.download {
-            let filename = format!("{} - Episode {}.mp4", safe_filename(&anime.title), safe_filename(&episode.number));
+            let filename = format!(
+                "{} - Episode {}.mp4",
+                safe_filename(&anime.title),
+                safe_filename(&episode.number)
+            );
             let destination = PathBuf::from(filename);
             let status = FfmpegDownloader::download(&media.stream, &destination)?;
             if !status.success() {
@@ -103,7 +129,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             let status = player.play(&media.stream, media.subtitle.as_ref(), &title)?;
             if !status.success() {
-                return Err(format!("{} exited with status {status}", player.command_name()).into());
+                return Err(
+                    format!("{} exited with status {status}", player.command_name()).into(),
+                );
             }
         }
     }
@@ -119,13 +147,20 @@ fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
 }
 
 fn safe_filename(value: &str) -> String {
-    value.chars().map(|character| {
-        if character.is_control() || ['<', '>', ':', '"', '/', '\\', '|', '?', '*'].contains(&character) {
-            '_'
-        } else {
-            character
-        }
-    }).collect::<String>().trim().to_owned()
+    value
+        .chars()
+        .map(|character| {
+            if character.is_control()
+                || ['<', '>', ':', '"', '/', '\\', '|', '?', '*'].contains(&character)
+            {
+                '_'
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 
 fn parse_episode_range(range: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {

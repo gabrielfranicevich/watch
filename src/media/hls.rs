@@ -48,7 +48,9 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
     }
 
     if variants.is_empty() {
-        return Err(HlsError("HLS master playlist contains no stream variants".into()));
+        return Err(HlsError(
+            "HLS master playlist contains no stream variants".into(),
+        ));
     }
     Ok(variants)
 }
@@ -61,8 +63,12 @@ pub fn select_quality<'a>(variants: &'a [HlsVariant], requested: &str) -> Option
         "best" => variants.iter().max_by_key(|variant| variant.bandwidth),
         "worst" => variants.iter().min_by_key(|variant| variant.bandwidth),
         value => variants.iter().find(|variant| {
-            variant.resolution.as_deref().is_some_and(|resolution| resolution.starts_with(value))
-                || resolution_height(variant.resolution.as_deref()) == Some(value.trim_end_matches('p'))
+            variant
+                .resolution
+                .as_deref()
+                .is_some_and(|resolution| resolution.starts_with(value))
+                || resolution_height(variant.resolution.as_deref())
+                    == Some(value.trim_end_matches('p'))
         }),
     }
 }
@@ -98,7 +104,10 @@ fn resolve_url(base: &str, reference: &str) -> Result<String, HlsError> {
     if reference.starts_with('/') {
         return Ok(format!("{origin}://{authority}{reference}"));
     }
-    let directory = base_path.rsplit_once('/').map(|(directory, _)| directory).unwrap_or("");
+    let directory = base_path
+        .rsplit_once('/')
+        .map(|(directory, _)| directory)
+        .unwrap_or("");
     let joined = if directory.is_empty() {
         format!("/{reference}")
     } else {
@@ -112,7 +121,9 @@ fn normalize_path(path: &str) -> String {
     for part in path.split('/') {
         match part {
             "" | "." => {}
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             _ => parts.push(part),
         }
     }
@@ -127,7 +138,8 @@ mod tests {
 
     #[test]
     fn parses_variants_and_resolves_relative_urls() {
-        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
+        let variants =
+            parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0].url, "https://cdn.example/hls/360/index.m3u8");
         assert_eq!(variants[1].url, "https://cdn.example/1080/index.m3u8");
@@ -135,11 +147,27 @@ mod tests {
 
     #[test]
     fn selects_best_worst_and_requested_height() {
-        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
-        assert_eq!(select_quality(&variants, "best").unwrap().resolution.as_deref(), Some("1920x1080"));
-        assert_eq!(select_quality(&variants, "worst").unwrap().resolution.as_deref(), Some("640x360"));
+        let variants =
+            parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
+        assert_eq!(
+            select_quality(&variants, "best")
+                .unwrap()
+                .resolution
+                .as_deref(),
+            Some("1920x1080")
+        );
+        assert_eq!(
+            select_quality(&variants, "worst")
+                .unwrap()
+                .resolution
+                .as_deref(),
+            Some("640x360")
+        );
         assert_eq!(select_quality(&variants, "720p"), None);
-        assert_eq!(select_quality(&variants, "1080p").unwrap().bandwidth, 2500000);
+        assert_eq!(
+            select_quality(&variants, "1080p").unwrap().bandwidth,
+            2500000
+        );
     }
 
     #[test]

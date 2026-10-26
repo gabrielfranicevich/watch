@@ -2,17 +2,27 @@ use std::io::{self, BufRead, Write};
 
 /// Read a one-based selection from a list of options.
 /// Returns the zero-based index, or None when input reaches EOF or the user cancels.
-pub fn read_selection<R, W>(input: &mut R, output: &mut W, option_count: usize) -> io::Result<Option<usize>>
+pub fn read_selection<R, W>(
+    input: &mut R,
+    output: &mut W,
+    option_count: usize,
+) -> io::Result<Option<usize>>
 where
     R: BufRead,
     W: Write,
 {
     if option_count == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "cannot select from an empty list"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "cannot select from an empty list",
+        ));
     }
 
     loop {
-        write!(output, "Select an entry (1-{option_count}, or q to cancel): ")?;
+        write!(
+            output,
+            "Select an entry (1-{option_count}, or q to cancel): "
+        )?;
         output.flush()?;
 
         let mut line = String::new();
@@ -27,7 +37,10 @@ where
 
         match value.parse::<usize>() {
             Ok(number) if (1..=option_count).contains(&number) => return Ok(Some(number - 1)),
-            _ => writeln!(output, "Invalid selection. Enter a number from 1 to {option_count}, or q to cancel.")?,
+            _ => writeln!(
+                output,
+                "Invalid selection. Enter a number from 1 to {option_count}, or q to cancel."
+            )?,
         }
     }
 }
@@ -49,7 +62,13 @@ mod tests {
         let mut input = Cursor::new("abc\n0\n4\n3\n");
         let mut output = Vec::new();
         assert_eq!(read_selection(&mut input, &mut output, 3).unwrap(), Some(2));
-        assert_eq!(String::from_utf8(output).unwrap().matches("Invalid selection").count(), 3);
+        assert_eq!(
+            String::from_utf8(output)
+                .unwrap()
+                .matches("Invalid selection")
+                .count(),
+            3
+        );
     }
 
     #[test]
@@ -70,6 +89,11 @@ mod tests {
     fn rejects_empty_option_lists() {
         let mut input = Cursor::new("1\n");
         let mut output = Vec::new();
-        assert_eq!(read_selection(&mut input, &mut output, 0).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(
+            read_selection(&mut input, &mut output, 0)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 }

@@ -44,9 +44,17 @@ mod tests {
             Some("https://embed.example/".into()),
         );
         let args = FfmpegDownloader::arguments(&stream, Path::new("episode.mkv"));
-        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
-        assert!(args.windows(2).any(|pair| pair == ["-headers", "Referer: https://embed.example/\r\n"]));
-        assert!(args.windows(2).any(|pair| pair[0] == "-i" && pair[1] == "https://cdn.example/episode.m3u8?token=a&b=c"));
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["-headers", "Referer: https://embed.example/\r\n"])
+        );
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-i" && pair[1] == "https://cdn.example/episode.m3u8?token=a&b=c"
+        ));
         assert_eq!(args.last().map(String::as_str), Some("episode.mkv"));
     }
 
