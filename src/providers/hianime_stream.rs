@@ -99,7 +99,7 @@ impl HiAnimeStreamResolver {
         let decoded = STANDARD.decode(blob)
             .map_err(|_| StreamResolveError::InvalidData("HiAnime embed config is not valid base64".into()))?;
         let json_bytes: Vec<u8> = decoded.iter().enumerate()
-            .map(|(index, byte)| byte ^ XOR_KEY[index % XOR_KEY.len()])
+            .map(|(index, byte)| *byte ^ XOR_KEY[index % XOR_KEY.len()])
             .collect();
         let config: Value = serde_json::from_slice(&json_bytes)
             .map_err(|error| StreamResolveError::InvalidData(format!("HiAnime embed config is invalid JSON: {error}")))?;
@@ -109,7 +109,7 @@ impl HiAnimeStreamResolver {
 
         let playlist = self.client.get(master_url).header(reqwest::header::REFERER, &referer)
             .send()?.error_for_status()?.text()?;
-        let variants = parse_master_playlist(&playlist, master_url, Some(&referer))?;
+        let variants = parse_master_playlist(&playlist, master_url)?;
         let selected = select_quality(&variants, quality)
             .or_else(|| select_quality(&variants, "best"))
             .ok_or_else(|| StreamResolveError::InvalidData("HLS playlist contains no selectable quality".into()))?;
