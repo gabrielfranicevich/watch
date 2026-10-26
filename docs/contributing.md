@@ -29,6 +29,6 @@ GitHub Actions runs these checks, plus CLI help/version smoke tests, on Linux, m
 
 ## Pull requests
 
-Describe the problem and behavior change, link related issues, and include the commands used to test it. Use the checklist in [pull-request-template.md](pull-request-template.md) when preparing a pull request.
+Describe the problem and behavior change, link related issues, and include the commands used to test it. Use the checklist in [pull_request_template.md](pull_request_template.md) when preparing a pull request.
 
 Do not claim compatibility for a platform or player unless it has been tested. Provider markup and third-party tools can change independently of this repository.

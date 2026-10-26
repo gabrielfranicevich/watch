@@ -44,4 +44,4 @@ Playback and downloading delegate work to external programs. Test command-line a
 
 ## Pull request checklist
 
-See [contributing.md](contributing.md) for quality gates and [pull-request-template.md](pull-request-template.md) for the review checklist.
+See [contributing.md](contributing.md) for quality gates and [pull_request_template.md](pull_request_template.md) for the review checklist.
