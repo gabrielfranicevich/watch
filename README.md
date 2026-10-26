@@ -10,6 +10,21 @@ ani-cli searches HiAnime, resolves available HLS streams, and hands playback or 
 
 > **Project status:** the Rust implementation is developed on `develop`. Prebuilt binaries and updated third-party packages are not published yet; some package managers may still provide the historical shell version from `main`.
 
+<details>
+<summary>Contents</summary>
+
+- [Quick start](#quick-start)
+- [Examples](#examples)
+- [What it supports](#what-it-supports)
+- [Common options](#common-options)
+- [Runtime dependencies](#runtime-dependencies)
+- [Configuration](#configuration)
+- [Caveats](#caveats)
+- [Documentation and support](#documentation-and-support)
+- [License](#license)
+
+</details>
+
 ## Quick start
 
 Install stable Rust 1.85 or newer and Git, then install the CLI and search for a title:
