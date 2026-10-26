@@ -302,8 +302,8 @@ mod tests {
     }
 
     fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>>) {
-        use base64::engine::general_purpose::STANDARD as BASE64;
         use base64::Engine;
+        use base64::engine::general_purpose::STANDARD as BASE64;
         use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::time::Duration;
@@ -366,11 +366,7 @@ mod tests {
                     } else if request_path == "/mal/12345/watch" {
                         ("200 OK", "text/html; charset=utf-8", embed_body.as_str())
                     } else if request_path == "/hls/master.m3u8" {
-                        (
-                            "200 OK",
-                            "application/vnd.apple.mpegurl",
-                            playlist.as_str(),
-                        )
+                        ("200 OK", "application/vnd.apple.mpegurl", playlist.as_str())
                     } else {
                         ("404 Not Found", "text/plain; charset=utf-8", "not found")
                     };
@@ -393,11 +389,7 @@ mod tests {
     fn resolves_server_embed_hls_audio_subtitles_and_available_qualities() {
         let (base_url, server) = mock_stream_resolver_server();
         let resolver = HiAnimeStreamResolver::with_base_url(&base_url);
-        let episode = Episode::new(
-            "1",
-            None,
-            format!("{base_url}/watch/frieren-123?ep=1001"),
-        );
+        let episode = Episode::new("1", None, format!("{base_url}/watch/frieren-123?ep=1001"));
 
         let resolved = resolver.resolve(&episode, false, "720p").unwrap();
         let requests = server.join().unwrap();
@@ -411,7 +403,10 @@ mod tests {
             Some(format!("{base_url}/audio/en.m3u8").as_str())
         );
         assert_eq!(
-            resolved.subtitle.as_ref().map(|subtitle| subtitle.url.as_str()),
+            resolved
+                .subtitle
+                .as_ref()
+                .map(|subtitle| subtitle.url.as_str()),
             Some(format!("{base_url}/subtitles/en.vtt").as_str())
         );
         assert_eq!(resolved.mal_id.as_deref(), Some("12345"));
