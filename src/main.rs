@@ -847,7 +847,7 @@ fn select_items(
     );
 
     match menu::select(labels, prompt, backend.as_deref(), multi)? {
-        MenuOutcome::Selected(mut indices) => {
+        MenuOutcome::Selected(indices) => {
             let indices = ordered_episode_indices(indices);
             if indices.is_empty() {
                 Err("selection cancelled".into())
