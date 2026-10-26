@@ -22,7 +22,6 @@ jobs:
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('Cargo.toml') != '' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

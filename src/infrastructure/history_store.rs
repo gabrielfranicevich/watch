@@ -29,7 +29,11 @@ impl HistoryStore {
     }
 
     pub fn write(&self, entries: &[HistoryEntry]) -> io::Result<()> {
-        let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
+        let parent = self
+            .path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(parent)?;
 
         let lock_path = suffix_path(&self.path, ".lock");
