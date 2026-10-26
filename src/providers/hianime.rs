@@ -88,7 +88,7 @@ impl HiAnimeProvider {
         let url = format!("{}/api/theme/episode/list/{}", self.base_url, slug);
         let response = self.client.get(url).send()?.error_for_status()?;
         let body = response.text()?;
-        let document = Html::parse_fragment(&body.replace("\\\\", ""));
+        let document = Html::parse_fragment(&body.replace("\\", ""));
         let selector = Selector::parse(".ep-item")
             .map_err(|_| ProviderError::InvalidSelector(".ep-item"))?;
         let mut episodes = Vec::new();
