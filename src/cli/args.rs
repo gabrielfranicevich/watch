@@ -252,4 +252,57 @@ mod tests {
         assert!(Cli::parse(["--help"]).unwrap().help);
         assert!(Cli::parse(["-V"]).unwrap().version);
     }
+    #[test]
+    fn preserves_legacy_operational_flags() {
+        let cli = Cli::parse([
+            "--delete",
+            "--logview",
+            "--skip",
+            "--no-detach",
+            "--exit-after-play",
+        ])
+        .unwrap();
+
+        assert!(cli.delete_history);
+        assert!(cli.logview);
+        assert!(cli.skip_intro);
+        assert!(cli.no_detach);
+        assert!(cli.exit_after_play);
+    }
+
+    #[test]
+    fn short_episode_range_alias_matches_long_option() {
+        let long = Cli::parse(["--episode", "2-4"]).unwrap();
+        let short = Cli::parse(["-r", "2-4"]).unwrap();
+
+        assert_eq!(long.episode_range, short.episode_range);
+    }
+
+    #[test]
+    fn rejects_non_positive_select_nth_values() {
+        for value in ["0", "-1", "not-a-number"] {
+            assert!(
+                Cli::parse(["--select-nth", value]).is_err(),
+                "expected --select-nth {value} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn keeps_multiword_query_when_options_are_interspersed() {
+        let cli = Cli::parse([
+            "Frieren",
+            "--download",
+            "Beyond",
+            "--quality",
+            "720p",
+            "Journey",
+        ])
+        .unwrap();
+
+        assert_eq!(cli.query.as_deref(), Some("Frieren Beyond Journey"));
+        assert_eq!(cli.quality.as_deref(), Some("720p"));
+        assert!(cli.download);
+    }
+
 }
