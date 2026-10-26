@@ -1,6 +1,6 @@
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Child, Command, ExitCode, ExitStatus};
 
 use ani_cli::cli::menu::{self, MenuOutcome};
 use ani_cli::cli::selection::read_selection;
@@ -16,7 +16,7 @@ use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
 
 fn main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => code,
         Err(error) => {
             eprintln!("ani-cli: {error}");
             ExitCode::from(1)
@@ -24,15 +24,15 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let cli = ani_cli::cli::args::Cli::parse(std::env::args().skip(1))?;
     if cli.help {
         print!("{}", ani_cli::cli::args::HELP);
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.version {
         println!("ani-cli {}", ani_cli::version());
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     let history = paths::history_file().map(HistoryStore::new);
@@ -42,10 +42,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
         store.write(&[])?;
         println!("History deleted.");
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.logview {
-        return show_logs();
+        show_logs()?;
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.update {
         return Err("--update is not implemented yet: automatic self-update needs a verified Rust release artifact".into());
@@ -82,8 +83,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
             })
             .collect();
-        let selected_index =
-            select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
+        let selected_index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
         let entry = &recent[selected_index];
         (
             Anime::new(
@@ -112,7 +112,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let selected: Vec<Episode> = if let Some(range) = cli.episode_range.as_deref() {
-        select_episode_range(episodes, range)?
+        select_episode_range(episodes.clone(), range)?
     } else if let Some(last_watched) = resume_episode.as_deref() {
         let current = episodes
             .iter()
@@ -156,6 +156,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             || std::env::var("ANI_CLI_PLAYER")
                 .is_ok_and(|value| value.to_ascii_lowercase().contains("vlc")),
     );
+    let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
     let download_dir = std::env::var_os("ANI_CLI_DOWNLOAD_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
@@ -164,26 +169,101 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(&download_dir)?;
     }
 
-    for episode in &selected {
+    let mut playback = PlaybackConfig {
+        resolver: &resolver,
+        player,
+        player_flags,
+        dubbed,
+        quality,
+        download: cli.download,
+        download_dir: &download_dir,
+        history: history.as_ref(),
+    };
+    let attached = cli.no_detach || cli.exit_after_play;
+    let mut active_player: Option<Child> = None;
+
+    for (index, episode) in selected.iter().enumerate() {
+        if index > 0 {
+            wait_for_player(&mut active_player)?;
+        }
+        match playback.play_episode(&anime, episode, attached)? {
+            PlaybackResult::Detached(child) => active_player = Some(child),
+            PlaybackResult::Attached(status) => {
+                if cli.exit_after_play {
+                    return Ok(exit_code(status));
+                }
+                ensure_success(status, player.command_name())?;
+            }
+            PlaybackResult::Downloaded => {}
+        }
+    }
+
+    if cli.download {
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let current_episode = selected
+        .last()
+        .ok_or("no episode was selected")?;
+    let mut current_index = episodes
+        .iter()
+        .position(|episode| episode.number == current_episode.number)
+        .ok_or("selected episode is missing from the provider episode list")?;
+
+    run_playback_menu(
+        &anime,
+        &episodes,
+        &mut current_index,
+        &mut active_player,
+        &mut playback,
+        &cli,
+    )
+}
+
+struct PlaybackConfig<'a> {
+    resolver: &'a HiAnimeStreamResolver,
+    player: Player,
+    player_flags: Vec<String>,
+    dubbed: bool,
+    quality: String,
+    download: bool,
+    download_dir: &'a Path,
+    history: Option<&'a HistoryStore>,
+}
+
+enum PlaybackResult {
+    Detached(Child),
+    Attached(ExitStatus),
+    Downloaded,
+}
+
+impl PlaybackConfig<'_> {
+    fn play_episode(
+        &mut self,
+        anime: &Anime,
+        episode: &Episode,
+        attached: bool,
+    ) -> Result<PlaybackResult, Box<dyn std::error::Error>> {
         eprintln!(
-            "Resolving episode {} ({})...",
+            "Resolving episode {} ({}) at quality {}...",
             episode.number,
-            if dubbed { "dub" } else { "sub" }
+            if self.dubbed { "dub" } else { "sub" },
+            self.quality
         );
-        let media = resolver.resolve(episode, dubbed, &quality)?;
+        let media = self
+            .resolver
+            .resolve(episode, self.dubbed, &self.quality)?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
 
-        if cli.download {
+        if self.download {
             let filename = format!(
                 "{} - Episode {}.mp4",
                 safe_filename(&anime.title),
                 safe_filename(&episode.number)
             );
-            let destination = download_dir.join(filename);
+            let destination = self.download_dir.join(filename);
             let status = FfmpegDownloader::download(&media.stream, &destination)?;
-            if !status.success() {
-                return Err(format!("ffmpeg exited with status {status}").into());
-            }
+            ensure_success(status, "ffmpeg")?;
             if let Some(subtitle) = media.subtitle.as_ref() {
                 let subtitle_path = destination.with_extension("vtt");
                 let mut request = reqwest::blocking::Client::new().get(&subtitle.url);
@@ -193,31 +273,178 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let response = request.send()?.error_for_status()?;
                 std::fs::write(subtitle_path, response.bytes()?)?;
             }
-        } else {
-            let status = player.play(&media.stream, media.subtitle.as_ref(), &title)?;
-            if !status.success() {
-                return Err(
-                    format!("{} exited with status {status}", player.command_name()).into(),
-                );
-            }
+            self.record(anime, episode)?;
+            return Ok(PlaybackResult::Downloaded);
         }
 
-        if let Some(store) = history.as_ref() {
-            record_history(store, &anime, episode)?;
+        if self.log_enabled() {
+            let _ = Command::new("logger")
+                .args([
+                    "-t",
+                    "ani-cli",
+                    &format!("{} {}", anime.title, episode.number),
+                ])
+                .status();
+        }
+
+        if attached {
+            let status = self.player.play_with_extra(
+                &media.stream,
+                media.subtitle.as_ref(),
+                &title,
+                &self.player_flags,
+            )?;
+            self.record(anime, episode)?;
+            Ok(PlaybackResult::Attached(status))
+        } else {
+            let child = self.player.launch_detached(
+                &media.stream,
+                media.subtitle.as_ref(),
+                &title,
+                &self.player_flags,
+            )?;
+            self.record(anime, episode)?;
+            Ok(PlaybackResult::Detached(child))
         }
     }
 
+    fn record(
+        &self,
+        anime: &Anime,
+        episode: &Episode,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(store) = self.history {
+            record_history(store, anime, episode)?;
+        }
+        Ok(())
+    }
+
+    fn log_enabled(&self) -> bool {
+        std::env::var("ANI_CLI_LOG")
+            .map(|value| value != "0")
+            .unwrap_or(true)
+    }
+}
+
+fn run_playback_menu(
+    anime: &Anime,
+    episodes: &[Episode],
+    current_index: &mut usize,
+    active_player: &mut Option<Child>,
+    playback: &mut PlaybackConfig<'_>,
+    cli: &ani_cli::cli::args::Cli,
+) -> Result<ExitCode, Box<dyn std::error::Error>> {
+    let actions = vec![
+        "Next episode".to_owned(),
+        "Replay current episode".to_owned(),
+        "Previous episode".to_owned(),
+        "Select episode".to_owned(),
+        "Change quality".to_owned(),
+        "Quit".to_owned(),
+    ];
+
+    loop {
+        let prompt = format!(
+            "Playing episode {} of {} — choose action: ",
+            episodes[*current_index].number, anime.title
+        );
+        let action = match select_item(&actions, &prompt, None, cli) {
+            Ok(index) => index,
+            Err(error) if error.to_string() == "selection cancelled" => {
+                return Ok(ExitCode::SUCCESS);
+            }
+            Err(error) => return Err(error),
+        };
+
+        match action {
+            0 => {
+                if *current_index + 1 >= episodes.len() {
+                    eprintln!("Already at the last episode.");
+                    continue;
+                }
+                *current_index += 1;
+            }
+            1 => {}
+            2 => {
+                if *current_index == 0 {
+                    eprintln!("Already at the first episode.");
+                    continue;
+                }
+                *current_index -= 1;
+            }
+            3 => {
+                let labels: Vec<String> = episodes
+                    .iter()
+                    .map(|episode| {
+                        format!(
+                            "Episode {}{}",
+                            episode.number,
+                            episode
+                                .title
+                                .as_deref()
+                                .map(|title| format!(" — {title}"))
+                                .unwrap_or_default()
+                        )
+                    })
+                    .collect();
+                *current_index = select_item(&labels, "Select episode: ", None, cli)?;
+            }
+            4 => {
+                print!("Video quality (best, worst, 1080p, 720p, ...): ");
+                io::stdout().flush()?;
+                let mut value = String::new();
+                if io::stdin().read_line(&mut value)? == 0 {
+                    return Ok(ExitCode::SUCCESS);
+                }
+                let value = value.trim();
+                if value.is_empty() {
+                    eprintln!("Quality was not changed.");
+                    continue;
+                }
+                playback.quality = value.to_owned();
+            }
+            _ => return Ok(ExitCode::SUCCESS),
+        }
+
+        wait_for_player(active_player)?;
+        match playback.play_episode(anime, &episodes[*current_index], cli.no_detach)? {
+            PlaybackResult::Detached(child) => *active_player = Some(child),
+            PlaybackResult::Attached(status) => ensure_success(status, playback.player.command_name())?,
+            PlaybackResult::Downloaded => return Ok(ExitCode::SUCCESS),
+        }
+    }
+}
+
+fn wait_for_player(active_player: &mut Option<Child>) -> io::Result<()> {
+    if let Some(mut child) = active_player.take() {
+        let _ = child.wait()?;
+    }
     Ok(())
+}
+
+fn exit_code(status: ExitStatus) -> ExitCode {
+    ExitCode::from(status.code().unwrap_or(1).clamp(0, 255) as u8)
+}
+
+fn ensure_success(
+    status: ExitStatus,
+    program: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{program} exited with status {status}").into())
+    }
 }
 
 fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
-    let status = std::process::Command::new("log")
+    let status = Command::new("log")
         .args(["show", "--predicate", "process == \"logger\""])
         .status()?;
 
     #[cfg(target_os = "linux")]
-    let status = std::process::Command::new("journalctl")
+    let status = Command::new("journalctl")
         .args(["-t", "ani-cli"])
         .status()?;
 
@@ -225,11 +452,7 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
     return Err("--logview is supported only on Linux and macOS".into());
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    if !status.success() {
-        return Err(format!("log viewer exited with status {status}").into());
-    }
-
-    Ok(())
+    ensure_success(status, "log viewer")
 }
 
 fn record_history(
@@ -377,7 +600,10 @@ mod tests {
         ];
         let selected = select_episode_range(episodes, "1-2").unwrap();
         assert_eq!(
-            selected.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+            selected
+                .iter()
+                .map(|episode| episode.number.as_str())
+                .collect::<Vec<_>>(),
             vec!["2", "1"]
         );
     }
