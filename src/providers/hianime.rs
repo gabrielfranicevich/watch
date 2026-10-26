@@ -80,6 +80,19 @@ impl HiAnimeProvider {
         let mut results = Vec::new();
 
         for element in document.select(&selector) {
+            let mut ancestor = element.parent_element();
+            let mut in_sidebar = false;
+            while let Some(parent) = ancestor {
+                if parent.value().attr("id") == Some("main-sidebar") {
+                    in_sidebar = true;
+                    break;
+                }
+                ancestor = parent.parent_element();
+            }
+            if in_sidebar {
+                continue;
+            }
+
             let Some(href) = element.value().attr("href") else {
                 continue;
             };
@@ -188,10 +201,19 @@ mod tests {
     #[test]
     fn search_parses_fixture_and_encodes_query() {
         let body = r#"
-            <div class="film-detail">
-                <h3 class="film-name">
-                    <a href="/watch/frieren-123" title="Frieren: Beyond Journey's End">Frieren</a>
-                </h3>
+            <div id="main-content">
+                <div class="film-detail">
+                    <h3 class="film-name">
+                        <a href="/watch/frieren-123" title="Frieren: Beyond Journey's End">Frieren</a>
+                    </h3>
+                </div>
+            </div>
+            <div id="main-sidebar">
+                <div class="film-detail">
+                    <h3 class="film-name">
+                        <a href="/watch/sidebar-pick-999" title="Sidebar recommendation">Sidebar pick</a>
+                    </h3>
+                </div>
             </div>
         "#;
         let (base_url, server) = mock_html_response(body);
@@ -203,6 +225,7 @@ mod tests {
         assert_eq!(results[0].id, "frieren-123");
         assert_eq!(results[0].title, "Frieren: Beyond Journey's End");
         assert_eq!(results[0].url, format!("{base_url}/watch/frieren-123"));
+        assert!(!results.iter().any(|result| result.id == "sidebar-pick-999"));
         assert!(request.starts_with("GET /search?keyword="));
         assert!(request.contains("Frieren"));
     }
