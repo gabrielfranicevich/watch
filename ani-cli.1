@@ -1,145 +1,154 @@
-.TH "ANI-CLI" "1" "August 2026" "ani-cli" "User Commands"
+.TH ANI-CLI 1 "October 2026" "ani-cli 0.1.0" "User Commands"
 .SH NAME
-ani-cli \- watch anime from the commandline
+ani-cli \- terminal client to search, stream and download anime
 .SH SYNOPSIS
 .B ani-cli
-[\fI\,OPTIONS\/\fR]
+.RI [ options ]
+.RI [ query ]
+.br
+.B ani-cli
+.RI [ query ]
+.RI [ options ]
 .SH DESCRIPTION
-A shell script to browse and search anime from the command-line.
-.PD 0
-.P
-.PD
-This tool scrapes the site hianime.
-.PD 0
-.P
-.PD
-\f[B]ani-cli\f[R] without options defaults to iina on macOS, flatpak mpv on Steamdeck, mpv apk on android, vlc on iOS and mpv media player everywhere else.
+.B ani-cli
+searches HiAnime, presents matching titles and episodes, resolves available streams, and opens the selected media with a supported external player. It can also download episodes and maintain a compatible watch-history file.
+.PP
+The Rust implementation is currently developed on the
+.B develop
+branch. The shell implementation on
+.B main
+remains the compatibility reference until the migration is validated.
 .SH OPTIONS
 .TP
-\fB\-e | --episode | -r | --range\fR \fI\,<episode>\/\fR
-Specify the episode numbers to watch. If a range is specified, it should be quoted or separated by a non-numeric character (e.g. -). Use 0 for the first available episode and -1 for the last.
+.BR -h ", " --help
+Show command help.
 .TP
-\fB\-c | --continue\fR
-Continue watching anime from history.
+.BR -V ", " --version
+Show the installed version.
 .TP
-\fB\-d | --download\fR
-Download episode.
+.BR -c ", " --continue
+Continue from watch history.
 .TP
-\fB\-D | --delete\fR
-Delete history.
+.BR -d ", " --download
+Download selected episode(s) instead of playing them.
 .TP
-\fB\-l | --logview\fR
-Show logs.
+.BR -D ", " --delete
+Delete watch history.
 .TP
-\fB\-h | --help\fR
-Show summary of options.
+.BR -l ", " --logview
+Show available system log entries.
 .TP
-\fB\-q | --quality\fR \fI\,<best|worst|360|480|720|1080>\/\fR
-Set the video quality. Default quality is best.
+.BR -s ", " --syncplay
+Use Syncplay.
 .TP
-\fB\-s | --syncplay\fR
-Watch anime together with friends, using Syncplay (works with mpv only).
+.BR -S ", " --select-nth " " N
+Select the one-based item index.
 .TP
-\fB\-U | --update\fR \fI\,<branch>\/\fR
-Fetch update from github.
+.BR -q ", " --quality " " QUALITY
+Select a quality such as
+.B best
+,
+.B worst
+or
+.B 720p
+.
 .TP
-\fB\-v | --vlc\fR
-Use VLC as the media player.
+.BR -v ", " --vlc
+Use VLC.
 .TP
-\fB\-S | --select-nth\fR \fI\,<index>\/\fR
-Selects nth entry.
+.BR -e ", " --episode " " RANGE
+Select episode numbers or ranges, for example
+.B 5-6
+,
+.B "1 3 5"
+,
+.B 0
+(first episode), or
+.B -1
+(last episode).
 .TP
-\fB\-N | --nextep-countdown\fR
-Prints a countdown to the next episode as the last episode in the list. If in history is after the current episode.
+.B --range RANGE
+Alias for
+.BR --episode .
 .TP
-\fB\--dub\fR
-Play the dubbed version. Without this flag, it'll always play the subbed version.
+.B --dub
+Select dubbed audio when available.
 .TP
-\fB\--rofi\fR
-Use rofi instead of fzf for the interactive menu
+.B --rofi
+Use Rofi for selection.
 .TP
-\fB\--dmenu\fR
-Use dmenu instead of fzf for the interactive menu
+.B --dmenu
+Use dmenu for selection.
 .TP
-\fB\--skip\fR
-Use ani-skip to skip the intro of the episode (mpv only)
+.B --skip
+Skip the intro when the selected player supports ani-skip.
 .TP
-\fB\--no-detach\fR
-Don't detach the player (useful for in-terminal playback, mpv only)
+.B --no-detach
+Keep playback attached to the terminal.
 .TP
-\fB\--exit-after-play\fR
-Exit the player, and return the player exit code (useful for non interactive scenarios, mpv only)
-.PP
-.SH
-ENVIRONMENT VARIABLES
-.PP
-ani-cli v5 uses environment variables to control unstable/untested and niche features in addition to everything that has an option. Command-line options take precedence over env vars. Note that these are all subject to change.
+.B --exit-after-play
+Exit after playback and return the player status.
 .TP
-\fBANI_CLI_BRANCH\fR
-Controls the Branch upgdated to with the -U option. Default is master.
+.B -N, --nextep-countdown
+Show the next-episode countdown before continuing into search/playback.
 .TP
-\fBANI_CLI_MODE\fR
-Controls the scraped media's mode, valid options are sub or dub. Default is sub.
+.B -U, --update
+Update the Rust installation from the selected Git branch using Cargo.
+.SH ENVIRONMENT
 .TP
-\fBANI_CLI_DOWNLOAD_DIR\fR
-Controls the directory where files are downloaded. Default is the current dir.
+.B ANI_CLI_DEFAULT_SOURCE
+Default source: search, history, or nextep.
 .TP
-\fBANI_CLI_QUALITY\fR
-Controls the scraped media's quality, a resolution such as 1080, or worst/best. Default is best.
+.B ANI_CLI_MODE
+Default audio mode: sub or dub.
 .TP
-\fBANI_CLI_EXACT\fR
-Controls whether only anime titles that exactly match the query are selected (case-insensitive). Can be 0 (disabled) or 1 (enabled). Default is 0.
+.B ANI_CLI_QUALITY
+Default quality, such as best, worst, 1080p or 720p.
 .TP
-\fBANI_CLI_PLAYER\fR
-Sets the player ani-cli uses. Can be debug (print links), download (equivalent to -d), android_mpv (apk and am start), android_vlc (apk and am start), catt (for streaming to tv), or any player that can play urls. For defaults see working without arguments.
+.B ANI_CLI_EXACT
+Set to 1 to require an exact normalized title match.
 .TP
-\fBANI_CLI_PLAYER_FLAGS\fR
-Sets the flags for the player ani-cli uses. Can be anything that the player supports. Default is none
+.B ANI_CLI_MENU
+Default menu backend: fzf, rofi or dmenu.
 .TP
-\fBANI_CLI_MENU\fR
-Controls the frontend of ani-cli. Can be fzf, rofi, dmenu or any other program. Default is fzf.
+.B ANI_CLI_MENU_FLAGS
+Additional arguments for the selected external menu.
 .TP
-\fBANI_CLI_MENU_FLAGS\fR
-Controls the flags for the frontend. Last flag must take prompt as argument. Default is none
+.B ANI_CLI_PLAYER
+Select mpv, vlc, syncplay, iina, or a custom player executable.
 .TP
-\fBANI_CLI_LOG\fR
-Controls the logging feature for playback. Can be 1(logs) or 0(doesn't log). Default is 1.
+.B ANI_CLI_PLAYER_FLAGS
+Additional player/downloader arguments.
 .TP
-\fBANI_CLI_HIST_DIR\fR
-Controls the directory ani-cli uses for storing history. A /ani-cli subfolder is created there for the histfile if doesn't exists. Default is $XDG_STATE_HOME if set, $HOME/.local/state if not.
+.B ANI_CLI_NO_DETACH
+Set to 1 to keep the player attached to the terminal.
 .TP
-\fBANI_CLI_DEFAULT_SOURCE\fR
-Controls the default source. Valid is history (equivalent to -c), everything else means search. Default is search.
+.B ANI_CLI_EXIT_AFTER_PLAY
+Set to 1 to return the player exit status after playback.
 .TP
-\fBANI_CLI_SKIP_INTRO\fR
-Controls if ani-skip is used to skip intros (works with mpv only). Can be 0 (disabled) or 1 (enabled). Default is 0.
+.B ANI_CLI_SKIP_INTRO
+Set to 1 to enable intro skipping where supported.
 .TP
-\fBANI_CLI_NO_DETACH\fR
-Controls if the player is detached from the main process for playback, which can be useful for use with terminal renderers such as kitty. Can be 0 (disabled) or 1 (enabled). Default is 0.
+.B ANI_CLI_DOWNLOAD_DIR
+Directory for downloaded episodes.
 .TP
-\fBANI_CLI_EXIT_AFTER_PLAY\fR
-Controls if the menu comes up after the player is spawned, potentially useful in non-interactive scenarios or with ANI_CLI_NO_DETACH. Can be 0 (disabled) or 1 (enabled). Default is 0.
-.PP
-.SH EPISODE SELECTION
-.PP
-Multiple episodes can be chosen using fzf (or alternative frontend's) multi-selection mode. For this refer to their instructions.
+.B ANI_CLI_HIST_DIR
+Directory containing the compatible ani-hsts history file.
+.TP
+.B ANI_CLI_LOG
+Set to 0 to disable system logger records.
+.SH DEPENDENCIES
+Rust is required to build the development branch. Playback needs a supported external media player such as mpv or VLC. Downloads use yt-dlp when available and FFmpeg as the fallback; FFmpeg is also required to mux separate audio and video renditions. Syncplay and ani-skip are optional.
+.SH FILES
+The history file is resolved using the platform-specific data directory or
+.BR ANI_CLI_HIST_DIR .
+Legacy numeric-ID history entries are backed up to a
+.B .v4
+file during migration.
 .SH BUGS
-.PP
-Use the GitHub issue tracker:
-https://github.com/pystardust/ani-cli/issues
-.SH COPYRIGHT
-.PP
-ani-cli is licensed under the GNU General Public License v3.0
-.PP
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-.PP
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-.PP
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+The client depends on third-party provider markup, streaming hosts and external media tools. Their behavior can change independently of this program.
+.SH SEE ALSO
+.BR cargo (1),
+.BR mpv (1),
+.BR ffmpeg (1),
+.BR yt-dlp (1)
