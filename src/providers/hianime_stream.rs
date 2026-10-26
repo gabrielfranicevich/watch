@@ -234,7 +234,7 @@ fn quality_options(variants: &[HlsVariant]) -> Vec<QualityOption> {
         })
         .collect();
 
-    options.sort_by(|left, right| right.0.cmp(&left.0));
+    options.sort_by_key(|option| std::cmp::Reverse(option.0));
     options.dedup_by(|left, right| left.1.value == right.1.value);
     options.into_iter().map(|(_, option)| option).collect()
 }
