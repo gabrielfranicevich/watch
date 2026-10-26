@@ -12,6 +12,7 @@ use ani_cli::infrastructure::paths;
 use ani_cli::media::downloader::MediaDownloader;
 use ani_cli::media::player::Player;
 use ani_cli::providers::hianime::HiAnimeProvider;
+use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
 
 fn main() -> ExitCode {
@@ -52,7 +53,12 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Err("--update is not implemented yet: automatic self-update needs a verified Rust release artifact".into());
     }
     if cli.next_episode_countdown {
-        return Err("--nextep-countdown is not implemented in the Rust migration yet".into());
+        let query = cli
+            .query
+            .as_deref()
+            .ok_or("--nextep-countdown requires an anime title")?;
+        AnimeScheduleProvider::new().show_countdown(query)?;
+        return Ok(ExitCode::SUCCESS);
     }
 
     let provider = HiAnimeProvider::new();

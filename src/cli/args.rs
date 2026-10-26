@@ -17,7 +17,7 @@ Options:
   -v, --vlc                Use VLC
   -V, --version            Show version
   -h, --help               Show this help
-  -e, --episode RANGE      Select episodes, e.g. 5-6 or "5 6"
+  -e, --episode RANGE      Select episodes, e.g. 5-6 or \"5 6\"
   -r, --range RANGE        Alias for --episode
       --dub                Play dubbed version
       --rofi               Use rofi for selection

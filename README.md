@@ -1,3 +1,5 @@
+> **Rust migration (`develop`):** the shell version remains the stable/default implementation. To try the Rust port, check out `develop` and run `cargo run --release -- "anime name"`. Rust adds playback, downloads, menu backends, and watch history; see [migration notes](docs/rust-migration.md).
+
 <p align=center>
 <br>
 <a href="http://makeapullrequest.com"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg"></a>
