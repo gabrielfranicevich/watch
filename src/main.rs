@@ -653,12 +653,16 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
 
 fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io::Result<()> {
     let mut entries = store.read()?;
-    entries.retain(|entry| entry.anime_id != anime.id);
-    entries.push(HistoryEntry::new(
-        episode.number.clone(),
-        anime.id.clone(),
-        anime.title.clone(),
-    ));
+    if let Some(existing) = entries.iter_mut().find(|entry| entry.anime_id == anime.id) {
+        existing.episode_number = episode.number.clone();
+        existing.anime_title = anime.title.clone();
+    } else {
+        entries.push(HistoryEntry::new(
+            episode.number.clone(),
+            anime.id.clone(),
+            anime.title.clone(),
+        ));
+    }
     store.write(&entries)
 }
 
@@ -984,9 +988,7 @@ fn effective_source(
     }
 }
 
-fn read_search_query(
-    cli: &ani_cli::cli::args::Cli,
-) -> Result<String, Box<dyn std::error::Error>> {
+fn read_search_query(cli: &ani_cli::cli::args::Cli) -> Result<String, Box<dyn std::error::Error>> {
     if let Some(backend) = menu_backend_for_cli(cli) {
         match menu::prompt_text("Search anime: ", Some(&backend))? {
             TextPromptOutcome::Text(query) => return Ok(query),
@@ -1044,6 +1046,54 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updating_history_keeps_existing_anime_position_and_appends_new_anime() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "ani-cli-record-history-{}-{nonce}",
+            std::process::id()
+        ));
+        let store = HistoryStore::new(&path);
+        store
+            .write(&[
+                HistoryEntry::new("2", "first-1", "First"),
+                HistoryEntry::new("5", "second-2", "Second"),
+            ])
+            .unwrap();
+
+        record_history(
+            &store,
+            &Anime::new("first-1", "First Updated", "https://hianime.at/watch/first-1"),
+            &Episode::new("3", None, "https://hianime.at/watch/first-1?ep=1003"),
+        )
+        .unwrap();
+        record_history(
+            &store,
+            &Anime::new("third-3", "Third", "https://hianime.at/watch/third-3"),
+            &Episode::new("1", None, "https://hianime.at/watch/third-3?ep=3001"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            store.read().unwrap(),
+            vec![
+                HistoryEntry::new("3", "first-1", "First Updated"),
+                HistoryEntry::new("5", "second-2", "Second"),
+                HistoryEntry::new("1", "third-3", "Third"),
+            ]
+        );
+        for suffix in ["", ".lock"] {
+            let _ = std::fs::remove_file({
+                let mut name = path.as_os_str().to_os_string();
+                name.push(suffix);
+                std::path::PathBuf::from(name)
+            });
+        }
+    }
 
     #[test]
     fn download_only_mode_does_not_require_a_player() {
