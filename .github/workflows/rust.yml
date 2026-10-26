@@ -50,5 +50,10 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets
 
+      - name: Smoke-test CLI entry points
+        run: |
+          cargo run --quiet -- --help
+          cargo run --quiet -- --version
+
       - name: Check formatting
         run: cargo fmt --all -- --check
