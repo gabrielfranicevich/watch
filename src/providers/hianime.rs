@@ -323,5 +323,4 @@ mod tests {
         assert!(requests[0].starts_with("GET /search?keyword=Frieren "));
         assert!(requests[1].starts_with("GET /api/theme/episode/list/123 "));
     }
-
 }

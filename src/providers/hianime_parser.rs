@@ -2,10 +2,7 @@ use scraper::{Element, Html, Selector};
 
 use crate::domain::{anime::Anime, episode::Episode};
 
-pub(super) fn parse_search_results(
-    body: &str,
-    base_url: &str,
-) -> Result<Vec<Anime>, &'static str> {
+pub(super) fn parse_search_results(body: &str, base_url: &str) -> Result<Vec<Anime>, &'static str> {
     let document = Html::parse_document(body);
     let selector = Selector::parse("div.film-detail h3.film-name a")
         .map_err(|_| "div.film-detail h3.film-name a")?;
@@ -83,11 +80,7 @@ pub(super) fn parse_episodes(
         else {
             continue;
         };
-        let Some(id) = element
-            .value()
-            .attr("data-id")
-            .filter(|id| !id.is_empty())
-        else {
+        let Some(id) = element.value().attr("data-id").filter(|id| !id.is_empty()) else {
             continue;
         };
         let watch_url = format!("{}/watch/{}?ep={}", base_url, anime_id, id);

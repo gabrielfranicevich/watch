@@ -363,5 +363,4 @@ mod tests {
         assert!(MediaDownloader::should_try_yt_dlp(&video_only));
         assert!(!MediaDownloader::should_try_yt_dlp(&separate_audio));
     }
-
 }

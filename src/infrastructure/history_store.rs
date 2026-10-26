@@ -335,5 +335,4 @@ mod tests {
         assert!(store.read().unwrap().is_empty());
         remove_history_artifacts(&path);
     }
-
 }

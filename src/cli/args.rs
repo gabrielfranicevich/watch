@@ -304,5 +304,4 @@ mod tests {
         assert_eq!(cli.quality.as_deref(), Some("720p"));
         assert!(cli.download);
     }
-
 }

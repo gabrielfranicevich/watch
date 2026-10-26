@@ -3,9 +3,11 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, ExitStatus};
 
-use ani_cli::application::{effective_source, next_episode_after, normalize_title, select_fixed_episodes};
 #[cfg(test)]
 use ani_cli::application::select_episode_range;
+use ani_cli::application::{
+    effective_source, next_episode_after, normalize_title, select_fixed_episodes,
+};
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
 use ani_cli::cli::selection::read_selection;
 use ani_cli::domain::anime::Anime;
@@ -701,14 +703,6 @@ fn ordered_episode_indices(mut indices: Vec<usize>) -> Vec<usize> {
     indices
 }
 
-
-
-
-
-
-
-
-
 fn select_item(
     labels: &[String],
     prompt: &str,
@@ -867,8 +861,6 @@ fn env_enabled(name: &str) -> bool {
 fn is_enabled(value: Option<&str>) -> bool {
     value == Some("1")
 }
-
-
 
 fn read_search_query(cli: &ani_cli::cli::args::Cli) -> Result<String, Box<dyn std::error::Error>> {
     if let Some(backend) = menu_backend_for_cli(cli) {
