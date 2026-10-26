@@ -881,9 +881,8 @@ fn flatpak_mpv_installed() -> bool {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .or_else(dirs_home);
-    home.is_some_and(|home| {
-        home.join(".local/share/flatpak/app/io.mpv.Mpv").is_dir()
-    }) || Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
+    home.is_some_and(|home| home.join(".local/share/flatpak/app/io.mpv.Mpv").is_dir())
+        || Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -1005,10 +1004,15 @@ mod tests {
         // CI machines usually have neither installation path; the result must
         // be a pure filesystem check and not run the Flatpak command.
         let available = flatpak_mpv_installed();
-        assert_eq!(available, Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
-            || std::env::var_os("HOME").is_some_and(|home| {
-                PathBuf::from(home).join(".local/share/flatpak/app/io.mpv.Mpv").is_dir()
-            }));
+        assert_eq!(
+            available,
+            Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
+                || std::env::var_os("HOME").is_some_and(|home| {
+                    PathBuf::from(home)
+                        .join(".local/share/flatpak/app/io.mpv.Mpv")
+                        .is_dir()
+                })
+        );
     }
 
     #[test]
