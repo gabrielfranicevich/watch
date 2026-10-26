@@ -19,6 +19,19 @@ pub fn config_dir() -> Option<PathBuf> {
     }
 }
 
+/// Location of the tab-delimited history file used by the legacy shell CLI.
+/// ANI_CLI_HIST_DIR is a directory override, not a filename.
+pub fn history_file() -> Option<PathBuf> {
+    if let Some(directory) = std::env::var_os("ANI_CLI_HIST_DIR") {
+        return Some(PathBuf::from(directory).join("ani-hsts"));
+    }
+
+    std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home_dir().map(|path| path.join(".local").join("state")))
+        .map(|path| path.join("ani-cli").join("ani-hsts"))
+}
+
 pub fn data_dir() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
         std::env::var_os("LOCALAPPDATA")
