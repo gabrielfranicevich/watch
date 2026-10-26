@@ -2,6 +2,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use ani_cli::cli::menu::{self, MenuOutcome};
 use ani_cli::cli::selection::read_selection;
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
@@ -72,15 +73,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 recent.push(entry);
             }
         }
-        for (index, entry) in recent.iter().enumerate() {
-            println!(
-                "{:>2}. {} — last watched episode {}",
-                index + 1,
-                entry.anime_title,
-                entry.episode_number
-            );
-        }
-        let selected_index = select_index(recent.len(), cli.select_index)?;
+        let labels: Vec<String> = recent
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{} — last watched episode {}",
+                    entry.anime_title, entry.episode_number
+                )
+            })
+            .collect();
+        let selected_index =
+            select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
         let entry = &recent[selected_index];
         (
             Anime::new(
@@ -97,10 +100,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if results.is_empty() {
             return Err(format!("no results found for '{query}'").into());
         }
-        for (index, result) in results.iter().enumerate() {
-            println!("{:>2}. {}", index + 1, result.title);
-        }
-        let index = select_index(results.len(), cli.select_index)?;
+        let labels: Vec<String> = results.iter().map(|result| result.title.clone()).collect();
+        let index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
         (results[index].clone(), None)
     };
 
@@ -124,19 +125,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let next = episodes.get(current + 1).ok_or("no next episode is available")?;
         vec![next.clone()]
     } else {
-        for (index, episode) in episodes.iter().enumerate() {
-            println!(
-                "{:>3}. Episode {}{}",
-                index + 1,
-                episode.number,
-                episode
-                    .title
-                    .as_deref()
-                    .map(|title| format!(" — {title}"))
-                    .unwrap_or_default()
-            );
-        }
-        let index = read_index(episodes.len())?;
+        let labels: Vec<String> = episodes
+            .iter()
+            .map(|episode| {
+                format!(
+                    "Episode {}{}",
+                    episode.number,
+                    episode
+                        .title
+                        .as_deref()
+                        .map(|title| format!(" — {title}"))
+                        .unwrap_or_default()
+                )
+            })
+            .collect();
+        let index = select_item(&labels, "Select episode: ", None, &cli)?;
         vec![episodes[index].clone()]
     };
 
@@ -263,18 +266,46 @@ fn select_episode_range(
     Ok(selected)
 }
 
-fn select_index(
-    count: usize,
+fn select_item(
+    labels: &[String],
+    prompt: &str,
     forced_one_based: Option<usize>,
+    cli: &ani_cli::cli::args::Cli,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     if let Some(number) = forced_one_based {
-        let index = number.checked_sub(1).ok_or("-S expects a positive selection number")?;
-        if index >= count {
-            return Err(format!("selection {number} is outside the valid range 1-{count}").into());
+        let index = number
+            .checked_sub(1)
+            .ok_or("-S expects a positive selection number")?;
+        if index >= labels.len() {
+            return Err(format!(
+                "selection {number} is outside the valid range 1-{}",
+                labels.len()
+            )
+            .into());
         }
-        Ok(index)
+        return Ok(index);
+    }
+
+    let backend = if cli.rofi {
+        Some("rofi".to_owned())
+    } else if cli.dmenu {
+        Some("dmenu".to_owned())
     } else {
-        read_index(count)
+        std::env::var("ANI_CLI_MENU").ok()
+    };
+
+    match menu::select(labels, prompt, backend.as_deref(), false)? {
+        MenuOutcome::Selected(indices) => indices
+            .first()
+            .copied()
+            .ok_or_else(|| "menu returned no selection".into()),
+        MenuOutcome::Cancelled => Err("selection cancelled".into()),
+        MenuOutcome::Unavailable => {
+            for (index, label) in labels.iter().enumerate() {
+                println!("{:>2}. {}", index + 1, label);
+            }
+            read_index(labels.len())
+        }
     }
 }
 
