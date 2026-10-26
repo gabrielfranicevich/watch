@@ -74,7 +74,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 
     let provider = HiAnimeProvider::new();
-    let (anime, resume_episode) = if source == "history" {
+    let (anime, resume_episode, prefetched_episodes) = if source == "history" {
         let store = history
             .as_ref()
             .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
@@ -89,24 +89,61 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 recent.push(entry);
             }
         }
-        let labels: Vec<String> = recent
-            .iter()
-            .map(|entry| {
-                format!(
-                    "{} — last watched episode {}",
-                    entry.anime_title, entry.episode_number
-                )
-            })
-            .collect();
-        let selected_index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
-        let entry = &recent[selected_index];
-        (
-            Anime::new(
+
+        let mut candidates = Vec::new();
+        for entry in recent {
+            let candidate_anime = Anime::new(
                 entry.anime_id.clone(),
                 entry.anime_title.clone(),
                 format!("https://hianime.at/{}", entry.anime_id),
-            ),
-            Some(entry.episode_number.clone()),
+            );
+            let candidate_episodes = match provider.episodes(&candidate_anime) {
+                Ok(episodes) => episodes,
+                Err(error) => {
+                    eprintln!(
+                        "Skipping '{}' in history because its episode list could not be loaded: {error}",
+                        entry.anime_title
+                    );
+                    continue;
+                }
+            };
+            if !candidate_episodes
+                .iter()
+                .any(|episode| episode.number == entry.episode_number)
+            {
+                eprintln!(
+                    "Skipping '{}' in history because episode {} is no longer available",
+                    entry.anime_title, entry.episode_number
+                );
+                continue;
+            }
+            let Some(next_episode) =
+                next_episode_after(&candidate_episodes, &entry.episode_number)
+            else {
+                eprintln!(
+                    "Skipping '{}' in history because it has no next episode",
+                    entry.anime_title
+                );
+                continue;
+            };
+            candidates.push((entry, candidate_anime, candidate_episodes, next_episode.number.clone()));
+        }
+        if candidates.is_empty() {
+            return Err("no unwatched series in history".into());
+        }
+
+        let labels: Vec<String> = candidates
+            .iter()
+            .map(|(entry, _, _, next_episode)| {
+                format!("{} — next episode {}", entry.anime_title, next_episode)
+            })
+            .collect();
+        let selected_index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
+        let (entry, candidate_anime, episodes, _) = candidates.remove(selected_index);
+        (
+            candidate_anime,
+            Some(entry.episode_number),
+            Some(episodes),
         )
     } else {
         let query = match cli.query.as_deref() {
@@ -130,11 +167,14 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         }
         let labels: Vec<String> = results.iter().map(|result| result.title.clone()).collect();
         let index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
-        (results[index].clone(), None)
+        (results[index].clone(), None, None)
     };
 
     println!("{}\n{}", anime.title, anime.url);
-    let episodes = provider.episodes(&anime)?;
+    let episodes = match prefetched_episodes {
+        Some(episodes) => episodes,
+        None => provider.episodes(&anime)?,
+    };
     if episodes.is_empty() {
         return Err(format!("no episodes found for '{}'", anime.title).into());
     }
@@ -142,15 +182,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let selected: Vec<Episode> = if let Some(range) = cli.episode_range.as_deref() {
         select_episode_range(episodes.clone(), range)?
     } else if let Some(last_watched) = resume_episode.as_deref() {
-        let current = episodes
-            .iter()
-            .position(|episode| episode.number == last_watched)
-            .ok_or_else(|| {
-                format!("history episode {last_watched} is not present in the current episode list")
-            })?;
-        let next = episodes
-            .get(current + 1)
-            .ok_or("no next episode is available")?;
+        let next = next_episode_after(&episodes, last_watched)
+            .ok_or("no next episode is available after the last watched episode")?;
         vec![next.clone()]
     } else {
         let labels: Vec<String> = episodes
@@ -578,6 +611,13 @@ fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io:
     store.write(&entries)
 }
 
+fn next_episode_after<'a>(episodes: &'a [Episode], last_watched: &str) -> Option<&'a Episode> {
+    let index = episodes
+        .iter()
+        .position(|episode| episode.number == last_watched)?;
+    episodes.get(index + 1)
+}
+
 fn normalize_title(title: &str) -> String {
     title
         .split_whitespace()
@@ -910,6 +950,29 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["1", "1.5", "2"]
         );
+    }
+
+    #[test]
+    fn finds_next_episode_after_last_watched_episode() {
+        let episodes = vec![
+            Episode::new("1", None, "one"),
+            Episode::new("2", None, "two"),
+            Episode::new("3", None, "three"),
+        ];
+        assert_eq!(
+            next_episode_after(&episodes, "2").map(|episode| episode.number.as_str()),
+            Some("3")
+        );
+    }
+
+    #[test]
+    fn does_not_resume_finished_or_unmatched_history_entries() {
+        let episodes = vec![
+            Episode::new("1", None, "one"),
+            Episode::new("2", None, "two"),
+        ];
+        assert_eq!(next_episode_after(&episodes, "2"), None);
+        assert_eq!(next_episode_after(&episodes, "99"), None);
     }
 
     #[test]
