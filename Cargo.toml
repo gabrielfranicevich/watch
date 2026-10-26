@@ -1,0 +1,16 @@
+[package]
+name = "ani-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A command-line tool to browse and watch anime"
+license = "Unlicense"
+repository = "https://github.com/gabrielfranicevich/ani-cli"
+
+[lib]
+name = "ani_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ani-cli"
+path = "src/main.rs"
