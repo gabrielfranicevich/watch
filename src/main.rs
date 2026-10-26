@@ -790,10 +790,22 @@ mod tests {
     #[test]
     fn selects_source_from_cli_flags_and_environment() {
         assert_eq!(effective_source(false, false, None).unwrap(), "search");
-        assert_eq!(effective_source(false, false, Some("history")).unwrap(), "history");
-        assert_eq!(effective_source(false, false, Some("nextep")).unwrap(), "nextep");
-        assert_eq!(effective_source(true, false, Some("search")).unwrap(), "history");
-        assert_eq!(effective_source(false, true, Some("search")).unwrap(), "nextep");
+        assert_eq!(
+            effective_source(false, false, Some("history")).unwrap(),
+            "history"
+        );
+        assert_eq!(
+            effective_source(false, false, Some("nextep")).unwrap(),
+            "nextep"
+        );
+        assert_eq!(
+            effective_source(true, false, Some("search")).unwrap(),
+            "history"
+        );
+        assert_eq!(
+            effective_source(false, true, Some("search")).unwrap(),
+            "nextep"
+        );
     }
 
     #[test]

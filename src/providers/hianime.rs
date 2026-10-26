@@ -158,7 +158,6 @@ impl HiAnimeProvider {
 mod tests {
     use super::*;
 
-
     fn mock_html_response(body: &'static str) -> (String, std::thread::JoinHandle<String>) {
         use std::io::{Read, Write};
         use std::net::TcpListener;
@@ -216,7 +215,11 @@ mod tests {
         "#;
         let (base_url, server) = mock_html_response(body);
         let provider = HiAnimeProvider::with_base_url(&base_url);
-        let anime = Anime::new("frieren-123", "Frieren", format!("{base_url}/watch/frieren-123"));
+        let anime = Anime::new(
+            "frieren-123",
+            "Frieren",
+            format!("{base_url}/watch/frieren-123"),
+        );
         let episodes = provider.episodes(&anime).unwrap();
         let request = server.join().unwrap();
 
