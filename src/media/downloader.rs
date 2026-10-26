@@ -166,9 +166,10 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "--referer" && pair[1] == "https://embed.example/"
-        ));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--referer" && pair[1] == "https://embed.example/")
+        );
         assert!(args.contains(&"--fragment-retries".to_owned()));
         assert!(args.contains(&"infinite".to_owned()));
         assert!(args.contains(&"-N".to_owned()));

@@ -157,10 +157,16 @@ fn parse_release_info(html: &str) -> ReleaseInfo {
     let countdown_selector =
         Selector::parse(".countdown-time[datetime]").expect("valid static CSS selector");
 
-    let sub_episode = first_text(&document, &sub_episode_selector)
-        .and_then(|text| text.strip_prefix("Episode").map(str::trim).map(str::to_owned));
-    let dub_episode = first_text(&document, &dub_episode_selector)
-        .and_then(|text| text.strip_prefix("Episode").map(str::trim).map(str::to_owned));
+    let sub_episode = first_text(&document, &sub_episode_selector).and_then(|text| {
+        text.strip_prefix("Episode")
+            .map(str::trim)
+            .map(str::to_owned)
+    });
+    let dub_episode = first_text(&document, &dub_episode_selector).and_then(|text| {
+        text.strip_prefix("Episode")
+            .map(str::trim)
+            .map(str::to_owned)
+    });
 
     let mut sub_countdown = None;
     let mut dub_countdown = None;
@@ -169,7 +175,10 @@ fn parse_release_info(html: &str) -> ReleaseInfo {
             continue;
         };
         let class = element.value().attr("class").unwrap_or_default();
-        if class.split_whitespace().any(|name| name == "countdown-time-dub") {
+        if class
+            .split_whitespace()
+            .any(|name| name == "countdown-time-dub")
+        {
             dub_countdown.get_or_insert_with(|| datetime.to_owned());
         } else {
             sub_countdown.get_or_insert_with(|| datetime.to_owned());

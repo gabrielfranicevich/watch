@@ -197,7 +197,10 @@ mod tests {
     #[test]
     fn parses_last_episode_sentinel() {
         assert_eq!(
-            Cli::parse(["--episode", "-1"]).unwrap().episode_range.as_deref(),
+            Cli::parse(["--episode", "-1"])
+                .unwrap()
+                .episode_range
+                .as_deref(),
             Some("-1")
         );
     }

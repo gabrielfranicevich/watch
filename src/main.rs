@@ -11,8 +11,8 @@ use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
 use ani_cli::media::downloader::MediaDownloader;
 use ani_cli::media::player::Player;
-use ani_cli::providers::hianime::HiAnimeProvider;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
+use ani_cli::providers::hianime::HiAnimeProvider;
 use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
 
 fn main() -> ExitCode {
@@ -53,11 +53,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Err("--update is not implemented yet: automatic self-update needs a verified Rust release artifact".into());
     }
     if cli.next_episode_countdown {
-        let query = cli
-            .query
-            .as_deref()
-            .ok_or("--nextep-countdown requires an anime title")?;
-        AnimeScheduleProvider::new().show_countdown(query)?;
+        let query = match cli.query.as_deref() {
+            Some(query) => query.to_owned(),
+            None => read_search_query()?,
+        };
+        AnimeScheduleProvider::new().show_countdown(&query)?;
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -97,9 +97,12 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             Some(entry.episode_number.clone()),
         )
     } else {
-        let query = cli.query.as_deref().ok_or("a search query is required")?;
+        let query = match cli.query.as_deref() {
+            Some(query) => query.to_owned(),
+            None => read_search_query()?,
+        };
         eprintln!("Searching HiAnime for: {query}");
-        let mut results = provider.search(query)?;
+        let mut results = provider.search(&query)?;
         let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
         if exact {
             let normalized_query = normalize_title(query);
@@ -152,8 +155,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 )
             })
             .collect();
-        let index = select_item(&labels, "Select episode: ", None, &cli)?;
-        vec![episodes[index].clone()]
+        let indices = select_items(&labels, "Select episode: ", None, true, &cli)?;
+        indices
+            .into_iter()
+            .map(|index| episodes[index].clone())
+            .collect()
     };
 
     let resolver = HiAnimeStreamResolver::new();
@@ -534,9 +540,9 @@ fn select_episode_range(
                 let start_number: f64 = start.parse().map_err(|_| {
                     format!("invalid start episode '{start}' in selection '{token}'")
                 })?;
-                let end_number: f64 = end.parse().map_err(|_| {
-                    format!("invalid end episode '{end}' in selection '{token}'")
-                })?;
+                let end_number: f64 = end
+                    .parse()
+                    .map_err(|_| format!("invalid end episode '{end}' in selection '{token}'"))?;
                 if end_number < start_number {
                     return Err(format!("invalid episode range '{token}'").into());
                 }
@@ -550,7 +556,10 @@ fn select_episode_range(
                     })
                     .collect();
                 if matched.is_empty() {
-                    return Err(format!("episode range '{token}' did not match available episodes").into());
+                    return Err(format!(
+                        "episode range '{token}' did not match available episodes"
+                    )
+                    .into());
                 }
                 requested.extend(matched);
             }
@@ -582,6 +591,19 @@ fn select_item(
     forced_one_based: Option<usize>,
     cli: &ani_cli::cli::args::Cli,
 ) -> Result<usize, Box<dyn std::error::Error>> {
+    select_items(labels, prompt, forced_one_based, false, cli)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "menu returned no selection".into())
+}
+
+fn select_items(
+    labels: &[String],
+    prompt: &str,
+    forced_one_based: Option<usize>,
+    multi: bool,
+    cli: &ani_cli::cli::args::Cli,
+) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
     if let Some(number) = forced_one_based {
         let index = number
             .checked_sub(1)
@@ -593,7 +615,7 @@ fn select_item(
             )
             .into());
         }
-        return Ok(index);
+        return Ok(vec![index]);
     }
 
     let backend = if cli.rofi {
@@ -604,19 +626,36 @@ fn select_item(
         std::env::var("ANI_CLI_MENU").ok()
     };
 
-    match menu::select(labels, prompt, backend.as_deref(), false)? {
-        MenuOutcome::Selected(indices) => indices
-            .first()
-            .copied()
-            .ok_or_else(|| "menu returned no selection".into()),
+    match menu::select(labels, prompt, backend.as_deref(), multi)? {
+        MenuOutcome::Selected(mut indices) => {
+            indices.sort_unstable();
+            indices.dedup();
+            if indices.is_empty() {
+                Err("selection cancelled".into())
+            } else {
+                Ok(indices)
+            }
+        }
         MenuOutcome::Cancelled => Err("selection cancelled".into()),
         MenuOutcome::Unavailable => {
             for (index, label) in labels.iter().enumerate() {
                 println!("{:>2}. {}", index + 1, label);
             }
-            read_index(labels.len())
+            Ok(vec![read_index(labels.len())?])
         }
     }
+}
+
+fn read_search_query() -> Result<String, Box<dyn std::error::Error>> {
+    print!("Search anime: ");
+    io::stdout().flush()?;
+    let mut query = String::new();
+    io::stdin().read_line(&mut query)?;
+    let query = query.trim();
+    if query.is_empty() {
+        return Err("search query was empty or cancelled".into());
+    }
+    Ok(query.to_owned())
 }
 
 fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
@@ -643,7 +682,6 @@ fn safe_filename(value: &str) -> String {
         .trim()
         .to_owned()
 }
-
 
 
 #[cfg(test)]
@@ -681,13 +719,19 @@ mod tests {
             Episode::new("3", None, "three"),
         ];
         assert_eq!(
-            select_episode_range(episodes.clone(), "0 -1").unwrap()
-                .iter().map(|ep| ep.number.as_str()).collect::<Vec<_>>(),
+            select_episode_range(episodes.clone(), "0 -1")
+                .unwrap()
+                .iter()
+                .map(|ep| ep.number.as_str())
+                .collect::<Vec<_>>(),
             vec!["1", "3"]
         );
         assert_eq!(
-            select_episode_range(episodes, "1-2").unwrap()
-                .iter().map(|ep| ep.number.as_str()).collect::<Vec<_>>(),
+            select_episode_range(episodes, "1-2")
+                .unwrap()
+                .iter()
+                .map(|ep| ep.number.as_str())
+                .collect::<Vec<_>>(),
             vec!["1", "1.5", "2"]
         );
     }
@@ -695,5 +739,19 @@ mod tests {
     #[test]
     fn normalizes_titles_for_exact_match() {
         assert_eq!(normalize_title("  BLUE   lock\n"), "blue lock");
+    }
+
+    #[test]
+    fn selects_multiple_episode_numbers_in_provider_order() {
+        let episodes = vec![
+            Episode::new("3", None, "three"),
+            Episode::new("2", None, "two"),
+            Episode::new("1", None, "one"),
+        ];
+        let selected = select_episode_range(episodes, "1 3").unwrap();
+        assert_eq!(
+            selected.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+            vec!["3", "1"]
+        );
     }
 }

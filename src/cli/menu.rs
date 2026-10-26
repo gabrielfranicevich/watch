@@ -47,6 +47,12 @@ pub fn select(
             command.arg(prompt);
         }
     }
+    let extra_flags: Vec<String> = std::env::var("ANI_CLI_MENU_FLAGS")
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    command.args(extra_flags);
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
