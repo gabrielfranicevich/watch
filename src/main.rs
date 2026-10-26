@@ -503,8 +503,7 @@ fn run_playback_menu(
                         )
                     })
                     .collect();
-                episodes_to_play =
-                    select_items(&labels, "Select episode: ", None, true, cli)?;
+                episodes_to_play = select_items(&labels, "Select episode: ", None, true, cli)?;
             }
             4 => {
                 let choices = quality_choices(&playback.available_qualities);
