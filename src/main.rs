@@ -105,7 +105,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         let mut results = provider.search(&query)?;
         let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
         if exact {
-            let normalized_query = normalize_title(query);
+            let normalized_query = normalize_title(&query);
             results.retain(|result| normalize_title(&result.title) == normalized_query);
         }
         if results.is_empty() {
@@ -682,7 +682,6 @@ fn safe_filename(value: &str) -> String {
         .trim()
         .to_owned()
 }
-
 
 #[cfg(test)]
 mod tests {
