@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn stream_response_reports_anti_bot_challenges_and_http_errors() {
-        use std::io::{Read, Write};
+        use std::io::Write;
         use std::net::TcpListener;
         use std::time::Duration;
 
