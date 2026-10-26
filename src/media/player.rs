@@ -79,6 +79,7 @@ impl Player {
                 "/Applications/IINA.app/Contents/MacOS/iina-cli"
             }
             Self::Iina => "iina-cli",
+            Self::FlatpakMpv => "flatpak",
             Self::Configured(command) => command,
         }
     }
