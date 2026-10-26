@@ -749,7 +749,10 @@ mod tests {
         ];
         let selected = select_episode_range(episodes, "1 3").unwrap();
         assert_eq!(
-            selected.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+            selected
+                .iter()
+                .map(|episode| episode.number.as_str())
+                .collect::<Vec<_>>(),
             vec!["3", "1"]
         );
     }
