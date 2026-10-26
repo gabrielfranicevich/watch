@@ -185,9 +185,15 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let env_player = std::env::var("ANI_CLI_PLAYER")
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let player = Player::from_flags(
+    let default_iina_path = "/Applications/IINA.app/Contents/MacOS/iina-cli";
+    let use_iina = env_player.contains("iina")
+        || (env_player.is_empty()
+            && cfg!(target_os = "macos")
+            && Path::new(default_iina_path).is_file());
+    let player = Player::from_options(
         cli.vlc || env_player.contains("vlc"),
         cli.syncplay || env_player.contains("syncplay"),
+        use_iina,
     );
     let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
