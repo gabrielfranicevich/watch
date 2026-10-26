@@ -158,6 +158,74 @@ impl HiAnimeProvider {
 mod tests {
     use super::*;
 
+
+    fn mock_html_response(body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0_u8; 4096];
+            let count = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]).into_owned();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+            request
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    #[test]
+    fn search_parses_fixture_and_encodes_query() {
+        let body = r#"
+            <div class="film-detail">
+                <h3 class="film-name">
+                    <a href="/watch/frieren-123" title="Frieren: Beyond Journey's End">Frieren</a>
+                </h3>
+            </div>
+        "#;
+        let (base_url, server) = mock_html_response(body);
+        let provider = HiAnimeProvider::with_base_url(&base_url);
+        let results = provider.search("Frieren: Beyond Journey's End").unwrap();
+        let request = server.join().unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "frieren-123");
+        assert_eq!(results[0].title, "Frieren: Beyond Journey's End");
+        assert_eq!(results[0].url, format!("{base_url}/watch/frieren-123"));
+        assert!(request.starts_with("GET /search?keyword="));
+        assert!(request.contains("Frieren"));
+    }
+
+    #[test]
+    fn episodes_parses_fixture_and_preserves_watch_identifier() {
+        let body = r#"
+            <div class="ep-item" data-number="1" data-id="1001"></div>
+            <div class="ep-item" data-number="2" data-id="1002"></div>
+        "#;
+        let (base_url, server) = mock_html_response(body);
+        let provider = HiAnimeProvider::with_base_url(&base_url);
+        let anime = Anime::new("frieren-123", "Frieren", format!("{base_url}/watch/frieren-123"));
+        let episodes = provider.episodes(&anime).unwrap();
+        let request = server.join().unwrap();
+
+        assert_eq!(episodes.len(), 2);
+        assert_eq!(episodes[0].number, "1");
+        assert!(episodes[0].url.ends_with("/watch/frieren-123?ep=1001"));
+        assert!(request.starts_with("GET /api/theme/episode/list/123 "));
+    }
+
     #[test]
     fn provider_has_a_stable_default_base_url() {
         let provider = HiAnimeProvider::default();
