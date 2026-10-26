@@ -11,6 +11,8 @@ pub enum Player {
     Syncplay,
     Iina,
     FlatpakMpv,
+    AndroidMpv,
+    AndroidVlc,
     Configured(String),
 }
 
@@ -21,6 +23,8 @@ enum PlayerKind {
     Syncplay,
     Iina,
     FlatpakMpv,
+    AndroidMpv,
+    AndroidVlc,
     Custom,
 }
 
@@ -54,9 +58,23 @@ impl Player {
         if use_syncplay {
             Self::Syncplay
         } else if use_vlc {
-            Self::Vlc
+            if cfg!(target_os = "android") {
+                Self::AndroidVlc
+            } else {
+                Self::Vlc
+            }
         } else if let Some(command) = configured_player.filter(|value| !value.trim().is_empty()) {
-            Self::Configured(command.to_owned())
+            if cfg!(target_os = "android") && command.to_ascii_lowercase().contains("vlc") {
+                Self::AndroidVlc
+            } else if cfg!(target_os = "android")
+                && command.to_ascii_lowercase().contains("mpv")
+            {
+                Self::AndroidMpv
+            } else {
+                Self::Configured(command.to_owned())
+            }
+        } else if cfg!(target_os = "android") {
+            Self::AndroidMpv
         } else if use_iina_default {
             Self::Iina
         } else {
@@ -80,6 +98,7 @@ impl Player {
             }
             Self::Iina => "iina-cli",
             Self::FlatpakMpv => "flatpak",
+            Self::AndroidMpv | Self::AndroidVlc => "am",
             Self::Configured(command) => command,
         }
     }
@@ -91,6 +110,8 @@ impl Player {
             Self::Syncplay => PlayerKind::Syncplay,
             Self::Iina => PlayerKind::Iina,
             Self::FlatpakMpv => PlayerKind::FlatpakMpv,
+            Self::AndroidMpv => PlayerKind::AndroidMpv,
+            Self::AndroidVlc => PlayerKind::AndroidVlc,
             Self::Configured(command) => {
                 let name = std::path::Path::new(command)
                     .file_name()
@@ -229,6 +250,55 @@ impl Player {
                 args.push(OsString::from(format!("--force-media-title={title}")));
                 args.extend(media_flags.iter().map(OsString::from));
             }
+            PlayerKind::AndroidMpv => {
+                args.extend(
+                    [
+                        "start",
+                        "--user",
+                        "0",
+                        "-a",
+                        "android.intent.action.VIEW",
+                        "-d",
+                    ]
+                    .into_iter()
+                    .map(OsString::from),
+                );
+                args.push(OsString::from(&stream.url));
+                args.extend(
+                    ["-n", "is.xyz.mpv/.MPVActivity", "-e", "title"]
+                        .into_iter()
+                        .map(OsString::from),
+                );
+                args.push(OsString::from(title));
+                args.extend(command_flags.iter().map(OsString::from));
+            }
+            PlayerKind::AndroidVlc => {
+                args.extend(
+                    [
+                        "start",
+                        "--user",
+                        "0",
+                        "-a",
+                        "android.intent.action.VIEW",
+                        "-d",
+                    ]
+                    .into_iter()
+                    .map(OsString::from),
+                );
+                args.push(OsString::from(&stream.url));
+                args.extend(
+                    [
+                        "-n",
+                        "org.videolan.vlc/org.videolan.vlc.gui.video.VideoPlayerActivity",
+                        "-e",
+                        "title",
+                    ]
+                    .into_iter()
+                    .map(OsString::from),
+                );
+                args.push(OsString::from(title));
+                args.extend(command_flags.iter().map(OsString::from));
+            }
             PlayerKind::Custom => {
                 args.extend(command_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
@@ -264,6 +334,7 @@ impl Player {
         command_flags: &[String],
         media_flags: &[String],
     ) -> io::Result<ExitStatus> {
+        self.prepare_playback(stream, subtitle);
         Command::new(self.command_name())
             .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .status()
@@ -289,12 +360,46 @@ impl Player {
         command_flags: &[String],
         media_flags: &[String],
     ) -> io::Result<Child> {
+        self.prepare_playback(stream, subtitle);
         Command::new(self.command_name())
             .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
+    }
+    fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) {
+        if !matches!(self, Self::AndroidMpv) {
+            return;
+        }
+
+        let config_path = std::path::Path::new("/storage/emulated/0/mpv");
+        if std::fs::create_dir_all(config_path).is_err() {
+            return;
+        }
+        let config = android_mpv_config(stream, subtitle);
+        if !config.is_empty() {
+            let path = config_path.join("mpv.config.mp4");
+            let _ = std::fs::write(path, config);
+        }
+    }
+}
+
+fn android_mpv_config(stream: &Stream, subtitle: Option<&Subtitle>) -> String {
+    let mut lines = Vec::new();
+    if let Some(referer) = stream.referer.as_deref() {
+        lines.push(format!("referrer={referer}"));
+    }
+    if let Some(subtitle) = subtitle {
+        lines.push(format!("sub-file={}", subtitle.url));
+    }
+    if let Some(audio) = stream.audio_url.as_deref() {
+        lines.push(format!("audio-file={audio}"));
+    }
+    if lines.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", lines.join("\n"))
     }
 }
 
@@ -424,6 +529,60 @@ mod tests {
         assert_eq!(
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
+        );
+    }
+
+    #[test]
+    fn android_mpv_uses_the_mpv_activity_and_title_extra() {
+        let args = Player::AndroidMpv.arguments_with_extra(
+            &stream(),
+            None,
+            "Frieren Episode 4",
+            &["--debug".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "start");
+        assert_eq!(args[1], "--user");
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-n" && pair[1] == "is.xyz.mpv/.MPVActivity"
+        ));
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-e" && pair[1] == "title"
+        ));
+        assert!(args.contains(&"Frieren Episode 4".to_owned()));
+        assert!(args.contains(&"--debug".to_owned()));
+        assert_eq!(Player::AndroidMpv.command_name(), "am");
+    }
+
+    #[test]
+    fn android_vlc_uses_the_vlc_activity_and_title_extra() {
+        let args = Player::AndroidVlc.arguments(&stream(), None, "Frieren Episode 4");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "-n"
+                && pair[1] == "org.videolan.vlc/org.videolan.vlc.gui.video.VideoPlayerActivity"
+        }));
+        assert!(args.contains(&"Frieren Episode 4".to_owned()));
+        assert_eq!(Player::AndroidVlc.command_name(), "am");
+    }
+
+    #[test]
+    fn android_mpv_config_contains_referer_audio_and_subtitle_lines() {
+        let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
+        let subtitle = Subtitle::new("https://cdn.example/sub.vtt", None);
+        assert_eq!(
+            android_mpv_config(&stream, Some(&subtitle)),
+            concat!(
+                "referrer=https://embed.example/\\n",
+                "sub-file=https://cdn.example/sub.vtt\\n",
+                "audio-file=https://cdn.example/audio.m3u8\\n"
+            )
         );
     }
 

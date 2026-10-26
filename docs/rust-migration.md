@@ -4,7 +4,7 @@ The Rust port is developed on the `develop` branch. The shell implementation on 
 
 ## Build and run
 
-Requires stable Rust, HiAnime network access, and `mpv` or `vlc` for playback. Syncplay and intro skipping require `syncplay` and `ani-skip`. Downloads use `yt-dlp` when available for a single media source and fall back to `ffmpeg`; separate audio renditions are muxed with FFmpeg.
+Requires stable Rust and HiAnime network access. Linux and Windows playback prefer MPV and fall back to VLC when available; Linux can use Flatpak MPV. macOS prefers IINA, then MPV/VLC. Termux/Android opens the MPV or VLC app through `am start`; MPV referrer/audio/subtitle options are written to `/storage/emulated/0/mpv/mpv.config.mp4` when storage access is available. Syncplay and intro skipping require `syncplay` and `ani-skip`. Downloads use `yt-dlp` when available for a single media source and fall back to `ffmpeg`; separate audio renditions are muxed with FFmpeg.
 
 ```sh
 cargo check --all-targets
