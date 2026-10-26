@@ -44,7 +44,7 @@ Downloads use yt-dlp when available for a compatible single media stream and FFm
 - HiAnime markup, streaming hosts, and anti-bot responses can change independently of this client. CI tests use local fixtures and do not establish live-provider availability.
 - Playback and downloads depend on external programs and platform-specific behavior. Install those tools separately and ensure they are accessible to the process.
 - The updater invokes Cargo to install from a selected Git branch. It requires Cargo and network access, validates the branch name, and passes arguments directly instead of invoking a shell. Windows may reject replacement of a currently running executable; close the application and retry or reinstall manually.
-- The checked-in `Cargo.lock` has not yet been regenerated with the complete dependency graph, so updater commands deliberately do not pass `--locked`. Regenerate and verify the lockfile before restoring locked installs.
+- The updater intentionally does not pass `--locked` yet. Before adding that flag to updater or installation instructions, verify locked dependency resolution from a clean checkout with `cargo check --all-targets --locked` and `cargo test --all-targets --locked`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update.
 
 ## Related documentation
 
