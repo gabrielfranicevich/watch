@@ -471,6 +471,7 @@ fn run_playback_menu(
             Err(error) => return Err(error),
         };
 
+        let mut episodes_to_play = Vec::new();
         match action {
             0 => {
                 if *current_index + 1 >= episodes.len() {
@@ -502,7 +503,8 @@ fn run_playback_menu(
                         )
                     })
                     .collect();
-                *current_index = select_item(&labels, "Select episode: ", None, cli)?;
+                episodes_to_play =
+                    select_items(&labels, "Select episode: ", None, true, cli)?;
             }
             4 => {
                 let choices = quality_choices(&playback.available_qualities);
@@ -526,13 +528,23 @@ fn run_playback_menu(
             _ => return Ok(ExitCode::SUCCESS),
         }
 
+        if episodes_to_play.is_empty() {
+            episodes_to_play.push(*current_index);
+        }
+
         wait_for_player(active_player)?;
-        match playback.play_episode(anime, &episodes[*current_index], attached)? {
-            PlaybackResult::Detached(child) => *active_player = Some(child),
-            PlaybackResult::Attached(status) => {
-                ensure_success(status, playback.player.command_name())?
+        for (position, episode_index) in episodes_to_play.into_iter().enumerate() {
+            if position > 0 {
+                wait_for_player(active_player)?;
             }
-            PlaybackResult::Downloaded => return Ok(ExitCode::SUCCESS),
+            *current_index = episode_index;
+            match playback.play_episode(anime, &episodes[*current_index], attached)? {
+                PlaybackResult::Detached(child) => *active_player = Some(child),
+                PlaybackResult::Attached(status) => {
+                    ensure_success(status, playback.player.command_name())?
+                }
+                PlaybackResult::Downloaded => return Ok(ExitCode::SUCCESS),
+            }
         }
     }
 }
@@ -672,6 +684,12 @@ fn quality_height(value: &str) -> u32 {
         .trim_end_matches('p')
         .parse::<u32>()
         .unwrap_or_default()
+}
+
+fn ordered_episode_indices(mut indices: Vec<usize>) -> Vec<usize> {
+    indices.sort_unstable();
+    indices.dedup();
+    indices
 }
 
 fn next_episode_after<'a>(episodes: &'a [Episode], last_watched: &str) -> Option<&'a Episode> {
@@ -830,8 +848,7 @@ fn select_items(
 
     match menu::select(labels, prompt, backend.as_deref(), multi)? {
         MenuOutcome::Selected(mut indices) => {
-            indices.sort_unstable();
-            indices.dedup();
+            let indices = ordered_episode_indices(indices);
             if indices.is_empty() {
                 Err("selection cancelled".into())
             } else {
@@ -1239,6 +1256,15 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["1", "1.5", "2"]
         );
+    }
+
+    #[test]
+    fn multi_episode_selection_is_sorted_and_deduplicated() {
+        assert_eq!(
+            ordered_episode_indices(vec![3, 1, 3, 0, 1, 2]),
+            vec![0, 1, 2, 3]
+        );
+        assert!(ordered_episode_indices(Vec::new()).is_empty());
     }
 
     #[test]
