@@ -579,9 +579,9 @@ mod tests {
         assert_eq!(
             android_mpv_config(&stream, Some(&subtitle)),
             concat!(
-                "referrer=https://embed.example/\\n",
-                "sub-file=https://cdn.example/sub.vtt\\n",
-                "audio-file=https://cdn.example/audio.m3u8\\n"
+                "referrer=https://embed.example/\n",
+                "sub-file=https://cdn.example/sub.vtt\n",
+                "audio-file=https://cdn.example/audio.m3u8\n"
             )
         );
     }
