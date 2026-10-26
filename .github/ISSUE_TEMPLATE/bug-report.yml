@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible issue with the Rust CLI.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Use the latest `develop` build if possible. Do not include personal data or private credentials."
+  - type: input
+    id: version
+    attributes:
+      label: ani-cli version
+      description: Output of `ani-cli --version`.
+      placeholder: "ani-cli 0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - WSL
+        - Android / Termux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: player
+    attributes:
+      label: Player and relevant tools
+      description: "For example: MPV, VLC, FFmpeg, yt-dlp, fzf."
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and steps to reproduce
+      description: Include the command and shortest repeatable sequence.
+      placeholder: |
+        1. Run ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include relevant error output; redact private paths if needed.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots or logs, if useful.
