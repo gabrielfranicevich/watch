@@ -4,7 +4,7 @@
 
 - Replace the shell implementation with a maintainable Rust CLI without silently dropping existing behavior.
 - Keep changes small, testable, and buildable at every step.
-- Preserve the existing shell script as a behavioral reference until Rust covers the required workflows.
+- Keep the shell implementation on `main` as the historical compatibility reference; `develop` contains the Rust implementation.
 - Keep provider-specific scraping separate from the domain, CLI, history, and media integrations.
 
 ## Repository baseline
@@ -45,7 +45,7 @@ Rustfmt uses its standard four-space indentation; it does not support a stable t
 8. Add process abstraction, player adapters, and downloader support.
 9. Add platform checks, harden external input handling, and document failure modes.
 10. Update packaging and installation only after the Rust executable covers required workflows.
-11. Remove the shell implementation only after feature parity and clean-checkout CI are verified.
+11. Remove the shell implementation from `develop` after the Rust quality gates, fixture-driven regression tests, and packaging updates pass. Keep `main` untouched as the historical reference.
 
 ## Architecture boundaries
 
@@ -75,3 +75,8 @@ Avoid empty placeholder modules and speculative abstractions. Introduce modules 
 - Supported platforms are documented and checked.
 - Installation and packaging point to the Rust binary.
 - The shell implementation is removed only after the above criteria are met.
+
+
+## Migration checkpoint: Rust branch
+
+The current `develop` implementation has passed the repository's GitHub Actions matrix on Linux, macOS and Windows: `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all-targets`, CLI help/version smoke tests and `cargo fmt --all -- --check`. Provider regressions run against local fixtures. This validates the checked-in Rust branch and its test suite; it does not guarantee live HiAnime availability or external-player behavior on every machine. Third-party package repositories may continue shipping the historical shell version.

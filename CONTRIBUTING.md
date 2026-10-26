@@ -2,18 +2,21 @@
 
 ## Pull Requests
 
-- Appease the linter (run `shfmt -i 4 -ci -d -w ani-cli`)
-- Appease POSIX (run `shellcheck -s sh -o all -e 2250 ani-cli`)
-- Bump the version
-- Adjust the Readme according to your changes (if applicable)
-- No extra dependencies unless absolutely necessary
-- If you're fixing an issue, open an issue as well or link existing one
+- Run `cargo fmt --all -- --check`.
+- Run `cargo check --all-targets`.
+- Run `cargo clippy --all-targets -- -D warnings`.
+- Run `cargo test --all-targets`.
+- Keep changes small, testable, and compatible with the documented CLI behavior.
+- Update the README or migration notes when user-visible behavior changes.
+- Avoid new dependencies unless necessary.
+- If fixing an issue, link the issue or describe the failure case in a regression test.
 
 ### Coding Tips
 
-- Keep it brief. Your likelihood of being merged is inversely proportional to your change size.
-- Use && and || over if-else constructs wherever appropriate. [This video explains why.](https://www.youtube.com/watch?v=p0KKBmfiVl0)
-- Keep posix compliance and cross platform portability in mind
+- Prefer focused modules with explicit responsibilities over adding more orchestration to `main.rs`.
+- Keep domain logic independent of HTTP, terminal I/O and external processes.
+- Handle platform-specific process arguments explicitly and test argument construction without launching a player.
+- Use local fixtures for network-dependent behavior so tests do not depend on the live provider.
 
 ### AI Policy
 
@@ -28,10 +31,6 @@
 - Opening fully AI generated PRs is not okay
 - A carefully steered and reviewed agentic PR does not constitute fully AI generated, see low effort.
 - Be cautious that LLMs tend to be overly verbose, while the ani-cli codebase prefers brevity
-
-Load these two files/urls into the context, however you do that with your LLM of choice:
-- https://github.com/pystardust/ani-cli/blob/master/.github/workflows/ani-cli.yml
-- https://github.com/pystardust/ani-cli/blob/master/CONTRIBUTING.md
 
 ### Email
 

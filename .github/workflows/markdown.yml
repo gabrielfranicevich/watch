@@ -2,7 +2,8 @@ name: 'markdown checks'
 on:
   push:
     branches:
-      - master
+      - main
+      - develop
   pull_request:
     paths: 
       - "**.md"
