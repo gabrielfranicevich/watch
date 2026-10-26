@@ -1,4 +1,4 @@
-use scraper::{Html, Selector};
+use scraper::{Element, Html, Selector};
 
 use crate::domain::{anime::Anime, episode::Episode};
 
@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(episodes.len(), 1);
         assert_eq!(episodes[0].number, "1");
         assert_eq!(
-            episodes[0].watch_url,
+            episodes[0].url,
             "https://hianime.at/watch/frieren-123?ep=episode-100"
         );
     }
