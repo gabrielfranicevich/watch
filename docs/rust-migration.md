@@ -36,4 +36,4 @@ cargo run --release -- --nextep-countdown "Frieren"
 
 ## Pending compatibility
 
-`--update` uses `cargo install --force --locked --git ... --branch ...` and therefore requires Cargo, network access, and an installation path whose parent is named `bin` (the normal Cargo layout). Windows may reject replacement of a currently running executable; in that case, update after closing it or reinstall manually. `--nextep-countdown` queries AnimeSchedule and depends on that provider's live API/page structure.
+`--update` installs from `https://github.com/gabrielfranicevich/anime` using `cargo install --force --locked --git ... --branch ...` and therefore requires Cargo, network access, and an installation path whose parent is named `bin` (the normal Cargo layout). Windows may reject replacement of a currently running executable; in that case, update after closing it or reinstall manually. `--nextep-countdown` queries AnimeSchedule and depends on that provider's live API/page structure.

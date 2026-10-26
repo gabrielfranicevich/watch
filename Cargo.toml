@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "A command-line tool to browse and watch anime"
 license = "Unlicense"
-repository = "https://github.com/gabrielfranicevich/ani-cli"
+repository = "https://github.com/gabrielfranicevich/anime"
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
