@@ -617,7 +617,6 @@ fn updater_arguments(install_root: &Path, branch: &str) -> Vec<OsString> {
     vec![
         OsString::from("install"),
         OsString::from("--force"),
-        OsString::from("--locked"),
         OsString::from("--git"),
         OsString::from("https://github.com/gabrielfranicevich/anime"),
         OsString::from("--branch"),
@@ -1091,7 +1090,7 @@ mod tests {
         );
         assert!(args.contains(&"https://github.com/gabrielfranicevich/anime".to_owned()));
         assert!(args.contains(&"--force".to_owned()));
-        assert!(args.contains(&"--locked".to_owned()));
+        assert!(!args.contains(&"--locked".to_owned()));
     }
 
     #[test]
