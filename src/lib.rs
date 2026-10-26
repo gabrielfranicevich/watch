@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod domain;
+pub mod media;
 pub mod infrastructure;
 pub mod providers;
 
