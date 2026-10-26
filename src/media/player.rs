@@ -88,7 +88,7 @@ impl Player {
                 if let Some(subtitle) = subtitle {
                     args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
                 }
-                args.extend(extra_flags.iter().map(OsString::from));
+                args.extend(command_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
 
                 let mut slave_inputs = Vec::new();
