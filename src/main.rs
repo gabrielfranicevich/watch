@@ -1206,9 +1206,7 @@ mod tests {
             args.windows(2)
                 .any(|pair| pair[0] == "--root" && pair[1] == "/home/user/.cargo")
         );
-        assert!(
-            args.contains(&"https://github.com/gabrielfranicevich/anime".to_owned())
-        );
+        assert!(args.contains(&"https://github.com/gabrielfranicevich/anime".to_owned()));
         assert!(args.contains(&"--force".to_owned()));
         assert!(args.contains(&"--locked".to_owned()));
     }
