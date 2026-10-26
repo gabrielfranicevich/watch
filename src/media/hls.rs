@@ -55,6 +55,31 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
     Ok(variants)
 }
 
+pub fn parse_default_audio_url(
+    body: &str,
+    master_url: &str,
+) -> Result<Option<String>, HlsError> {
+    if !body.lines().any(|line| line.trim() == "#EXTM3U") {
+        return Err(HlsError("response is not an HLS playlist".into()));
+    }
+
+    for line in body.lines().map(str::trim) {
+        let Some(attributes) = line.strip_prefix("#EXT-X-MEDIA:") else {
+            continue;
+        };
+        if attribute(attributes, "TYPE") != Some("AUDIO")
+            || attribute(attributes, "DEFAULT") != Some("YES")
+        {
+            continue;
+        }
+        let Some(uri) = attribute(attributes, "URI") else {
+            return Ok(None);
+        };
+        return resolve_url(master_url, uri).map(Some);
+    }
+    Ok(None)
+}
+
 pub fn select_quality<'a>(variants: &'a [HlsVariant], requested: &str) -> Option<&'a HlsVariant> {
     if variants.is_empty() {
         return None;
@@ -167,6 +192,24 @@ mod tests {
         assert_eq!(
             select_quality(&variants, "1080p").unwrap().bandwidth,
             2500000
+        );
+    }
+
+
+    #[test]
+    fn parses_default_audio_rendition_and_resolves_its_url() {
+        let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n360.m3u8\n";
+        assert_eq!(
+            parse_default_audio_url(playlist, "https://cdn.example/hls/master.m3u8").unwrap(),
+            Some("https://cdn.example/audio/en.m3u8".to_owned())
+        );
+    }
+
+    #[test]
+    fn returns_none_when_no_default_audio_rendition_is_declared() {
+        assert_eq!(
+            parse_default_audio_url("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\n360.m3u8\n", "https://cdn.example/master.m3u8").unwrap(),
+            None
         );
     }
 

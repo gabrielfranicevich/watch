@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
-use crate::media::hls::{into_stream, parse_master_playlist, select_quality};
+use crate::media::hls::{into_stream, parse_default_audio_url, parse_master_playlist, select_quality};
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
 
@@ -170,6 +170,7 @@ impl HiAnimeStreamResolver {
             .error_for_status()?
             .text()?;
         let variants = parse_master_playlist(&playlist, master_url)?;
+        let audio_url = parse_default_audio_url(&playlist, master_url)?;
         let selected = select_quality(&variants, quality)
             .or_else(|| select_quality(&variants, "best"))
             .ok_or_else(|| {
@@ -177,7 +178,7 @@ impl HiAnimeStreamResolver {
                     "HLS playlist contains no selectable quality".into(),
                 )
             })?;
-        let stream = into_stream(selected, Some(referer));
+        let stream = into_stream(selected, Some(referer)).with_audio(audio_url);
 
         let subtitle = config
             .get("subtitles")

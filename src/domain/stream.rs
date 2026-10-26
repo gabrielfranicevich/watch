@@ -3,6 +3,7 @@ pub struct Stream {
     pub url: String,
     pub quality: Option<String>,
     pub referer: Option<String>,
+    pub audio_url: Option<String>,
 }
 
 impl Stream {
@@ -12,5 +13,10 @@ impl Stream {
             quality,
             referer,
         }
+    }
+
+    pub fn with_audio(mut self, audio_url: Option<String>) -> Self {
+        self.audio_url = audio_url;
+        self
     }
 }

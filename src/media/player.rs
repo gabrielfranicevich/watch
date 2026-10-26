@@ -46,6 +46,9 @@ impl Player {
                 if let Some(referer) = stream.referer.as_deref() {
                     args.push(OsString::from(format!("--referrer={referer}")));
                 }
+                if let Some(audio) = stream.audio_url.as_deref() {
+                    args.push(OsString::from(format!("--audio-file={audio}")));
+                }
                 if let Some(subtitle) = subtitle {
                     args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
                 }
@@ -63,6 +66,20 @@ impl Player {
                 }
                 args.extend(extra_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
+
+                let mut slave_inputs = Vec::new();
+                if let Some(audio) = stream.audio_url.as_deref() {
+                    slave_inputs.push(audio);
+                }
+                if let Some(subtitle) = subtitle {
+                    slave_inputs.push(subtitle.url.as_str());
+                }
+                if !slave_inputs.is_empty() {
+                    args.push(OsString::from(format!(
+                        ":input-slave={}",
+                        slave_inputs.join("#")
+                    )));
+                }
             }
         }
         args
@@ -169,6 +186,17 @@ mod tests {
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
         );
+    }
+
+
+    #[test]
+    fn forwards_external_audio_to_mpv_and_vlc() {
+        let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
+        let mpv = Player::Mpv.arguments(&stream, None, "Example");
+        assert!(mpv.iter().any(|arg| arg == "--audio-file=https://cdn.example/audio.m3u8"));
+
+        let vlc = Player::Vlc.arguments(&stream, None, "Example");
+        assert!(vlc.iter().any(|arg| arg == ":input-slave=https://cdn.example/audio.m3u8"));
     }
 
     #[test]
