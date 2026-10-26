@@ -72,9 +72,11 @@ impl HiAnimeProvider {
             .client
             .get(url)
             .query(&[("keyword", query)])
-            .send()?
-            .error_for_status()?;
-        let document = Html::parse_document(&response.text()?);
+            .send()?;
+        let status = response.status();
+        let body = response.text()?;
+        ensure_provider_response(status, &body)?;
+        let document = Html::parse_document(&body);
         let selector = Selector::parse("div.film-detail h3.film-name a")
             .map_err(|_| ProviderError::InvalidSelector("div.film-detail h3.film-name a"))?;
         let mut results = Vec::new();
@@ -135,8 +137,10 @@ impl HiAnimeProvider {
     pub fn episodes(&self, anime: &Anime) -> Result<Vec<Episode>, ProviderError> {
         let slug = anime.id.rsplit('-').next().unwrap_or(&anime.id);
         let url = format!("{}/api/theme/episode/list/{}", self.base_url, slug);
-        let response = self.client.get(url).send()?.error_for_status()?;
+        let response = self.client.get(url).send()?;
+        let status = response.status();
         let body = response.text()?;
+        ensure_provider_response(status, &body)?;
         let document = Html::parse_fragment(&body.replace("\\", ""));
         let selector =
             Selector::parse(".ep-item").map_err(|_| ProviderError::InvalidSelector(".ep-item"))?;
@@ -158,13 +162,37 @@ impl HiAnimeProvider {
             episodes.push(Episode::new(number, None, watch_url));
         }
 
-        if episodes.is_empty() && body.contains("Just a moment") {
-            return Err(ProviderError::UnexpectedResponse(
-                "HiAnime returned a browser-verification page; try a curl-impersonate build or retry later".into(),
-            ));
-        }
         Ok(episodes)
     }
+}
+
+fn is_browser_verification_page(body: &str) -> bool {
+    let normalized = body.to_ascii_lowercase();
+    [
+        "just a moment",
+        "cf-browser-verification",
+        "challenge-platform",
+        "verify you are human",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+}
+
+fn ensure_provider_response(
+    status: reqwest::StatusCode,
+    body: &str,
+) -> Result<(), ProviderError> {
+    if is_browser_verification_page(body) {
+        return Err(ProviderError::UnexpectedResponse(
+            "HiAnime returned an anti-bot verification page; retry later or use a compatible curl-impersonate setup".into(),
+        ));
+    }
+    if !status.is_success() {
+        return Err(ProviderError::UnexpectedResponse(format!(
+            "HiAnime returned HTTP status {status}"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -196,6 +224,30 @@ mod tests {
             request
         });
         (format!("http://{address}"), handle)
+    }
+
+    #[test]
+    fn identifies_common_anti_bot_challenge_markers() {
+        assert!(is_browser_verification_page("<title>Just a moment...</title>"));
+        assert!(is_browser_verification_page("<div id=\"cf-browser-verification\">"));
+        assert!(is_browser_verification_page("Verify you are human"));
+        assert!(!is_browser_verification_page("<div class=\"film-detail\">Frieren</div>"));
+    }
+
+    #[test]
+    fn provider_response_distinguishes_challenge_from_empty_search_results() {
+        let challenge = ensure_provider_response(
+            reqwest::StatusCode::FORBIDDEN,
+            "<title>Just a moment...</title>",
+        )
+        .unwrap_err();
+        assert!(challenge.to_string().contains("anti-bot verification"));
+
+        let forbidden = ensure_provider_response(reqwest::StatusCode::FORBIDDEN, "forbidden")
+            .unwrap_err();
+        assert!(forbidden.to_string().contains("HTTP status 403"));
+
+        assert!(ensure_provider_response(reqwest::StatusCode::OK, "<html></html>").is_ok());
     }
 
     #[test]
