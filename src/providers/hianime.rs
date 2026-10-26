@@ -1,5 +1,5 @@
 use reqwest::blocking::Client;
-use scraper::{Html, Selector};
+use scraper::{Element, Html, Selector};
 use std::time::Duration;
 
 use crate::domain::{anime::Anime, episode::Episode};
