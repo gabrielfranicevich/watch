@@ -229,7 +229,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && !command_available("mpv")
         && command_available("flatpak")
         && flatpak_mpv_installed();
-    let player = if cli.download {
+    let player = if !player_required(cli.download) {
         // Download-only mode does not spawn a player and must work without MPV/VLC.
         Player::Mpv
     } else if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
