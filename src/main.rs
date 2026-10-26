@@ -763,12 +763,14 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "--branch" && pair[1] == "develop"
-        ));
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "--root" && pair[1] == "/home/user/.cargo"
-        ));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--branch" && pair[1] == "develop")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--root" && pair[1] == "/home/user/.cargo")
+        );
         assert!(args.contains(&"--force".to_owned()));
         assert!(args.contains(&"--locked".to_owned()));
     }
