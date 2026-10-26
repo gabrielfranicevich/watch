@@ -22,10 +22,7 @@ impl HistoryStore {
             Err(error) => return Err(error),
         };
 
-        Ok(content
-            .lines()
-            .filter_map(parse_history_line)
-            .collect())
+        Ok(content.lines().filter_map(parse_history_line).collect())
     }
 
     pub fn write(&self, entries: &[HistoryEntry]) -> io::Result<()> {
@@ -76,7 +73,10 @@ fn parse_history_line(line: &str) -> Option<HistoryEntry> {
 }
 
 fn clean_field(value: &str) -> String {
-    value.replace('\t', " ").replace('\n', " ").replace('\r', " ")
+    value
+        .replace('\t', " ")
+        .replace('\n', " ")
+        .replace('\r', " ")
 }
 
 fn suffix_path(path: &Path, suffix: &str) -> PathBuf {
@@ -109,7 +109,10 @@ struct LockFile {
 
 impl LockFile {
     fn acquire(path: PathBuf) -> io::Result<Self> {
-        OpenOptions::new().write(true).create_new(true).open(&path)?;
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)?;
         Ok(Self { path })
     }
 }
@@ -140,11 +143,14 @@ mod tests {
 
         let entries = HistoryStore::new(&path).read().unwrap();
 
-        assert_eq!(entries, vec![HistoryEntry::new(
-            "12",
-            "frieren",
-            "Frieren: Beyond Journey's End"
-        )]);
+        assert_eq!(
+            entries,
+            vec![HistoryEntry::new(
+                "12",
+                "frieren",
+                "Frieren: Beyond Journey's End"
+            )]
+        );
         fs::remove_file(path).unwrap();
     }
 

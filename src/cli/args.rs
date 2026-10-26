@@ -114,7 +114,9 @@ impl Cli {
         }
 
         if cli.rofi && cli.dmenu {
-            return Err(ParseError("--rofi and --dmenu cannot be used together".into()));
+            return Err(ParseError(
+                "--rofi and --dmenu cannot be used together".into(),
+            ));
         }
 
         if !query_words.is_empty() {
@@ -162,7 +164,12 @@ mod tests {
 
     #[test]
     fn rejects_missing_option_values() {
-        assert!(Cli::parse(["--episode"]).unwrap_err().to_string().contains("requires a value"));
+        assert!(
+            Cli::parse(["--episode"])
+                .unwrap_err()
+                .to_string()
+                .contains("requires a value")
+        );
     }
 
     #[test]

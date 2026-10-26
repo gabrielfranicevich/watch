@@ -6,6 +6,9 @@ pub struct Subtitle {
 
 impl Subtitle {
     pub fn new(url: impl Into<String>, language: Option<String>) -> Self {
-        Self { url: url.into(), language }
+        Self {
+            url: url.into(),
+            language,
+        }
     }
 }

@@ -10,12 +10,20 @@ fn main() -> ExitCode {
             println!("ani-cli {}", ani_cli::version());
             ExitCode::SUCCESS
         }
-        Ok(cli) if cli.query.is_none() && !cli.continue_history && !cli.delete_history && !cli.logview && !cli.update => {
+        Ok(cli)
+            if cli.query.is_none()
+                && !cli.continue_history
+                && !cli.delete_history
+                && !cli.logview
+                && !cli.update =>
+        {
             print!("{}", ani_cli::cli::args::HELP);
             ExitCode::SUCCESS
         }
         Ok(_) => {
-            eprintln!("This Rust build is a migration scaffold; the requested workflow is not implemented yet.");
+            eprintln!(
+                "This Rust build is a migration scaffold; the requested workflow is not implemented yet."
+            );
             ExitCode::from(2)
         }
         Err(error) => {

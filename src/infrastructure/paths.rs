@@ -2,9 +2,15 @@ use std::path::PathBuf;
 
 pub fn config_dir() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
-        std::env::var_os("APPDATA").map(PathBuf::from).map(|path| path.join("ani-cli"))
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join("ani-cli"))
     } else if cfg!(target_os = "macos") {
-        home_dir().map(|path| path.join("Library").join("Application Support").join("ani-cli"))
+        home_dir().map(|path| {
+            path.join("Library")
+                .join("Application Support")
+                .join("ani-cli")
+        })
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
@@ -15,7 +21,9 @@ pub fn config_dir() -> Option<PathBuf> {
 
 pub fn data_dir() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
-        std::env::var_os("LOCALAPPDATA").map(PathBuf::from).map(|path| path.join("ani-cli"))
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join("ani-cli"))
     } else if cfg!(target_os = "macos") {
         home_dir().map(|path| path.join("Library").join("Application Support").join("ani-cli"))
     } else {
