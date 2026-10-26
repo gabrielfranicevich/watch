@@ -40,6 +40,7 @@ pub struct Cli {
     pub logview: bool,
     pub syncplay: bool,
     pub select_nth: bool,
+    pub select_index: Option<usize>,
     pub quality: Option<String>,
     pub vlc: bool,
     pub version: bool,
@@ -87,7 +88,18 @@ impl Cli {
                 "-D" | "--delete" => cli.delete_history = true,
                 "-l" | "--logview" => cli.logview = true,
                 "-s" | "--syncplay" => cli.syncplay = true,
-                "-S" | "--select-nth" => cli.select_nth = true,
+                "-S" | "--select-nth" => {
+                    index += 1;
+                    let value = required_value(&args, index, arg)?;
+                    let number = value.parse::<usize>().map_err(|_| {
+                        ParseError(format!("{arg} requires a positive integer"))
+                    })?;
+                    if number == 0 {
+                        return Err(ParseError(format!("{arg} requires a positive integer")));
+                    }
+                    cli.select_nth = true;
+                    cli.select_index = Some(number);
+                }
                 "-v" | "--vlc" => cli.vlc = true,
                 "-e" | "--episode" | "-r" | "--range" => {
                     index += 1;
@@ -175,6 +187,21 @@ mod tests {
     #[test]
     fn rejects_conflicting_interactive_menus() {
         assert!(Cli::parse(["--rofi", "--dmenu"]).is_err());
+    }
+
+    #[test]
+    fn parses_one_based_select_nth_index() {
+        let cli = Cli::parse(["-S", "2", "frieren"]).unwrap();
+        assert!(cli.select_nth);
+        assert_eq!(cli.select_index, Some(2));
+        assert_eq!(cli.query.as_deref(), Some("frieren"));
+    }
+
+    #[test]
+    fn rejects_invalid_select_nth_index() {
+        assert!(Cli::parse(["--select-nth"]).is_err());
+        assert!(Cli::parse(["--select-nth", "0"]).is_err());
+        assert!(Cli::parse(["--select-nth", "abc"]).is_err());
     }
 
     #[test]
