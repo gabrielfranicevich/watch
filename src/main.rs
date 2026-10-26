@@ -1067,7 +1067,11 @@ mod tests {
 
         record_history(
             &store,
-            &Anime::new("first-1", "First Updated", "https://hianime.at/watch/first-1"),
+            &Anime::new(
+                "first-1",
+                "First Updated",
+                "https://hianime.at/watch/first-1",
+            ),
             &Episode::new("3", None, "https://hianime.at/watch/first-1?ep=1003"),
         )
         .unwrap();
