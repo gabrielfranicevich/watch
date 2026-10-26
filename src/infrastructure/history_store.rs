@@ -166,14 +166,21 @@ impl Drop for LockFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEST_PATH: AtomicU64 = AtomicU64::new(0);
 
     fn test_path() -> PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("ani-cli-history-{}-{nonce}", std::process::id()))
+        let sequence = NEXT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "ani-cli-history-{}-{nonce}-{sequence}",
+            std::process::id()
+        ))
     }
 
     fn remove_history_artifacts(path: &Path) {
