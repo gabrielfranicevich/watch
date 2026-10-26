@@ -9,6 +9,7 @@ pub enum Player {
     Mpv,
     Vlc,
     Syncplay,
+    Iina,
 }
 
 impl Player {
@@ -17,10 +18,16 @@ impl Player {
     }
 
     pub fn from_flags(use_vlc: bool, use_syncplay: bool) -> Self {
+        Self::from_options(use_vlc, use_syncplay, false)
+    }
+
+    pub fn from_options(use_vlc: bool, use_syncplay: bool, use_iina: bool) -> Self {
         if use_syncplay {
             Self::Syncplay
         } else if use_vlc {
             Self::Vlc
+        } else if use_iina {
+            Self::Iina
         } else {
             Self::Mpv
         }
@@ -31,6 +38,13 @@ impl Player {
             Self::Mpv => "mpv",
             Self::Vlc => "vlc",
             Self::Syncplay => "syncplay",
+            Self::Iina => {
+                if cfg!(target_os = "macos") {
+                    "/Applications/IINA.app/Contents/MacOS/iina-cli"
+                } else {
+                    "iina-cli"
+                }
+            }
         }
     }
 
@@ -104,6 +118,28 @@ impl Player {
                         slave_inputs.join("#")
                     )));
                 }
+            }
+            Self::Iina => {
+                if let Some(referer) = stream.referer.as_deref() {
+                    args.push(OsString::from(format!("--mpv-referrer={referer}")));
+                }
+                if let Some(audio) = stream.audio_url.as_deref() {
+                    args.push(OsString::from(format!(
+                        "--mpv-audio-files={}",
+                        escape_iina_url(audio)
+                    )));
+                }
+                if let Some(subtitle) = subtitle {
+                    args.push(OsString::from(format!(
+                        "--mpv-sub-files={}",
+                        escape_iina_url(&subtitle.url)
+                    )));
+                }
+                args.extend(command_flags.iter().map(OsString::from));
+                args.push(OsString::from("--no-stdin"));
+                args.push(OsString::from("--keep-running"));
+                args.push(OsString::from(format!("--mpv-force-media-title={title}")));
+                args.push(OsString::from(&stream.url));
             }
             Self::Syncplay => {
                 args.extend(command_flags.iter().map(OsString::from));
@@ -184,6 +220,10 @@ impl Player {
             .stderr(Stdio::null())
             .spawn()
     }
+}
+
+fn escape_iina_url(url: &str) -> String {
+    url.replace(':', "\\:")
 }
 
 #[cfg(test)]
@@ -288,6 +328,34 @@ mod tests {
         assert_eq!(args[url_index + 1], "--");
         assert!(args.contains(&"--audio-file=https://cdn.example/audio.m3u8".to_owned()));
         assert!(args.contains(&"--start=1".to_owned()));
+    }
+
+    #[test]
+    fn iina_arguments_forward_mpv_media_options_and_escape_colons() {
+        let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
+        let subtitle = Subtitle::new("https://cdn.example/sub.vtt", Some("English".into()));
+        let args = Player::Iina.arguments(&stream, Some(&subtitle), "Example Anime");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"--mpv-referrer=https://embed.example/".to_owned()));
+        assert!(args.contains(&"--mpv-audio-files=https\\://cdn.example/audio.m3u8".to_owned()));
+        assert!(args.contains(&"--mpv-sub-files=https\\://cdn.example/sub.vtt".to_owned()));
+        assert!(args.contains(&"--no-stdin".to_owned()));
+        assert!(args.contains(&"--keep-running".to_owned()));
+        assert!(args.contains(&"--mpv-force-media-title=Example Anime".to_owned()));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("https://cdn.example/video.m3u8")
+        );
+    }
+
+    #[test]
+    fn selects_iina_when_requested_without_other_player_flags() {
+        assert_eq!(Player::from_options(false, false, true), Player::Iina);
+        assert_eq!(Player::from_options(true, false, true), Player::Vlc);
+        assert_eq!(Player::from_options(false, true, true), Player::Syncplay);
     }
 
     #[test]
