@@ -202,18 +202,19 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         std::fs::create_dir_all(&download_dir)?;
     }
 
+    let exit_after_play = cli.exit_after_play || env_enabled("ANI_CLI_EXIT_AFTER_PLAY");
+    let attached = cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
     let mut playback = PlaybackConfig {
         resolver: &resolver,
         player,
         player_flags,
         dubbed,
-        skip_intro: cli.skip_intro,
+        skip_intro: cli.skip_intro || env_enabled("ANI_CLI_SKIP_INTRO"),
         quality,
         download: cli.download,
         download_dir: &download_dir,
         history: history.as_ref(),
     };
-    let attached = cli.no_detach || cli.exit_after_play;
     let mut active_player: Option<Child> = None;
 
     for (index, episode) in selected.iter().enumerate() {
@@ -223,7 +224,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         match playback.play_episode(&anime, episode, attached)? {
             PlaybackResult::Detached(child) => active_player = Some(child),
             PlaybackResult::Attached(status) => {
-                if cli.exit_after_play {
+                if exit_after_play && index + 1 == selected.len() {
                     return Ok(exit_code(status));
                 }
                 ensure_success(status, player.command_name())?;
@@ -249,6 +250,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         &mut active_player,
         &mut playback,
         &cli,
+        attached,
     )
 }
 
@@ -378,6 +380,7 @@ fn run_playback_menu(
     active_player: &mut Option<Child>,
     playback: &mut PlaybackConfig<'_>,
     cli: &ani_cli::cli::args::Cli,
+    attached: bool,
 ) -> Result<ExitCode, Box<dyn std::error::Error>> {
     let actions = vec![
         "Next episode".to_owned(),
@@ -452,7 +455,7 @@ fn run_playback_menu(
         }
 
         wait_for_player(active_player)?;
-        match playback.play_episode(anime, &episodes[*current_index], cli.no_detach)? {
+        match playback.play_episode(anime, &episodes[*current_index], attached)? {
             PlaybackResult::Detached(child) => *active_player = Some(child),
             PlaybackResult::Attached(status) => {
                 ensure_success(status, playback.player.command_name())?
@@ -720,6 +723,14 @@ fn select_items(
     }
 }
 
+fn env_enabled(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|value| is_enabled(Some(&value)))
+}
+
+fn is_enabled(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
 fn effective_source(
     continue_history: bool,
     next_episode_countdown: bool,
@@ -786,6 +797,14 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn supports_legacy_boolean_environment_flags() {
+        assert!(is_enabled(Some("1")));
+        assert!(!is_enabled(Some("0")));
+        assert!(!is_enabled(Some("true")));
+        assert!(!is_enabled(None));
+    }
 
     #[test]
     fn selects_source_from_cli_flags_and_environment() {
