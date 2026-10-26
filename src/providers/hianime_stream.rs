@@ -9,6 +9,7 @@ use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{
     HlsVariant, into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
 };
+use super::hianime::is_browser_verification_page;
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
 
@@ -109,12 +110,8 @@ impl HiAnimeStreamResolver {
             "{}/api/theme/episode/servers?episodeId={episode_id}",
             self.base_url
         );
-        let servers_body = self
-            .client
-            .get(servers_url)
-            .send()?
-            .error_for_status()?
-            .text()?;
+        let servers_response = self.client.get(servers_url).send()?;
+        let servers_body = provider_response_body(servers_response)?;
         let servers = Html::parse_fragment(&normalize_server_html(&servers_body));
         let selector = Selector::parse(".server-item")
             .map_err(|_| StreamResolveError::InvalidData("invalid server selector".into()))?;
@@ -143,12 +140,8 @@ impl HiAnimeStreamResolver {
         let referer = origin_with_slash(&embed_url)?;
         let mal_id = mal_id_from_embed(&embed_url);
 
-        let embed_body = self
-            .client
-            .get(&embed_url)
-            .send()?
-            .error_for_status()?
-            .text()?;
+        let embed_response = self.client.get(&embed_url).send()?;
+        let embed_body = provider_response_body(embed_response)?;
         let blob = extract_window_blob(&embed_body).ok_or_else(|| {
             StreamResolveError::InvalidData("HiAnime embed page did not contain window.__P".into())
         })?;
@@ -173,13 +166,12 @@ impl HiAnimeStreamResolver {
                 StreamResolveError::InvalidData("HiAnime embed config has no HLS source".into())
             })?;
 
-        let playlist = self
+        let playlist_response = self
             .client
             .get(master_url)
             .header(reqwest::header::REFERER, &referer)
-            .send()?
-            .error_for_status()?
-            .text()?;
+            .send()?;
+        let playlist = provider_response_body(playlist_response)?;
         let variants = parse_master_playlist(&playlist, master_url)?;
         let qualities = quality_options(&variants);
         let audio_url = parse_default_audio_url(&playlist, master_url)?;
@@ -237,6 +229,26 @@ fn quality_options(variants: &[HlsVariant]) -> Vec<QualityOption> {
     options.sort_by_key(|option| std::cmp::Reverse(option.0));
     options.dedup_by(|left, right| left.1.value == right.1.value);
     options.into_iter().map(|(_, option)| option).collect()
+}
+
+fn provider_response_body(
+    response: reqwest::blocking::Response,
+) -> Result<String, StreamResolveError> {
+    let status = response.status();
+    let body = response.text()?;
+
+    if is_browser_verification_page(&body) {
+        return Err(StreamResolveError::InvalidData(
+            "HiAnime returned an anti-bot verification page while resolving the stream; retry later or use a compatible curl-impersonate setup".into(),
+        ));
+    }
+    if !status.is_success() {
+        return Err(StreamResolveError::InvalidData(format!(
+            "HiAnime stream endpoint returned HTTP status {status}"
+        )));
+    }
+
+    Ok(body)
 }
 
 fn normalize_server_html(body: &str) -> String {
@@ -299,6 +311,24 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["720p"]
         );
+    }
+
+    fn mock_http_response(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::Write;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (mut connection, _) = listener.accept().unwrap();
+            write!(
+                connection,
+                "HTTP/1.1 {status} Error\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        (format!("http://{address}/error"), handle)
     }
 
     fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>>) {
@@ -432,6 +462,41 @@ mod tests {
         let server = document.select(&selector).next().unwrap();
         assert_eq!(server.value().attr("data-type"), Some("sub"));
         assert_eq!(server.value().attr("data-hash"), Some("YWJj"));
+    }
+
+    #[test]
+    fn stream_response_reports_anti_bot_challenges_and_http_errors() {
+        use std::io::Write;
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut connection, _) = listener.accept().unwrap();
+            connection
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let body = "<title>Just a moment...</title>";
+            write!(
+                connection,
+                "HTTP/1.1 403 Forbidden\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let response = reqwest::blocking::Client::new()
+            .get(format!("http://{address}/challenge"))
+            .send()
+            .unwrap();
+        let error = provider_response_body(response).unwrap_err();
+        server.join().unwrap();
+        assert!(error.to_string().contains("anti-bot verification"));
+
+        let (stream, _server) = mock_http_response(403, "forbidden");
+        let response = reqwest::blocking::Client::new().get(&stream).send().unwrap();
+        let error = provider_response_body(response).unwrap_err();
+        assert!(error.to_string().contains("HTTP status 403"));
     }
 
     #[test]

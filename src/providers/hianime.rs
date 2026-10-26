@@ -162,7 +162,7 @@ impl HiAnimeProvider {
     }
 }
 
-fn is_browser_verification_page(body: &str) -> bool {
+pub(crate) fn is_browser_verification_page(body: &str) -> bool {
     let normalized = body.to_ascii_lowercase();
     [
         "just a moment",
