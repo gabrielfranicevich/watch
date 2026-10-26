@@ -34,7 +34,7 @@ cargo install --git https://github.com/gabrielfranicevich/anime --branch develop
 ani-cli "Frieren"
 ~~~
 
-Choose a result and an episode from the interactive menus. For playback, install a supported media player such as MPV. See the [tutorial](docs/tutorial.md) for setup and examples.
+Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run ani-cli. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
 
 ## Examples
 
@@ -92,13 +92,13 @@ These paths depend on the provider, platform, media player, and external tools. 
 
 | Tool | When it is needed |
 | --- | --- |
-| MPV, VLC, IINA, or Syncplay | Playing streams; availability depends on the platform. |
+| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to ani-cli. |
 | FFmpeg | Downloads and muxing separate audio/video streams. |
 | yt-dlp | Optional; preferred for supported single-stream downloads. |
 | fzf, rofi, or dmenu | Optional selection backends. |
 | ani-skip | Optional intro skipping for supported MPV/Syncplay setups. |
 
-Install players and command-line tools with your operating system's package manager. On Windows, install tools in the environment where you run ani-cli. WSL may need extra setup to launch a Windows player. Android/Termux support depends on the player app and intent integration; this project does not ship a native Android binary.
+Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.exe` or `vlc.exe` is available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. Android/Termux support depends on the player app and intent integration; this project does not ship a native Android binary.
 
 ## Configuration
 

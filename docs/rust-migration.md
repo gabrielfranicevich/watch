@@ -18,7 +18,7 @@ cargo run --release -- --continue
 cargo run --release -- --nextep-countdown "Frieren"
 ~~~
 
-Linux and Windows playback prefer MPV and can fall back to VLC when available. Linux can use Flatpak MPV. macOS supports IINA, MPV, and VLC where installed. Termux/Android support uses Android app integration and depends on the installed player. Syncplay and intro skipping require their respective external tools.
+Player selection depends on the platform and which executables are available. On Windows, ani-cli checks for MPV and falls back to VLC when MPV is unavailable; if neither is available, install one or set `ANI_CLI_PLAYER` to an executable path. Linux can use Flatpak MPV when regular MPV is unavailable. macOS can use IINA, MPV, or VLC when installed. Termux/Android playback uses Android app integration and depends on the installed player. Syncplay and intro skipping require their respective external tools.
 
 Downloads use yt-dlp when available for a compatible single media stream and FFmpeg as a fallback. Separate audio renditions are muxed with FFmpeg.
 

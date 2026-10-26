@@ -26,7 +26,7 @@ Prebuilt binaries and updated packages for third-party package managers are not 
 
 ## 2. Install playback tools
 
-Install a supported player separately. MPV is a good default; VLC, Syncplay, and IINA are also supported where applicable.
+Install a supported player separately. MPV is the usual default; VLC, Syncplay, and IINA are also supported where applicable. On Windows, install MPV or VLC and make sure its executable is available through `PATH`. ani-cli must be able to find the player from the same terminal or environment that launches it. If you use a custom location, set `ANI_CLI_PLAYER` to the executable path.
 
 FFmpeg is needed for downloads and for muxing separate video and audio tracks. yt-dlp is optional and preferred when a resolved stream is suitable. fzf, rofi, and dmenu are optional selection menus.
 
@@ -108,7 +108,9 @@ Set `ANI_CLI_PLAYER` to a supported player name or executable path, and `ANI_CLI
 
 **Search fails or returns a verification page.** The upstream provider may be applying anti-bot checks or may have changed its page structure. Retry later; this is not necessarily an ani-cli configuration problem.
 
-**Playback does not start.** Confirm that the selected player is installed and accessible from your terminal. Try `ani-cli --vlc "Frieren"` if VLC is installed, and inspect the error output.
+**Playback fails with `program not found`.** ani-cli resolves the stream but delegates playback to an external player. Install MPV or VLC and make sure `mpv.exe` or `vlc.exe` is available through `PATH` in the environment where ani-cli runs. To use a custom location, set `ANI_CLI_PLAYER` to the executable path. You can also try `ani-cli --vlc "Frieren"` when VLC is installed.
+
+**Playback does not start for another reason.** Confirm that the selected player supports the stream and is accessible from your terminal, then inspect the error output.
 
 **Download fails.** Install FFmpeg and, if available, yt-dlp. Some stream sources may be unavailable or unsuitable for download even when playback works.
 

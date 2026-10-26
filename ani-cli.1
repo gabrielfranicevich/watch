@@ -138,7 +138,7 @@ Directory containing the compatible ani-hsts history file.
 .B ANI_CLI_LOG
 Set to 0 to disable system logger records.
 .SH DEPENDENCIES
-Rust is required to build the development branch. Playback needs a supported external media player such as mpv or VLC. Downloads use yt-dlp when available and FFmpeg as the fallback; FFmpeg is also required to mux separate audio and video renditions. Syncplay and ani-skip are optional.
+Rust is required to build the development branch. Playback needs an installed external media player such as mpv or VLC. On Windows, the player's executable must be available through PATH, or selected explicitly with ANI_CLI_PLAYER. Downloads use yt-dlp when available and FFmpeg as the fallback; FFmpeg is also required to mux separate audio and video renditions. Syncplay and ani-skip are optional.
 .SH FILES
 The history file is resolved using the platform-specific data directory or
 .BR ANI_CLI_HIST_DIR .
