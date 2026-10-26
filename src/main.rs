@@ -229,7 +229,10 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && !command_available("mpv")
         && command_available("flatpak")
         && flatpak_mpv_installed();
-    let player = if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
+    let player = if cli.download {
+        // Download-only mode does not spawn a player and must work without MPV/VLC.
+        Player::Mpv
+    } else if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
         Player::from_configuration(cli.vlc, cli.syncplay, false, env_player.as_deref())
     } else if use_iina_default && command_available("iina") {
         Player::from_configuration(false, false, false, Some("iina"))
@@ -879,6 +882,10 @@ fn preferred_menu_backend(
         .map(str::to_owned)
 }
 
+fn player_required(download_only: bool) -> bool {
+    !download_only
+}
+
 fn flatpak_mpv_installed() -> bool {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -1008,6 +1015,12 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_only_mode_does_not_require_a_player() {
+        assert!(!player_required(true));
+        assert!(player_required(false));
+    }
 
     #[test]
     fn flatpak_detection_uses_installed_app_directories() {
