@@ -66,9 +66,7 @@ impl Player {
         } else if let Some(command) = configured_player.filter(|value| !value.trim().is_empty()) {
             if cfg!(target_os = "android") && command.to_ascii_lowercase().contains("vlc") {
                 Self::AndroidVlc
-            } else if cfg!(target_os = "android")
-                && command.to_ascii_lowercase().contains("mpv")
-            {
+            } else if cfg!(target_os = "android") && command.to_ascii_lowercase().contains("mpv") {
                 Self::AndroidMpv
             } else {
                 Self::Configured(command.to_owned())
@@ -546,12 +544,14 @@ mod tests {
             .collect();
         assert_eq!(args[0], "start");
         assert_eq!(args[1], "--user");
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-n" && pair[1] == "is.xyz.mpv/.MPVActivity"
-        ));
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-e" && pair[1] == "title"
-        ));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-n" && pair[1] == "is.xyz.mpv/.MPVActivity")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-e" && pair[1] == "title")
+        );
         assert!(args.contains(&"Frieren Episode 4".to_owned()));
         assert!(args.contains(&"--debug".to_owned()));
         assert_eq!(Player::AndroidMpv.command_name(), "am");
