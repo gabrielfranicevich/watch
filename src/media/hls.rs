@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn selects_best_worst_and_requested_height() {
-        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8", None).unwrap();
+        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
         assert_eq!(select_quality(&variants, "best").unwrap().resolution.as_deref(), Some("1920x1080"));
         assert_eq!(select_quality(&variants, "worst").unwrap().resolution.as_deref(), Some("640x360"));
         assert_eq!(select_quality(&variants, "720p"), None);
