@@ -182,18 +182,20 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .clone()
         .or_else(|| std::env::var("ANI_CLI_QUALITY").ok())
         .unwrap_or_else(|| "best".to_owned());
-    let env_player = std::env::var("ANI_CLI_PLAYER")
+    let env_player = std::env::var("ANI_CLI_PLAYER").ok();
+    let configured_player_lower = env_player
+        .as_deref()
         .unwrap_or_default()
         .to_ascii_lowercase();
     let default_iina_path = "/Applications/IINA.app/Contents/MacOS/iina-cli";
-    let use_iina = env_player.contains("iina")
-        || (env_player.is_empty()
-            && cfg!(target_os = "macos")
-            && Path::new(default_iina_path).is_file());
-    let player = Player::from_options(
-        cli.vlc || env_player.contains("vlc"),
-        cli.syncplay || env_player.contains("syncplay"),
-        use_iina,
+    let use_iina_default = env_player.is_none()
+        && cfg!(target_os = "macos")
+        && Path::new(default_iina_path).is_file();
+    let player = Player::from_configuration(
+        cli.vlc,
+        cli.syncplay,
+        use_iina_default,
+        env_player.as_deref(),
     );
     let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
@@ -233,7 +235,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 if exit_after_play && index + 1 == selected.len() {
                     return Ok(exit_code(status));
                 }
-                ensure_success(status, player.command_name())?;
+                ensure_success(status, playback.player.command_name())?;
             }
             PlaybackResult::Downloaded => {}
         }
@@ -294,7 +296,7 @@ impl PlaybackConfig<'_> {
         let media = self.resolver.resolve(episode, self.dubbed, &self.quality)?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
         let mut media_flags = Vec::new();
-        if self.skip_intro && matches!(self.player, Player::Mpv | Player::Syncplay) {
+        if self.skip_intro && self.player.supports_intro_skipping() {
             let mal_id = media
                 .mal_id
                 .as_deref()

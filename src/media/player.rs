@@ -4,12 +4,22 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::domain::{stream::Stream, subtitle::Subtitle};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Player {
     Mpv,
     Vlc,
     Syncplay,
     Iina,
+    Configured(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlayerKind {
+    Mpv,
+    Vlc,
+    Syncplay,
+    Iina,
+    Custom,
 }
 
 impl Player {
@@ -33,23 +43,71 @@ impl Player {
         }
     }
 
-    pub fn command_name(self) -> &'static str {
+    pub fn from_configuration(
+        use_vlc: bool,
+        use_syncplay: bool,
+        use_iina_default: bool,
+        configured_player: Option<&str>,
+    ) -> Self {
+        if use_syncplay {
+            Self::Syncplay
+        } else if use_vlc {
+            Self::Vlc
+        } else if let Some(command) = configured_player.filter(|value| !value.trim().is_empty()) {
+            Self::Configured(command.to_owned())
+        } else if use_iina_default {
+            Self::Iina
+        } else {
+            Self::Mpv
+        }
+    }
+
+    pub fn command_name(&self) -> &str {
         match self {
             Self::Mpv => "mpv",
             Self::Vlc => "vlc",
             Self::Syncplay => "syncplay",
-            Self::Iina => {
-                if cfg!(target_os = "macos") {
-                    "/Applications/IINA.app/Contents/MacOS/iina-cli"
+            Self::Iina if cfg!(target_os = "macos") => {
+                "/Applications/IINA.app/Contents/MacOS/iina-cli"
+            }
+            Self::Iina => "iina-cli",
+            Self::Configured(command) => command,
+        }
+    }
+
+    fn kind(&self) -> PlayerKind {
+        match self {
+            Self::Mpv => PlayerKind::Mpv,
+            Self::Vlc => PlayerKind::Vlc,
+            Self::Syncplay => PlayerKind::Syncplay,
+            Self::Iina => PlayerKind::Iina,
+            Self::Configured(command) => {
+                let name = std::path::Path::new(command)
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or(command)
+                    .to_ascii_lowercase();
+                if name.contains("syncplay") {
+                    PlayerKind::Syncplay
+                } else if name.contains("vlc") {
+                    PlayerKind::Vlc
+                } else if name.contains("iina") {
+                    PlayerKind::Iina
+                } else if name.contains("mpv") {
+                    PlayerKind::Mpv
                 } else {
-                    "iina-cli"
+                    PlayerKind::Custom
                 }
             }
         }
     }
 
+    pub fn supports_intro_skipping(&self) -> bool {
+        matches!(self.kind(), PlayerKind::Mpv | PlayerKind::Syncplay)
+    }
+
     pub fn arguments(
-        self,
+        &self,
         stream: &Stream,
         subtitle: Option<&Subtitle>,
         title: &str,
@@ -76,8 +134,8 @@ impl Player {
         media_flags: &[String],
     ) -> Vec<OsString> {
         let mut args = Vec::new();
-        match self {
-            Self::Mpv => {
+        match self.kind() {
+            PlayerKind::Mpv => {
                 args.push(OsString::from("--force-window"));
                 args.push(OsString::from(format!("--force-media-title={title}")));
                 if let Some(referer) = stream.referer.as_deref() {
@@ -93,7 +151,7 @@ impl Player {
                 args.extend(media_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
             }
-            Self::Vlc => {
+            PlayerKind::Vlc => {
                 args.push(OsString::from("--play-and-exit"));
                 args.push(OsString::from(format!("--meta-title={title}")));
                 if let Some(referer) = stream.referer.as_deref() {
@@ -119,7 +177,7 @@ impl Player {
                     )));
                 }
             }
-            Self::Iina => {
+            PlayerKind::Iina => {
                 if let Some(referer) = stream.referer.as_deref() {
                     args.push(OsString::from(format!("--mpv-referrer={referer}")));
                 }
@@ -141,7 +199,7 @@ impl Player {
                 args.push(OsString::from(format!("--mpv-force-media-title={title}")));
                 args.push(OsString::from(&stream.url));
             }
-            Self::Syncplay => {
+            PlayerKind::Syncplay => {
                 args.extend(command_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
                 args.push(OsString::from("--"));
@@ -156,6 +214,10 @@ impl Player {
                 }
                 args.push(OsString::from(format!("--force-media-title={title}")));
                 args.extend(media_flags.iter().map(OsString::from));
+            }
+            PlayerKind::Custom => {
+                args.extend(command_flags.iter().map(OsString::from));
+                args.push(OsString::from(&stream.url));
             }
         }
         args
