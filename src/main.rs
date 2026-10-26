@@ -826,7 +826,11 @@ fn preferred_menu_backend(
     // and let rofi override it when both are installed.
     if !stdin_is_terminal {
         if dmenu_available {
-            return Some("dmenu".to_owned());
+            let default = Some("dmenu".to_owned());
+            if rofi_available {
+                return Some("rofi".to_owned());
+            }
+            return default;
         }
         if rofi_available {
             return Some("rofi".to_owned());
