@@ -180,12 +180,12 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Err(format!("no episodes found for '{}'", anime.title).into());
     }
 
-    let selected: Vec<Episode> = if let Some(range) = cli.episode_range.as_deref() {
-        select_episode_range(episodes.clone(), range)?
-    } else if let Some(last_watched) = resume_episode.as_deref() {
-        let next = next_episode_after(&episodes, last_watched)
-            .ok_or("no next episode is available after the last watched episode")?;
-        vec![next.clone()]
+    let selected: Vec<Episode> = if let Some(selected) = select_fixed_episodes(
+        &episodes,
+        cli.episode_range.as_deref(),
+        resume_episode.as_deref(),
+    )? {
+        selected
     } else {
         let labels: Vec<String> = episodes
             .iter()
@@ -666,6 +666,23 @@ fn normalize_title(title: &str) -> String {
         .to_lowercase()
 }
 
+fn select_fixed_episodes(
+    episodes: &[Episode],
+    range: Option<&str>,
+    resume_episode: Option<&str>,
+) -> Result<Option<Vec<Episode>>, Box<dyn std::error::Error>> {
+    // The shell implementation's history source overrides an explicit -e value.
+    if let Some(last_watched) = resume_episode {
+        let next = next_episode_after(episodes, last_watched)
+            .ok_or("no next episode is available after the last watched episode")?;
+        return Ok(Some(vec![next.clone()]));
+    }
+    if let Some(range) = range {
+        return Ok(Some(select_episode_range(episodes.to_vec(), range)?));
+    }
+    Ok(None)
+}
+
 fn select_episode_range(
     episodes: Vec<Episode>,
     range: &str,
@@ -1051,6 +1068,45 @@ mod tests {
     #[test]
     fn filename_replaces_platform_invalid_characters() {
         assert_eq!(safe_filename("A/B: C?"), "A_B_ C_");
+    }
+
+    #[test]
+    fn history_resume_takes_precedence_over_explicit_episode_range() {
+        let episodes = vec![
+            Episode::new("1", None, "one"),
+            Episode::new("2", None, "two"),
+            Episode::new("3", None, "three"),
+        ];
+        let selected = select_fixed_episodes(&episodes, Some("1-2"), Some("2"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            selected
+                .iter()
+                .map(|episode| episode.number.as_str())
+                .collect::<Vec<_>>(),
+            vec!["3"]
+        );
+    }
+
+    #[test]
+    fn explicit_episode_range_is_used_when_not_resuming_history() {
+        let episodes = vec![
+            Episode::new("1", None, "one"),
+            Episode::new("2", None, "two"),
+            Episode::new("3", None, "three"),
+        ];
+        let selected = select_fixed_episodes(&episodes, Some("1-2"), None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            selected
+                .iter()
+                .map(|episode| episode.number.as_str())
+                .collect::<Vec<_>>(),
+            vec!["1", "2"]
+        );
+        assert!(select_fixed_episodes(&episodes, None, None).unwrap().is_none());
     }
 
     #[test]
