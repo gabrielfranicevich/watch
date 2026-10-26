@@ -28,7 +28,7 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update ani-cli
 
-Note: Rust migration is in progress; playback and provider workflows are not yet available.
+Current Rust support: searches HiAnime and lists episodes. Playback, downloads, history and several legacy options are still being migrated.
 ";
 
 #[derive(Debug, Default, PartialEq, Eq)]
