@@ -320,19 +320,41 @@ mod tests {
     ) -> (String, std::thread::JoinHandle<()>) {
         use std::io::Write;
         use std::net::TcpListener;
+        use std::time::Duration;
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let handle = std::thread::spawn(move || {
             let (mut connection, _) = listener.accept().unwrap();
+            connection
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            read_request_headers(&mut connection);
             write!(
                 connection,
                 "HTTP/1.1 {status} Error\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             )
             .unwrap();
+            connection.flush().unwrap();
         });
         (format!("http://{address}/error"), handle)
+    }
+
+    fn read_request_headers(connection: &mut std::net::TcpStream) {
+        use std::io::Read;
+
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while request.len() < 16 * 1024 && !request.windows(4).any(|part| part == b"\r\n\r\n") {
+            let Ok(count) = connection.read(&mut buffer) else {
+                break;
+            };
+            if count == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..count]);
+        }
     }
 
     fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>>) {
@@ -470,7 +492,7 @@ mod tests {
 
     #[test]
     fn stream_response_reports_anti_bot_challenges_and_http_errors() {
-        use std::io::Write;
+        use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::time::Duration;
 
@@ -481,6 +503,7 @@ mod tests {
             connection
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .unwrap();
+            read_request_headers(&mut connection);
             let body = "<title>Just a moment...</title>";
             write!(
                 connection,
@@ -497,12 +520,13 @@ mod tests {
         server.join().unwrap();
         assert!(error.to_string().contains("anti-bot verification"));
 
-        let (stream, _server) = mock_http_response(403, "forbidden");
+        let (stream, server) = mock_http_response(403, "forbidden");
         let response = reqwest::blocking::Client::new()
             .get(&stream)
             .send()
             .unwrap();
         let error = provider_response_body(response).unwrap_err();
+        server.join().unwrap();
         assert!(error.to_string().contains("HTTP status 403"));
     }
 
