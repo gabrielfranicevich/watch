@@ -1,4 +1,4 @@
-> **Rust migration (`develop`):** the shell version remains the stable/default implementation. To try the Rust port, check out `develop` and run `cargo run --release -- "anime name"`. Rust adds playback, downloads, menu backends, and watch history; see [migration notes](docs/rust-migration.md).
+> **Rust migration (`develop`):** the shell version on `main` remains the reference implementation while compatibility is validated. To build locally, check out `develop` and run `cargo run --release -- "anime name"`. To install the experimental Rust binary with Cargo, run `cargo install --git https://github.com/gabrielfranicevich/anime --branch develop`. This branch is not yet a claim of full package-manager parity; see [migration notes](docs/rust-migration.md).
 
 <p align=center>
 <br>

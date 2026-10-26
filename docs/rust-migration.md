@@ -36,4 +36,27 @@ cargo run --release -- --nextep-countdown "Frieren"
 
 ## Pending compatibility
 
-`--update` installs from `https://github.com/gabrielfranicevich/anime` using `cargo install --force --locked --git ... --branch ...` and therefore requires Cargo, network access, and an installation path whose parent is named `bin` (the normal Cargo layout). Windows may reject replacement of a currently running executable; in that case, update after closing it or reinstall manually. `--nextep-countdown` queries AnimeSchedule and depends on that provider's live API/page structure.
+`--update` installs from `https://github.com/gabrielfranicevich/anime` using `cargo install --force --git ... --branch ... --root ...`. It requires Cargo, network access, and an installation path whose parent is named `bin` (the normal Cargo layout). The updater validates branch names before invoking Cargo. The checked-in `Cargo.lock` has not yet been regenerated with the full dependency graph, so the updater deliberately does not pass `--locked`; regenerate and validate the lockfile before restoring locked installs. Windows may reject replacement of a currently running executable; close the program and retry or reinstall manually. `--nextep-countdown` queries AnimeSchedule and depends on the provider live API/page structure..
+
+## Current Rust feature surface
+
+The current port contains these workflows:
+
+- HiAnime title search and episode-list parsing, including local fixture regression tests.
+- Interactive selection and explicit episode ranges, including history-based continuation.
+- HLS stream resolution, quality selection, external audio renditions and subtitle resolution.
+- MPV, VLC, Syncplay, IINA, Flatpak MPV and Android playback adapters, subject to tools/platform support.
+- Downloads through `yt-dlp` with FFmpeg fallback for a single stream, and FFmpeg muxing when audio is separate.
+- Compatible `ani-hsts` history reading, append/update behavior, legacy `.v4` backup, log viewing and Cargo-based update flow.
+
+These are implemented code paths, not a guarantee that the live provider or every external player is always available. Provider markup, anti-bot responses, streaming hosts and third-party tools can change independently of the client.
+
+## Compatibility and validation policy
+
+Keep the original shell entry point on `main` until the Rust branch passes a clean-checkout CI run and the required compatibility checklist. In particular, compare option aliases and argument ordering, environment-variable precedence, exit codes, filenames, history migration, player arguments, subtitles, download behavior and platform-specific defaults. The `--logview` option is implemented and should remain covered by CLI regression tests.
+
+The Rust CI workflow checks formatting, all targets, Clippy with warnings denied, tests, and CLI help/version smoke tests on Linux, macOS and Windows. Network-dependent tests must use local fixtures rather than the live HiAnime site.
+
+## Dependency and updater notes
+
+Cargo resolves Rust dependencies during install/build. Do not add `--locked` to release or updater commands until a complete, committed lockfile has been generated and verified against `Cargo.toml`. The updater uses a validated branch argument and passes every argument to `cargo` separately, not through a shell. It does not independently verify a publisher signature for the resulting executable; treat updates as code execution from the selected Git branch.
