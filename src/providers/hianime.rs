@@ -314,4 +314,39 @@ mod tests {
         let provider = HiAnimeProvider::with_base_url("http://127.0.0.1:1234/");
         assert_eq!(provider.base_url, "http://127.0.0.1:1234");
     }
+    #[test]
+    fn search_deduplicates_cards_and_ignores_incomplete_entries() {
+        let body = r#"
+            <div class="film-detail">
+                <h3 class="film-name">
+                    <a href="/watch/frieren-123" title="Frieren">First card</a>
+                </h3>
+            </div>
+            <div class="film-detail">
+                <h3 class="film-name">
+                    <a href="/watch/frieren-123" title="Duplicate title">Duplicate card</a>
+                </h3>
+            </div>
+            <div class="film-detail">
+                <h3 class="film-name">
+                    <a href="/watch/missing-title">No title attribute</a>
+                </h3>
+            </div>
+            <div class="film-detail">
+                <h3 class="film-name">
+                    <a href="/" title="No usable identifier">Invalid card</a>
+                </h3>
+            </div>
+        "#;
+        let (base_url, server) = mock_html_response(body);
+        let provider = HiAnimeProvider::with_base_url(&base_url);
+
+        let results = provider.search("Frieren").unwrap();
+        let _request = server.join().unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "frieren-123");
+        assert_eq!(results[0].title, "Frieren");
+    }
+
 }
