@@ -247,6 +247,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         dubbed,
         skip_intro: cli.skip_intro || env_enabled("ANI_CLI_SKIP_INTRO"),
         quality,
+        available_qualities: Vec::new(),
         download: cli.download,
         download_dir: &download_dir,
         history: history.as_ref(),
@@ -297,6 +298,7 @@ struct PlaybackConfig<'a> {
     dubbed: bool,
     skip_intro: bool,
     quality: String,
+    available_qualities: Vec<String>,
     download: bool,
     download_dir: &'a Path,
     history: Option<&'a HistoryStore>,
@@ -322,6 +324,11 @@ impl PlaybackConfig<'_> {
             self.quality
         );
         let media = self.resolver.resolve(episode, self.dubbed, &self.quality)?;
+        self.available_qualities = media
+            .qualities
+            .iter()
+            .map(|option| option.value.clone())
+            .collect();
         let title = format!("{} - Episode {}", anime.title, episode.number);
         let mut media_flags = Vec::new();
         if self.skip_intro && self.player.supports_intro_skipping() {
@@ -474,18 +481,23 @@ fn run_playback_menu(
                 *current_index = select_item(&labels, "Select episode: ", None, cli)?;
             }
             4 => {
-                print!("Video quality (best, worst, 1080p, 720p, ...): ");
-                io::stdout().flush()?;
-                let mut value = String::new();
-                if io::stdin().read_line(&mut value)? == 0 {
-                    return Ok(ExitCode::SUCCESS);
-                }
-                let value = value.trim();
-                if value.is_empty() {
-                    eprintln!("Quality was not changed.");
-                    continue;
-                }
-                playback.quality = value.to_owned();
+                let choices = quality_choices(&playback.available_qualities);
+                let labels: Vec<String> = choices
+                    .iter()
+                    .map(|(label, _)| {
+                        if label == &playback.quality {
+                            format!("{label} (current)")
+                        } else {
+                            label.clone()
+                        }
+                    })
+                    .collect();
+                let selected = match select_item(&labels, "Select quality: ", None, cli) {
+                    Ok(index) => index,
+                    Err(error) if error.to_string() == "selection cancelled" => continue,
+                    Err(error) => return Err(error),
+                };
+                playback.quality = choices[selected].1.clone();
             }
             _ => return Ok(ExitCode::SUCCESS),
         }
@@ -609,6 +621,33 @@ fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io:
         anime.title.clone(),
     ));
     store.write(&entries)
+}
+
+fn quality_choices(available: &[String]) -> Vec<(String, String)> {
+    let mut choices = vec![
+        ("best".to_owned(), "best".to_owned()),
+        ("worst".to_owned(), "worst".to_owned()),
+    ];
+    let mut options = available.to_vec();
+    options.sort_by(|left, right| {
+        quality_height(right)
+            .cmp(&quality_height(left))
+            .then_with(|| left.cmp(right))
+    });
+    options.dedup();
+    for option in options {
+        if !choices.iter().any(|(_, value)| value == &option) {
+            choices.push((option.clone(), option));
+        }
+    }
+    choices
+}
+
+fn quality_height(value: &str) -> u32 {
+    value
+        .trim_end_matches('p')
+        .parse::<u32>()
+        .unwrap_or_default()
 }
 
 fn next_episode_after<'a>(episodes: &'a [Episode], last_watched: &str) -> Option<&'a Episode> {
@@ -949,6 +988,26 @@ mod tests {
                 .map(|ep| ep.number.as_str())
                 .collect::<Vec<_>>(),
             vec!["1", "1.5", "2"]
+        );
+    }
+
+    #[test]
+    fn quality_menu_lists_best_worst_and_unique_resolutions() {
+        let available = vec![
+            "720p".to_owned(),
+            "1080p".to_owned(),
+            "720p".to_owned(),
+            "360p".to_owned(),
+        ];
+        assert_eq!(
+            quality_choices(&available),
+            vec![
+                ("best".to_owned(), "best".to_owned()),
+                ("worst".to_owned(), "worst".to_owned()),
+                ("1080p".to_owned(), "1080p".to_owned()),
+                ("720p".to_owned(), "720p".to_owned()),
+                ("360p".to_owned(), "360p".to_owned()),
+            ]
         );
     }
 

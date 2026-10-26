@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{
-    into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
+    into_stream, parse_default_audio_url, parse_master_playlist, select_quality, HlsVariant,
 };
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
@@ -44,10 +44,17 @@ impl From<crate::media::hls::HlsError> for StreamResolveError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QualityOption {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedMedia {
     pub stream: Stream,
     pub subtitle: Option<Subtitle>,
     pub mal_id: Option<String>,
+    pub qualities: Vec<QualityOption>,
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +181,7 @@ impl HiAnimeStreamResolver {
             .error_for_status()?
             .text()?;
         let variants = parse_master_playlist(&playlist, master_url)?;
+        let qualities = quality_options(&variants);
         let audio_url = parse_default_audio_url(&playlist, master_url)?;
         let selected = select_quality(&variants, quality)
             .or_else(|| select_quality(&variants, "best"))
@@ -199,8 +207,36 @@ impl HiAnimeStreamResolver {
             stream,
             subtitle,
             mal_id,
+            qualities,
         })
     }
+}
+
+fn quality_options(variants: &[HlsVariant]) -> Vec<QualityOption> {
+    let mut options: Vec<(u32, QualityOption)> = variants
+        .iter()
+        .filter_map(|variant| {
+            let height = variant
+                .resolution
+                .as_deref()?
+                .split_once('x')?
+                .1
+                .parse::<u32>()
+                .ok()?;
+            let value = format!("{height}p");
+            Some((
+                height,
+                QualityOption {
+                    label: value.clone(),
+                    value,
+                },
+            ))
+        })
+        .collect();
+
+    options.sort_by(|left, right| right.0.cmp(&left.0));
+    options.dedup_by(|left, right| left.1.value == right.1.value);
+    options.into_iter().map(|(_, option)| option).collect()
 }
 
 fn normalize_server_html(body: &str) -> String {
@@ -236,6 +272,33 @@ fn origin_with_slash(url: &str) -> Result<String, StreamResolveError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extracts_unique_quality_choices_in_descending_resolution_order() {
+        let playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,RESOLUTION=640x360\n360.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n720-a.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=950000,RESOLUTION=1280x720\n720-b.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080\n1080.m3u8\n";
+        let variants =
+            parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
+        let qualities = quality_options(&variants);
+        assert_eq!(
+            qualities.iter().map(|option| option.value.as_str()).collect::<Vec<_>>(),
+            vec!["1080p", "720p", "360p"]
+        );
+        assert!(qualities.iter().all(|option| option.label == option.value));
+    }
+
+    #[test]
+    fn omits_quality_variants_without_a_known_resolution() {
+        let playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nunknown.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n720.m3u8\n";
+        let variants =
+            parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
+        assert_eq!(
+            quality_options(&variants)
+                .iter()
+                .map(|option| option.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["720p"]
+        );
+    }
 
     #[test]
     fn removes_json_escape_backslashes_before_parsing_server_html() {
