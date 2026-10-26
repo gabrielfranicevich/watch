@@ -10,17 +10,38 @@ pub struct FfmpegDownloader;
 
 impl FfmpegDownloader {
     pub fn arguments(stream: &Stream, destination: &Path) -> Vec<OsString> {
-        let mut args = vec![OsString::from("-hide_banner"), OsString::from("-y")];
+        Self::arguments_with_extra(stream, destination, &[])
+    }
+
+    pub fn arguments_with_extra(
+        stream: &Stream,
+        destination: &Path,
+        extra_flags: &[String],
+    ) -> Vec<OsString> {
+        let mut args = vec![
+            OsString::from("-hide_banner"),
+            OsString::from("-y"),
+            OsString::from("-extension_picky"),
+            OsString::from("0"),
+        ];
         if let Some(referer) = stream.referer.as_deref() {
-            args.push(OsString::from("-headers"));
-            args.push(OsString::from(format!("Referer: {referer}\r\n")));
+            args.extend([OsString::from("-referer"), OsString::from(referer)]);
         }
-        args.extend([OsString::from("-i"), OsString::from(&stream.url)]);
+        args.extend([
+            OsString::from("-loglevel"),
+            OsString::from("error"),
+            OsString::from("-stats"),
+            OsString::from("-i"),
+            OsString::from(&stream.url),
+        ]);
 
         if let Some(audio_url) = stream.audio_url.as_deref() {
+            args.extend([
+                OsString::from("-extension_picky"),
+                OsString::from("0"),
+            ]);
             if let Some(referer) = stream.referer.as_deref() {
-                args.push(OsString::from("-headers"));
-                args.push(OsString::from(format!("Referer: {referer}\r\n")));
+                args.extend([OsString::from("-referer"), OsString::from(referer)]);
             }
             args.extend([OsString::from("-i"), OsString::from(audio_url)]);
             args.extend([
@@ -36,12 +57,21 @@ impl FfmpegDownloader {
             OsString::from("copy"),
             destination.as_os_str().to_owned(),
         ]);
+        args.extend(extra_flags.iter().map(OsString::from));
         args
     }
 
     pub fn download(stream: &Stream, destination: &Path) -> io::Result<ExitStatus> {
+        Self::download_with_extra(stream, destination, &[])
+    }
+
+    pub fn download_with_extra(
+        stream: &Stream,
+        destination: &Path,
+        extra_flags: &[String],
+    ) -> io::Result<ExitStatus> {
         Command::new("ffmpeg")
-            .args(Self::arguments(stream, destination))
+            .args(Self::arguments_with_extra(stream, destination, extra_flags))
             .status()
     }
 }
@@ -51,6 +81,14 @@ pub struct YtDlpDownloader;
 
 impl YtDlpDownloader {
     pub fn arguments(stream: &Stream, destination: &Path) -> Vec<OsString> {
+        Self::arguments_with_extra(stream, destination, &[])
+    }
+
+    pub fn arguments_with_extra(
+        stream: &Stream,
+        destination: &Path,
+        extra_flags: &[String],
+    ) -> Vec<OsString> {
         let mut args = Vec::new();
         if let Some(referer) = stream.referer.as_deref() {
             args.extend([OsString::from("--referer"), OsString::from(referer)]);
@@ -65,12 +103,21 @@ impl YtDlpDownloader {
             OsString::from("-o"),
             destination.as_os_str().to_owned(),
         ]);
+        args.extend(extra_flags.iter().map(OsString::from));
         args
     }
 
     pub fn download(stream: &Stream, destination: &Path) -> io::Result<ExitStatus> {
+        Self::download_with_extra(stream, destination, &[])
+    }
+
+    pub fn download_with_extra(
+        stream: &Stream,
+        destination: &Path,
+        extra_flags: &[String],
+    ) -> io::Result<ExitStatus> {
         Command::new("yt-dlp")
-            .args(Self::arguments(stream, destination))
+            .args(Self::arguments_with_extra(stream, destination, extra_flags))
             .status()
     }
 }
@@ -82,8 +129,16 @@ pub struct MediaDownloader;
 
 impl MediaDownloader {
     pub fn download(stream: &Stream, destination: &Path) -> io::Result<ExitStatus> {
+        Self::download_with_extra(stream, destination, &[])
+    }
+
+    pub fn download_with_extra(
+        stream: &Stream,
+        destination: &Path,
+        extra_flags: &[String],
+    ) -> io::Result<ExitStatus> {
         if stream.audio_url.is_none() {
-            match YtDlpDownloader::download(stream, destination) {
+            match YtDlpDownloader::download_with_extra(stream, destination, extra_flags) {
                 Ok(status) if status.success() => return Ok(status),
                 Ok(_) => {}
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -91,7 +146,7 @@ impl MediaDownloader {
             }
         }
 
-        FfmpegDownloader::download(stream, destination)
+        FfmpegDownloader::download_with_extra(stream, destination, extra_flags)
     }
 }
 
@@ -111,9 +166,16 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.windows(2).any(|pair| {
-            pair[0] == "-headers" && pair[1] == "Referer: https://embed.example/\r\n"
-        }));
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-referer" && pair[1] == "https://embed.example/"
+        ));
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-extension_picky" && pair[1] == "0"
+        ));
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "-loglevel" && pair[1] == "error"
+        ));
+        assert!(args.contains(&"-stats".to_owned()));
         assert!(args.windows(2).any(
             |pair| pair[0] == "-i" && pair[1] == "https://cdn.example/episode.m3u8?token=a&b=c"
         ));
@@ -151,7 +213,7 @@ mod tests {
     fn ffmpeg_supports_streams_without_referer() {
         let stream = Stream::new("https://cdn.example/episode.m3u8", None, None);
         let args = FfmpegDownloader::arguments(&stream, Path::new("episode.mp4"));
-        assert!(!args.iter().any(|arg| arg == "-headers"));
+        assert!(!args.iter().any(|arg| arg == "-referer"));
     }
 
     #[test]
@@ -161,7 +223,11 @@ mod tests {
             None,
             Some("https://embed.example/".into()),
         );
-        let args = YtDlpDownloader::arguments(&stream, Path::new("episode.mp4"));
+        let args = YtDlpDownloader::arguments_with_extra(
+            &stream,
+            Path::new("episode.mp4"),
+            &["--limit-rate=2M".to_owned()],
+        );
         let args: Vec<_> = args
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
@@ -173,7 +239,27 @@ mod tests {
         assert!(args.contains(&"--fragment-retries".to_owned()));
         assert!(args.contains(&"infinite".to_owned()));
         assert!(args.contains(&"-N".to_owned()));
-        assert_eq!(args.last().map(String::as_str), Some("episode.mp4"));
+        assert_eq!(args[args.len() - 3], "-o");
+        assert_eq!(args.last().map(String::as_str), Some("--limit-rate=2M"));
+        assert!(args.contains(&"--limit-rate=2M".to_owned()));
+    }
+
+    #[test]
+    fn ffmpeg_appends_custom_flags_after_the_output_path() {
+        let stream = Stream::new("https://cdn.example/episode.m3u8", None, None);
+        let args = FfmpegDownloader::arguments_with_extra(
+            &stream,
+            Path::new("episode.mp4"),
+            &["-preset".to_owned(), "fast".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            &args[args.len() - 3..],
+            ["episode.mp4", "-preset", "fast"]
+        );
     }
 
     #[test]

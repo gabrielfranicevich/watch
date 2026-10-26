@@ -372,12 +372,15 @@ impl PlaybackConfig<'_> {
 
         if self.download {
             let filename = format!(
-                "{} - Episode {}.mp4",
-                safe_filename(&anime.title),
-                safe_filename(&episode.number)
+                "{}.mp4",
+                episode_file_stem(&anime.title, &episode.number)
             );
             let destination = self.download_dir.join(filename);
-            let status = MediaDownloader::download(&media.stream, &destination)?;
+            let status = MediaDownloader::download_with_extra(
+                &media.stream,
+                &destination,
+                &self.player_flags,
+            )?;
             ensure_success(status, "ffmpeg")?;
             if let Some(subtitle) = media.subtitle.as_ref() {
                 let subtitle_path = destination.with_extension("vtt");
@@ -982,6 +985,14 @@ fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
     read_selection(&mut input, &mut output, count)?.ok_or_else(|| "selection cancelled".into())
 }
 
+fn episode_file_stem(anime_title: &str, episode_number: &str) -> String {
+    format!(
+        "{} Episode {}",
+        safe_filename(anime_title),
+        safe_filename(episode_number)
+    )
+}
+
 fn safe_filename(value: &str) -> String {
     value
         .chars()
@@ -1120,6 +1131,15 @@ mod tests {
         assert!(!valid_branch_name("--help"));
         assert!(!valid_branch_name("../main"));
         assert!(!valid_branch_name(""));
+    }
+
+    #[test]
+    fn download_filename_matches_legacy_episode_stem_format() {
+        assert_eq!(
+            episode_file_stem("Frieren: Beyond Journey's End", "2.5"),
+            "Frieren_ Beyond Journey's End Episode 2.5"
+        );
+        assert_eq!(episode_file_stem("A/B", "1"), "A_B Episode 1");
     }
 
     #[test]

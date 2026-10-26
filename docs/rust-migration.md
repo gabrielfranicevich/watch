@@ -24,7 +24,7 @@ cargo run --release -- --nextep-countdown "Frieren"
 - `ANI_CLI_QUALITY=best|worst|1080p|720p...`: default stream quality.
 - `ANI_CLI_EXACT=1`: require a normalized exact title match.
 - `ANI_CLI_MENU=fzf|rofi|dmenu`: selection backend; `--rofi` and `--dmenu` override it.
-- `ANI_CLI_PLAYER_FLAGS`: extra player arguments.
+- `ANI_CLI_PLAYER_FLAGS`: extra player or downloader arguments.
 - `ANI_CLI_PLAYER=mpv|vlc|syncplay|iina|/path/to/player`: player selection; paths to named players preserve their corresponding argument conventions, and other programs receive the URL plus configured flags.
 - `ANI_CLI_NO_DETACH=1`: run the player attached to the terminal.
 - `ANI_CLI_EXIT_AFTER_PLAY=1`: return the selected player's exit status after playback.
