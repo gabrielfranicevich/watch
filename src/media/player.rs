@@ -677,7 +677,10 @@ mod tests {
             .collect();
         assert_eq!(args[0], "run");
         assert_eq!(args[1], "io.mpv.Mpv");
-        assert_eq!(args.last().map(String::as_str), Some("https://cdn.example/video.m3u8"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("https://cdn.example/video.m3u8")
+        );
     }
 
     #[test]
