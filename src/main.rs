@@ -225,6 +225,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && !cli.vlc
         && !cli.syncplay
         && cfg!(target_os = "linux")
+        && !command_available("mpv")
         && command_available("flatpak")
         && flatpak_mpv_installed();
     let player = if cli.syncplay || cli.vlc || env_player.is_some() || use_iina_default {
@@ -879,7 +880,7 @@ fn preferred_menu_backend(
 fn flatpak_mpv_installed() -> bool {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
-        .or_else(|| dirs_home());
+        .or_else(dirs_home);
     home.is_some_and(|home| {
         home.join(".local/share/flatpak/app/io.mpv.Mpv").is_dir()
     }) || Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
