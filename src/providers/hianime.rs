@@ -68,11 +68,7 @@ impl HiAnimeProvider {
 
     pub fn search(&self, query: &str) -> Result<Vec<Anime>, ProviderError> {
         let url = format!("{}/search", self.base_url);
-        let response = self
-            .client
-            .get(url)
-            .query(&[("keyword", query)])
-            .send()?;
+        let response = self.client.get(url).query(&[("keyword", query)]).send()?;
         let status = response.status();
         let body = response.text()?;
         ensure_provider_response(status, &body)?;
@@ -178,10 +174,7 @@ fn is_browser_verification_page(body: &str) -> bool {
     .any(|marker| normalized.contains(marker))
 }
 
-fn ensure_provider_response(
-    status: reqwest::StatusCode,
-    body: &str,
-) -> Result<(), ProviderError> {
+fn ensure_provider_response(status: reqwest::StatusCode, body: &str) -> Result<(), ProviderError> {
     if is_browser_verification_page(body) {
         return Err(ProviderError::UnexpectedResponse(
             "HiAnime returned an anti-bot verification page; retry later or use a compatible curl-impersonate setup".into(),
@@ -228,10 +221,16 @@ mod tests {
 
     #[test]
     fn identifies_common_anti_bot_challenge_markers() {
-        assert!(is_browser_verification_page("<title>Just a moment...</title>"));
-        assert!(is_browser_verification_page("<div id=\"cf-browser-verification\">"));
+        assert!(is_browser_verification_page(
+            "<title>Just a moment...</title>"
+        ));
+        assert!(is_browser_verification_page(
+            "<div id=\"cf-browser-verification\">"
+        ));
         assert!(is_browser_verification_page("Verify you are human"));
-        assert!(!is_browser_verification_page("<div class=\"film-detail\">Frieren</div>"));
+        assert!(!is_browser_verification_page(
+            "<div class=\"film-detail\">Frieren</div>"
+        ));
     }
 
     #[test]
@@ -243,8 +242,8 @@ mod tests {
         .unwrap_err();
         assert!(challenge.to_string().contains("anti-bot verification"));
 
-        let forbidden = ensure_provider_response(reqwest::StatusCode::FORBIDDEN, "forbidden")
-            .unwrap_err();
+        let forbidden =
+            ensure_provider_response(reqwest::StatusCode::FORBIDDEN, "forbidden").unwrap_err();
         assert!(forbidden.to_string().contains("HTTP status 403"));
 
         assert!(ensure_provider_response(reqwest::StatusCode::OK, "<html></html>").is_ok());
