@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
+use super::hianime::is_browser_verification_page;
 use crate::media::hls::{
     HlsVariant, into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
 };
@@ -313,7 +314,10 @@ mod tests {
         );
     }
 
-    fn mock_http_response(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<()>) {
+    fn mock_http_response(
+        status: u16,
+        body: &'static str,
+    ) -> (String, std::thread::JoinHandle<()>) {
         use std::io::Write;
         use std::net::TcpListener;
 
@@ -494,7 +498,10 @@ mod tests {
         assert!(error.to_string().contains("anti-bot verification"));
 
         let (stream, _server) = mock_http_response(403, "forbidden");
-        let response = reqwest::blocking::Client::new().get(&stream).send().unwrap();
+        let response = reqwest::blocking::Client::new()
+            .get(&stream)
+            .send()
+            .unwrap();
         let error = provider_response_body(response).unwrap_err();
         assert!(error.to_string().contains("HTTP status 403"));
     }
