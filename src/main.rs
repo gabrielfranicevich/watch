@@ -78,6 +78,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         let store = history
             .as_ref()
             .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
+        store.backup_legacy_entries()?;
         let entries = store.read()?;
         if entries.is_empty() {
             return Err("watch history is empty".into());

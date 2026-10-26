@@ -26,15 +26,58 @@ impl HistoryStore {
     }
 
     pub fn write(&self, entries: &[HistoryEntry]) -> io::Result<()> {
+        self.create_parent_dir()?;
+        let lock_path = suffix_path(&self.path, ".lock");
+        let _lock = LockFile::acquire(lock_path)?;
+        self.write_without_lock(entries)
+    }
+
+    /// Back up legacy history entries whose IDs do not use the current slug
+    /// format, then remove them from the active history. This mirrors the
+    /// shell implementation's .v4 backup file.
+    pub fn backup_legacy_entries(&self) -> io::Result<()> {
+        self.create_parent_dir()?;
+        let lock_path = suffix_path(&self.path, ".lock");
+        let _lock = LockFile::acquire(lock_path)?;
+
+        let entries = self.read()?;
+        let (legacy, current): (Vec<_>, Vec<_>) = entries
+            .into_iter()
+            .partition(|entry| !entry.anime_id.contains('-'));
+
+        if legacy.is_empty() {
+            return Ok(());
+        }
+
+        let backup_path = suffix_path(&self.path, ".v4");
+        let mut backup = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(backup_path)?;
+        for entry in &legacy {
+            writeln!(
+                backup,
+                "{}\t{}\t{}",
+                clean_field(&entry.episode_number),
+                clean_field(&entry.anime_id),
+                clean_field(&entry.anime_title)
+            )?;
+        }
+        backup.sync_all()?;
+
+        self.write_without_lock(&current)
+    }
+
+    fn create_parent_dir(&self) -> io::Result<()> {
         let parent = self
             .path
             .parent()
             .filter(|path| !path.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)
+    }
 
-        let lock_path = suffix_path(&self.path, ".lock");
-        let _lock = LockFile::acquire(lock_path)?;
+    fn write_without_lock(&self, entries: &[HistoryEntry]) -> io::Result<()> {
         let temp_path = unique_temp_path(&self.path);
         let result = (|| {
             let mut file = OpenOptions::new()
@@ -133,10 +176,17 @@ mod tests {
         std::env::temp_dir().join(format!("ani-cli-history-{}-{nonce}", std::process::id()))
     }
 
+    fn remove_history_artifacts(path: &Path) {
+        for suffix in ["", ".v4", ".lock"] {
+            let candidate = suffix_path(path, suffix);
+            let _ = fs::remove_file(candidate);
+        }
+    }
+
     #[test]
     fn reads_legacy_tab_delimited_history() {
         let path = test_path();
-        fs::write(&path, "12\tfrieren\tFrieren: Beyond Journey's End\n").unwrap();
+        fs::write(&path, "12\tfrieren-123\tFrieren: Beyond Journey's End\n").unwrap();
 
         let entries = HistoryStore::new(&path).read().unwrap();
 
@@ -144,32 +194,88 @@ mod tests {
             entries,
             vec![HistoryEntry::new(
                 "12",
-                "frieren",
+                "frieren-123",
                 "Frieren: Beyond Journey's End"
             )]
         );
-        fs::remove_file(path).unwrap();
+        remove_history_artifacts(&path);
     }
 
     #[test]
     fn writes_and_reads_history_entries() {
         let path = test_path();
         let store = HistoryStore::new(&path);
-        let entries = vec![HistoryEntry::new("5", "frieren", "Frieren")];
+        let entries = vec![HistoryEntry::new("5", "frieren-123", "Frieren")];
 
         store.write(&entries).unwrap();
 
         assert_eq!(store.read().unwrap(), entries);
-        fs::remove_file(path).unwrap();
+        remove_history_artifacts(&path);
     }
 
     #[test]
     fn ignores_malformed_history_lines() {
         let path = test_path();
-        fs::write(&path, "broken-line\n5\tfrieren\tFrieren\n").unwrap();
+        fs::write(&path, "broken-line\n5\tfrieren-123\tFrieren\n").unwrap();
 
         assert_eq!(HistoryStore::new(&path).read().unwrap().len(), 1);
-        fs::remove_file(path).unwrap();
+        remove_history_artifacts(&path);
+    }
+
+    #[test]
+    fn backs_up_legacy_ids_and_keeps_slug_entries_active() {
+        let path = test_path();
+        let store = HistoryStore::new(&path);
+        store
+            .write(&[
+                HistoryEntry::new("4", "12345", "Old title"),
+                HistoryEntry::new("7", "frieren-123", "Frieren"),
+            ])
+            .unwrap();
+
+        store.backup_legacy_entries().unwrap();
+
+        assert_eq!(
+            store.read().unwrap(),
+            vec![HistoryEntry::new("7", "frieren-123", "Frieren")]
+        );
+        assert_eq!(
+            fs::read_to_string(suffix_path(&path, ".v4")).unwrap(),
+            "4\t12345\tOld title\n"
+        );
+        remove_history_artifacts(&path);
+    }
+
+    #[test]
+    fn appends_legacy_backups_and_removes_old_entries_from_active_history() {
+        let path = test_path();
+        let store = HistoryStore::new(&path);
+        store.write(&[HistoryEntry::new("4", "12345", "First")]).unwrap();
+        store.backup_legacy_entries().unwrap();
+        store.write(&[HistoryEntry::new("9", "99999", "Second")]).unwrap();
+        store.backup_legacy_entries().unwrap();
+
+        assert_eq!(
+            fs::read_to_string(suffix_path(&path, ".v4")).unwrap(),
+            "4\t12345\tFirst\n9\t99999\tSecond\n"
+        );
+        assert!(store.read().unwrap().is_empty());
+        assert!(fs::metadata(suffix_path(&path, ".lock")).is_err());
+        remove_history_artifacts(&path);
+    }
+
+    #[test]
+    fn slug_only_history_does_not_create_a_backup_file() {
+        let path = test_path();
+        let store = HistoryStore::new(&path);
+        let entries = vec![HistoryEntry::new("5", "frieren-123", "Frieren")];
+        store.write(&entries).unwrap();
+
+        store.backup_legacy_entries().unwrap();
+
+        assert_eq!(store.read().unwrap(), entries);
+        assert!(fs::metadata(suffix_path(&path, ".v4")).is_err());
+        remove_history_artifacts(&path);
     }
 
     #[test]
@@ -186,6 +292,6 @@ mod tests {
         let result = HistoryStore::new(&path).write(&[]);
 
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
-        fs::remove_file(lock_path).unwrap();
+        remove_history_artifacts(&path);
     }
 }
