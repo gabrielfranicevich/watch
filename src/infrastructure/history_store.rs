@@ -250,9 +250,13 @@ mod tests {
     fn appends_legacy_backups_and_removes_old_entries_from_active_history() {
         let path = test_path();
         let store = HistoryStore::new(&path);
-        store.write(&[HistoryEntry::new("4", "12345", "First")]).unwrap();
+        store
+            .write(&[HistoryEntry::new("4", "12345", "First")])
+            .unwrap();
         store.backup_legacy_entries().unwrap();
-        store.write(&[HistoryEntry::new("9", "99999", "Second")]).unwrap();
+        store
+            .write(&[HistoryEntry::new("9", "99999", "Second")])
+            .unwrap();
         store.backup_legacy_entries().unwrap();
 
         assert_eq!(
