@@ -73,10 +73,7 @@ fn parse_history_line(line: &str) -> Option<HistoryEntry> {
 }
 
 fn clean_field(value: &str) -> String {
-    value
-        .replace('\t', " ")
-        .replace('\n', " ")
-        .replace('\r', " ")
+    value.replace(['\t', '\n', '\r'], " ")
 }
 
 fn suffix_path(path: &Path, suffix: &str) -> PathBuf {
@@ -173,6 +170,11 @@ mod tests {
 
         assert_eq!(HistoryStore::new(&path).read().unwrap().len(), 1);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sanitizes_delimiters_and_line_breaks() {
+        assert_eq!(clean_field("a\tb\nc\rd"), "a b c d");
     }
 
     #[test]
