@@ -1,5 +1,6 @@
 //! Core library for the ani-cli Rust implementation.
 
+pub mod application;
 pub mod cli;
 pub mod domain;
 pub mod infrastructure;
