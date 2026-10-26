@@ -3,7 +3,7 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, ExitStatus};
 
-use ani_cli::cli::menu::{self, MenuOutcome};
+use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
 use ani_cli::cli::selection::read_selection;
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
@@ -67,7 +67,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     if source == "nextep" {
         let query = match search_query.clone() {
             Some(query) => query,
-            None => read_search_query()?,
+            None => read_search_query(&cli)?,
         };
         if let Err(error) = AnimeScheduleProvider::new().show_countdown(&query) {
             eprintln!("ani-cli: warning: could not fetch next-episode countdown: {error}");
@@ -839,15 +839,7 @@ fn select_items(
         return Ok(vec![index]);
     }
 
-    let stdin_is_terminal = io::stdin().is_terminal();
-    let configured_backend = std::env::var("ANI_CLI_MENU").ok();
-    let backend = preferred_menu_backend(
-        cli,
-        stdin_is_terminal,
-        configured_backend.as_deref(),
-        !stdin_is_terminal && command_available("dmenu"),
-        !stdin_is_terminal && command_available("rofi"),
-    );
+    let backend = menu_backend_for_cli(cli);
 
     match menu::select(labels, prompt, backend.as_deref(), multi)? {
         MenuOutcome::Selected(indices) => {
@@ -866,6 +858,18 @@ fn select_items(
             Ok(vec![read_index(labels.len())?])
         }
     }
+}
+
+fn menu_backend_for_cli(cli: &ani_cli::cli::args::Cli) -> Option<String> {
+    let stdin_is_terminal = io::stdin().is_terminal();
+    let configured_backend = std::env::var("ANI_CLI_MENU").ok();
+    preferred_menu_backend(
+        cli,
+        stdin_is_terminal,
+        configured_backend.as_deref(),
+        !stdin_is_terminal && command_available("dmenu"),
+        !stdin_is_terminal && command_available("rofi"),
+    )
 }
 
 fn preferred_menu_backend(
@@ -980,7 +984,19 @@ fn effective_source(
     }
 }
 
-fn read_search_query() -> Result<String, Box<dyn std::error::Error>> {
+fn read_search_query(
+    cli: &ani_cli::cli::args::Cli,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(backend) = menu_backend_for_cli(cli) {
+        match menu::prompt_text("Search anime: ", Some(&backend))? {
+            TextPromptOutcome::Text(query) => return Ok(query),
+            TextPromptOutcome::Cancelled => {
+                return Err("search query was empty or cancelled".into());
+            }
+            TextPromptOutcome::Unavailable => {}
+        }
+    }
+
     print!("Search anime: ");
     io::stdout().flush()?;
     let mut query = String::new();
