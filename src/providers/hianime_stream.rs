@@ -291,8 +291,7 @@ mod tests {
     #[test]
     fn omits_quality_variants_without_a_known_resolution() {
         let playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nunknown.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n720.m3u8\n";
-        let variants =
-            parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
+        let variants = parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
         assert_eq!(
             quality_options(&variants)
                 .iter()
