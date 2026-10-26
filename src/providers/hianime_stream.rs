@@ -3,10 +3,10 @@ use base64::engine::general_purpose::STANDARD;
 use reqwest::blocking::Client;
 use scraper::{Html, Selector};
 use serde_json::Value;
+use super::hianime::is_browser_verification_page;
 use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
-use super::hianime::is_browser_verification_page;
 use crate::media::hls::{
     HlsVariant, into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
 };
