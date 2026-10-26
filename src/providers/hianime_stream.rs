@@ -45,6 +45,7 @@ impl From<crate::media::hls::HlsError> for StreamResolveError {
 pub struct ResolvedMedia {
     pub stream: Stream,
     pub subtitle: Option<Subtitle>,
+    pub mal_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +132,7 @@ impl HiAnimeStreamResolver {
             StreamResolveError::InvalidData("HiAnime server URL is not UTF-8".into())
         })?;
         let referer = origin_with_slash(&embed_url)?;
+        let mal_id = mal_id_from_embed(&embed_url);
 
         let embed_body = self
             .client
@@ -191,7 +193,11 @@ impl HiAnimeStreamResolver {
             .and_then(|item| item.get("src").and_then(Value::as_str))
             .map(|url| Subtitle::new(url, Some("default".into())));
 
-        Ok(ResolvedMedia { stream, subtitle })
+        Ok(ResolvedMedia {
+            stream,
+            subtitle,
+            mal_id,
+        })
     }
 }
 
@@ -201,6 +207,12 @@ fn extract_window_blob(html: &str) -> Option<&str> {
     let rest = &html[start..];
     let end = rest.find('"')?;
     Some(&rest[..end])
+}
+
+fn mal_id_from_embed(url: &str) -> Option<String> {
+    let id = url.split("/mal/").nth(1)?.split('/').next()?;
+    (!id.is_empty() && id.chars().all(|character| character.is_ascii_digit()))
+        .then(|| id.to_owned())
 }
 
 fn origin_with_slash(url: &str) -> Result<String, StreamResolveError> {
@@ -226,6 +238,16 @@ mod tests {
             Some("YWJjZA==")
         );
         assert_eq!(extract_window_blob("<html></html>"), None);
+    }
+
+    #[test]
+    fn extracts_mal_id_from_embed_url_when_available() {
+        assert_eq!(
+            mal_id_from_embed("https://embed.example/mal/12345/watch"),
+            Some("12345".to_owned())
+        );
+        assert_eq!(mal_id_from_embed("https://embed.example/watch"), None);
+        assert_eq!(mal_id_from_embed("https://embed.example/mal/nope/watch"), None);
     }
 
     #[test]

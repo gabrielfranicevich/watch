@@ -12,6 +12,7 @@ impl Stream {
             url: url.into(),
             quality,
             referer,
+            audio_url: None,
         }
     }
 

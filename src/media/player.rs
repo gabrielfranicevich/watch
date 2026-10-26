@@ -8,17 +8,29 @@ use crate::domain::{stream::Stream, subtitle::Subtitle};
 pub enum Player {
     Mpv,
     Vlc,
+    Syncplay,
 }
 
 impl Player {
     pub fn from_vlc_flag(use_vlc: bool) -> Self {
-        if use_vlc { Self::Vlc } else { Self::Mpv }
+        Self::from_flags(use_vlc, false)
+    }
+
+    pub fn from_flags(use_vlc: bool, use_syncplay: bool) -> Self {
+        if use_syncplay {
+            Self::Syncplay
+        } else if use_vlc {
+            Self::Vlc
+        } else {
+            Self::Mpv
+        }
     }
 
     pub fn command_name(self) -> &'static str {
         match self {
             Self::Mpv => "mpv",
             Self::Vlc => "vlc",
+            Self::Syncplay => "syncplay",
         }
     }
 
@@ -28,7 +40,7 @@ impl Player {
         subtitle: Option<&Subtitle>,
         title: &str,
     ) -> Vec<OsString> {
-        self.arguments_with_extra(stream, subtitle, title, &[])
+        self.arguments_with_options(stream, subtitle, title, &[], &[])
     }
 
     pub fn arguments_with_extra(
@@ -37,6 +49,17 @@ impl Player {
         subtitle: Option<&Subtitle>,
         title: &str,
         extra_flags: &[String],
+    ) -> Vec<OsString> {
+        self.arguments_with_options(stream, subtitle, title, extra_flags, &[])
+    }
+
+    pub fn arguments_with_options(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        command_flags: &[String],
+        media_flags: &[String],
     ) -> Vec<OsString> {
         let mut args = Vec::new();
         match self {
@@ -52,7 +75,8 @@ impl Player {
                 if let Some(subtitle) = subtitle {
                     args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
                 }
-                args.extend(extra_flags.iter().map(OsString::from));
+                args.extend(command_flags.iter().map(OsString::from));
+                args.extend(media_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
             }
             Self::Vlc => {
@@ -81,6 +105,22 @@ impl Player {
                     )));
                 }
             }
+            Self::Syncplay => {
+                args.extend(command_flags.iter().map(OsString::from));
+                args.push(OsString::from(&stream.url));
+                args.push(OsString::from("--"));
+                if let Some(referer) = stream.referer.as_deref() {
+                    args.push(OsString::from(format!("--referrer={referer}")));
+                }
+                if let Some(audio) = stream.audio_url.as_deref() {
+                    args.push(OsString::from(format!("--audio-file={audio}")));
+                }
+                if let Some(subtitle) = subtitle {
+                    args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
+                }
+                args.push(OsString::from(format!("--force-media-title={title}")));
+                args.extend(media_flags.iter().map(OsString::from));
+            }
         }
         args
     }
@@ -101,8 +141,25 @@ impl Player {
         title: &str,
         extra_flags: &[String],
     ) -> io::Result<ExitStatus> {
+        self.play_with_options(stream, subtitle, title, extra_flags, &[])
+    }
+
+    pub fn play_with_options(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        command_flags: &[String],
+        media_flags: &[String],
+    ) -> io::Result<ExitStatus> {
         Command::new(self.command_name())
-            .args(self.arguments_with_extra(stream, subtitle, title, extra_flags))
+            .args(self.arguments_with_options(
+                stream,
+                subtitle,
+                title,
+                command_flags,
+                media_flags,
+            ))
             .status()
     }
 
@@ -115,8 +172,25 @@ impl Player {
         title: &str,
         extra_flags: &[String],
     ) -> io::Result<Child> {
+        self.launch_detached_with_options(stream, subtitle, title, extra_flags, &[])
+    }
+
+    pub fn launch_detached_with_options(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        command_flags: &[String],
+        media_flags: &[String],
+    ) -> io::Result<Child> {
         Command::new(self.command_name())
-            .args(self.arguments_with_extra(stream, subtitle, title, extra_flags))
+            .args(self.arguments_with_options(
+                stream,
+                subtitle,
+                title,
+                command_flags,
+                media_flags,
+            ))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -197,6 +271,35 @@ mod tests {
 
         let vlc = Player::Vlc.arguments(&stream, None, "Example");
         assert!(vlc.iter().any(|arg| arg == ":input-slave=https://cdn.example/audio.m3u8"));
+    }
+
+    #[test]
+    fn syncplay_passes_media_url_and_mpv_arguments_after_separator() {
+        let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
+        let args = Player::Syncplay.arguments_with_options(
+            &stream,
+            None,
+            "Example Anime",
+            &["--player-flag".to_owned()],
+            &["--start=1".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let url_index = args
+            .iter()
+            .position(|arg| arg == "https://cdn.example/video.m3u8")
+            .unwrap();
+        assert_eq!(args[url_index - 1], "--player-flag");
+        assert_eq!(args[url_index + 1], "--");
+        assert!(args.contains(&"--audio-file=https://cdn.example/audio.m3u8".to_owned()));
+        assert!(args.contains(&"--start=1".to_owned()));
+    }
+
+    #[test]
+    fn chooses_syncplay_when_requested() {
+        assert_eq!(Player::from_flags(false, true), Player::Syncplay);
     }
 
     #[test]

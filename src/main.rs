@@ -54,9 +54,6 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     if cli.next_episode_countdown {
         return Err("--nextep-countdown is not implemented in the Rust migration yet".into());
     }
-    if cli.syncplay || cli.skip_intro {
-        return Err("--syncplay and --skip are not implemented in the Rust migration yet".into());
-    }
 
     let provider = HiAnimeProvider::new();
     let (anime, resume_episode) = if cli.continue_history {
@@ -151,10 +148,12 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .clone()
         .or_else(|| std::env::var("ANI_CLI_QUALITY").ok())
         .unwrap_or_else(|| "best".to_owned());
-    let player = Player::from_vlc_flag(
-        cli.vlc
-            || std::env::var("ANI_CLI_PLAYER")
-                .is_ok_and(|value| value.to_ascii_lowercase().contains("vlc")),
+    let env_player = std::env::var("ANI_CLI_PLAYER")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let player = Player::from_flags(
+        cli.vlc || env_player.contains("vlc"),
+        cli.syncplay || env_player.contains("syncplay"),
     );
     let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
@@ -174,6 +173,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         player,
         player_flags,
         dubbed,
+        skip_intro: cli.skip_intro,
         quality,
         download: cli.download,
         download_dir: &download_dir,
@@ -223,6 +223,7 @@ struct PlaybackConfig<'a> {
     player: Player,
     player_flags: Vec<String>,
     dubbed: bool,
+    skip_intro: bool,
     quality: String,
     download: bool,
     download_dir: &'a Path,
@@ -250,6 +251,22 @@ impl PlaybackConfig<'_> {
         );
         let media = self.resolver.resolve(episode, self.dubbed, &self.quality)?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
+        let mut media_flags = Vec::new();
+        if self.skip_intro && matches!(self.player, Player::Mpv | Player::Syncplay) {
+            let mal_id = media
+                .mal_id
+                .as_deref()
+                .ok_or("--skip could not find a MAL ID in the embed URL")?;
+            let output = Command::new("ani-skip")
+                .args(["-i", mal_id, "-e", episode.number.as_str()])
+                .output()?;
+            ensure_success(output.status, "ani-skip")?;
+            media_flags.extend(
+                String::from_utf8_lossy(&output.stdout)
+                    .split_whitespace()
+                    .map(str::to_owned),
+            );
+        }
 
         if self.download {
             let filename = format!(
@@ -284,20 +301,22 @@ impl PlaybackConfig<'_> {
         }
 
         if attached {
-            let status = self.player.play_with_extra(
+            let status = self.player.play_with_options(
                 &media.stream,
                 media.subtitle.as_ref(),
                 &title,
                 &self.player_flags,
+                &media_flags,
             )?;
             self.record(anime, episode)?;
             Ok(PlaybackResult::Attached(status))
         } else {
-            let child = self.player.launch_detached(
+            let child = self.player.launch_detached_with_options(
                 &media.stream,
                 media.subtitle.as_ref(),
                 &title,
                 &self.player_flags,
+                &media_flags,
             )?;
             self.record(anime, episode)?;
             Ok(PlaybackResult::Detached(child))
