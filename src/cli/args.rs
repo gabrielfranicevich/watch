@@ -145,7 +145,7 @@ fn required_episode_value<'a>(
     option: &str,
 ) -> Result<&'a String, ParseError> {
     args.get(index)
-        .filter(|value| !value.starts_with('-') || value == "-1")
+        .filter(|value| !value.starts_with('-') || *value == "-1")
         .ok_or_else(|| ParseError(format!("{option} requires a value")))
 }
 

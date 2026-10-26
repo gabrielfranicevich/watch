@@ -64,7 +64,8 @@ impl AnimeScheduleProvider {
             .query(&[("q", query)])
             .send()?
             .error_for_status()?;
-        let body: Value = response.json()?;
+        let body = response.text()?;
+        let body: Value = serde_json::from_str(&body)?;
         let entries = body
             .as_array()
             .or_else(|| body.get("data").and_then(Value::as_array))
