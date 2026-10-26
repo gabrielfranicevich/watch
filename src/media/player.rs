@@ -10,6 +10,7 @@ pub enum Player {
     Vlc,
     Syncplay,
     Iina,
+    FlatpakMpv,
     Configured(String),
 }
 
@@ -19,6 +20,7 @@ enum PlayerKind {
     Vlc,
     Syncplay,
     Iina,
+    FlatpakMpv,
     Custom,
 }
 
@@ -64,8 +66,14 @@ impl Player {
 
     pub fn command_name(&self) -> &str {
         match self {
+            Self::Mpv if cfg!(target_os = "windows") => "mpv.exe",
             Self::Mpv => "mpv",
+            Self::Vlc if cfg!(target_os = "windows") => "vlc.exe",
             Self::Vlc => "vlc",
+            Self::Syncplay if cfg!(target_os = "macos") => {
+                "/Applications/Syncplay.app/Contents/MacOS/syncplay"
+            }
+            Self::Syncplay if cfg!(target_os = "windows") => "syncplay.exe",
             Self::Syncplay => "syncplay",
             Self::Iina if cfg!(target_os = "macos") => {
                 "/Applications/IINA.app/Contents/MacOS/iina-cli"
@@ -81,6 +89,7 @@ impl Player {
             Self::Vlc => PlayerKind::Vlc,
             Self::Syncplay => PlayerKind::Syncplay,
             Self::Iina => PlayerKind::Iina,
+            Self::FlatpakMpv => PlayerKind::FlatpakMpv,
             Self::Configured(command) => {
                 let name = std::path::Path::new(command)
                     .file_name()
@@ -135,7 +144,11 @@ impl Player {
     ) -> Vec<OsString> {
         let mut args = Vec::new();
         match self.kind() {
-            PlayerKind::Mpv => {
+            PlayerKind::Mpv | PlayerKind::FlatpakMpv => {
+                if matches!(self.kind(), PlayerKind::FlatpakMpv) {
+                    args.push(OsString::from("run"));
+                    args.push(OsString::from("io.mpv.Mpv"));
+                }
                 args.push(OsString::from("--force-window"));
                 args.push(OsString::from(format!("--force-media-title={title}")));
                 if let Some(referer) = stream.referer.as_deref() {
@@ -411,6 +424,34 @@ mod tests {
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
         );
+    }
+
+    #[test]
+    fn flatpak_mpv_uses_the_flatpak_application_entrypoint() {
+        let args = Player::FlatpakMpv.arguments(&stream(), None, "Example");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "io.mpv.Mpv");
+        assert!(args.contains(&"--referrer=https://embed.example/".to_owned()));
+        assert_eq!(args.last().map(String::as_str), Some("https://cdn.example/video.m3u8"));
+    }
+
+    #[test]
+    fn command_names_follow_host_platform_for_standard_players() {
+        if cfg!(target_os = "windows") {
+            assert_eq!(Player::Mpv.command_name(), "mpv.exe");
+            assert_eq!(Player::Vlc.command_name(), "vlc.exe");
+            assert_eq!(Player::Syncplay.command_name(), "syncplay.exe");
+        }
+        if cfg!(target_os = "macos") {
+            assert_eq!(
+                Player::Syncplay.command_name(),
+                "/Applications/Syncplay.app/Contents/MacOS/syncplay"
+            );
+        }
     }
 
     #[test]

@@ -218,14 +218,31 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "best".to_owned());
     let env_player = std::env::var("ANI_CLI_PLAYER").ok();
     let default_iina_path = "/Applications/IINA.app/Contents/MacOS/iina-cli";
-    let use_iina_default =
-        env_player.is_none() && cfg!(target_os = "macos") && Path::new(default_iina_path).is_file();
-    let player = Player::from_configuration(
-        cli.vlc,
-        cli.syncplay,
-        use_iina_default,
-        env_player.as_deref(),
-    );
+    let use_iina_default = env_player.is_none()
+        && cfg!(target_os = "macos")
+        && (command_available("iina") || Path::new(default_iina_path).is_file());
+    let use_flatpak_default = env_player.is_none()
+        && !cli.vlc
+        && !cli.syncplay
+        && cfg!(target_os = "linux")
+        && command_available("flatpak")
+        && flatpak_mpv_installed();
+    let player = if cli.syncplay || cli.vlc || env_player.is_some() || use_iina_default {
+        Player::from_configuration(
+            cli.vlc,
+            cli.syncplay,
+            use_iina_default,
+            env_player.as_deref(),
+        )
+    } else if use_flatpak_default {
+        Player::FlatpakMpv
+    } else if cfg!(target_os = "windows") || command_available("mpv") {
+        Player::Mpv
+    } else if command_available("vlc") {
+        Player::Vlc
+    } else {
+        return Err("no supported player found; install mpv or VLC, or set ANI_CLI_PLAYER".into());
+    };
     let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
         .split_whitespace()
@@ -859,6 +876,26 @@ fn preferred_menu_backend(
         .map(str::to_owned)
 }
 
+fn flatpak_mpv_installed() -> bool {
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs_home());
+    home.is_some_and(|home| {
+        home.join(".local/share/flatpak/app/io.mpv.Mpv").is_dir()
+    }) || Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE").map(PathBuf::from)
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 fn command_available(program: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else {
         return false;
@@ -961,6 +998,17 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flatpak_detection_uses_installed_app_directories() {
+        // CI machines usually have neither installation path; the result must
+        // be a pure filesystem check and not run the Flatpak command.
+        let available = flatpak_mpv_installed();
+        assert_eq!(available, Path::new("/var/lib/flatpak/app/io.mpv.Mpv").is_dir()
+            || std::env::var_os("HOME").is_some_and(|home| {
+                PathBuf::from(home).join(".local/share/flatpak/app/io.mpv.Mpv").is_dir()
+            }));
+    }
 
     #[test]
     fn explicit_menu_flags_override_environment_and_terminal_detection() {
