@@ -1,82 +1,48 @@
-# Rust migration roadmap
+# Rust project roadmap
 
-## Goals
+## Current status
 
-- Replace the shell implementation with a maintainable Rust CLI without silently dropping existing behavior.
-- Keep changes small, testable, and buildable at every step.
-- Keep the shell implementation on `main` as the historical compatibility reference; `develop` contains the Rust implementation.
-- Keep provider-specific scraping separate from the domain, CLI, history, and media integrations.
+The active Rust implementation is developed on `develop`. The historical shell implementation remains on `main`; this documentation describes the Rust branch.
 
-## Repository baseline
+The Rust CI matrix currently checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. Provider regression tests use local fixtures rather than relying on the live service. These checks validate the repository code, not the continued availability of external websites or media players.
 
-The default branch remains the upstream-compatible shell implementation. Rust work is isolated on `develop`. Existing branches were reviewed before creating it:
+## Architecture
 
-- `curl-impersonate-windows`: one Windows-specific curl-impersonate change.
-- `docs/readme-update`: README troubleshooting/dependency documentation.
-- `fix-download-args`: downloader argument forwarding and quoting fixes.
-- `next`: backup provider work and related documentation/workflow changes.
-- `port19x-patch-1`: MacPorts documentation.
-- `master`: current baseline.
+- `src/cli/`: argument parsing, interactive menus, and selection.
+- `src/application.rs`: use-case policies and episode-range rules.
+- `src/domain/`: anime, episode, stream, subtitle, and history types.
+- `src/providers/`: provider requests, response parsing, stream resolution, and AnimeSchedule integration.
+- `src/media/`: HLS parsing, playback arguments, subtitles, and downloads.
+- `src/infrastructure/`: configuration, portable paths, and history persistence.
+- `src/main.rs`: CLI orchestration.
 
-These branches are not merged automatically; their changes are independent of the Rust migration and should be evaluated separately before release.
+Keep provider-specific parsing separate from the domain and prefer small, testable changes. Avoid introducing abstractions without a concrete use case.
+
+## Remaining work
+
+- Regenerate and commit a complete `Cargo.lock` for reproducible locked builds before restoring `--locked` to updater/install instructions.
+- Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
+- Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
+- Keep the README, tutorial, man page, and CLI help synchronized as options change.
 
 ## Quality gates
 
-Run locally before each commit:
+Run locally before submitting changes:
 
-```sh
+~~~sh
 cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
-```
+~~~
 
-Rustfmt uses its standard four-space indentation; it does not support a stable two-space indentation setting. Keep Rust source formatted by rustfmt instead of introducing a competing formatter.
+GitHub Actions runs these gates and CLI help/version smoke tests on Linux, macOS, and Windows.
 
-## Migration sequence
+## Release criteria
 
-1. Establish Rust CI and a minimal Cargo project.
-2. Add domain models and a thin CLI.
-3. Add configuration and portable path handling.
-4. Add regression fixtures for legacy history, then implement safe history migration.
-5. Implement interactive selection.
-6. Isolate HTTP and provider scraping; test parsers using local fixtures.
-7. Add stream/subtitle resolution.
-8. Add process abstraction, player adapters, and downloader support.
-9. Add platform checks, harden external input handling, and document failure modes.
-10. Update packaging and installation only after the Rust executable covers required workflows.
-11. Remove the shell implementation from `develop` after the Rust quality gates, fixture-driven regression tests, and packaging updates pass. Keep `main` untouched as the historical reference.
-
-## Architecture boundaries
-
-- `cli/`: arguments, interactive prompts, output and exit codes.
-- `application/`: use-case orchestration.
-- `domain/`: domain types and rules; no HTTP, terminal or process dependencies.
-- `providers/`: provider-specific requests and parsing.
-- `media/`: playback, subtitles and downloads.
-- `infrastructure/`: HTTP client, filesystem, configuration, process execution and platform detection.
-
-Avoid empty placeholder modules and speculative abstractions. Introduce modules when there is real behavior to put in them.
-
-## Known audit items to address
-
-- Legacy history migration uses `IFS="\\t"`, which does not represent a literal tab in POSIX shell. Add a regression fixture before changing or replacing this behavior.
-- The history update path uses a shared `.new` temporary file and needs concurrency/interruption-safe handling.
-- The self-updater downloads executable code without an independent signature check. Reassess the update model before replacing it; do not claim transport TLS alone authenticates the artifact.
-- HTML/JSON/HLS parsing is brittle when coupled to provider markup. Add fixture-based tests before refactoring.
-- CI currently checks shell style and repository conventions but does not provide functional regression coverage for the full user workflow.
-
-## Completion criteria
-
-- The four Cargo quality gates pass on a clean checkout.
-- Required CLI options, search, episode listing, streams, playback, downloads, subtitles and history have explicit acceptance tests or documented platform limitations.
-- Legacy history is preserved or migrated with a tested procedure.
-- Missing external tools and network/provider failures produce actionable errors.
-- Supported platforms are documented and checked.
-- Installation and packaging point to the Rust binary.
-- The shell implementation is removed only after the above criteria are met.
-
-
-## Migration checkpoint: Rust branch
-
-The current `develop` implementation has passed the repository's GitHub Actions matrix on Linux, macOS and Windows: `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all-targets`, CLI help/version smoke tests and `cargo fmt --all -- --check`. Provider regressions run against local fixtures. This validates the checked-in Rust branch and its test suite; it does not guarantee live HiAnime availability or external-player behavior on every machine. Third-party package repositories may continue shipping the historical shell version.
+- All four Cargo quality gates pass from a clean checkout.
+- Important CLI options and workflows have regression coverage or a documented platform limitation.
+- Legacy history remains readable and migration behavior is tested.
+- Provider/network failures and missing external tools produce actionable errors.
+- Installation and packaging instructions point to the Rust binary and accurately state which platforms/packages are supported.
+- Live provider availability and compatibility with third-party media tools are described as external dependencies, not guaranteed behavior.
