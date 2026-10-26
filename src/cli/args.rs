@@ -91,9 +91,9 @@ impl Cli {
                 "-S" | "--select-nth" => {
                     index += 1;
                     let value = required_value(&args, index, arg)?;
-                    let number = value.parse::<usize>().map_err(|_| {
-                        ParseError(format!("{arg} requires a positive integer"))
-                    })?;
+                    let number = value
+                        .parse::<usize>()
+                        .map_err(|_| ParseError(format!("{arg} requires a positive integer")))?;
                     if number == 0 {
                         return Err(ParseError(format!("{arg} requires a positive integer")));
                     }
