@@ -1,9 +1,13 @@
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use ani_cli::cli::selection::read_selection;
+use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
+use ani_cli::domain::history::HistoryEntry;
+use ani_cli::infrastructure::history_store::HistoryStore;
+use ani_cli::infrastructure::paths;
 use ani_cli::media::downloader::FfmpegDownloader;
 use ani_cli::media::player::Player;
 use ani_cli::providers::hianime::HiAnimeProvider;
@@ -29,38 +33,75 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         println!("ani-cli {}", ani_cli::version());
         return Ok(());
     }
-    if cli.delete_history
-        || cli.logview
-        || cli.update
-        || cli.continue_history
-        || cli.next_episode_countdown
-    {
-        return Err("this option is not implemented in the Rust migration yet".into());
+
+    let history = paths::history_file().map(HistoryStore::new);
+    if cli.delete_history {
+        let store = history
+            .as_ref()
+            .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
+        store.write(&[])?;
+        println!("History deleted.");
+        return Ok(());
+    }
+    if cli.logview {
+        return show_logs();
+    }
+    if cli.update {
+        return Err("--update is not implemented yet: automatic self-update needs a verified Rust release artifact".into());
+    }
+    if cli.next_episode_countdown {
+        return Err("--nextep-countdown is not implemented in the Rust migration yet".into());
     }
     if cli.syncplay || cli.skip_intro {
         return Err("--syncplay and --skip are not implemented in the Rust migration yet".into());
     }
 
-    let query = cli.query.as_deref().ok_or("a search query is required")?;
     let provider = HiAnimeProvider::new();
-    eprintln!("Searching HiAnime for: {query}");
-    let results = provider.search(query)?;
-    if results.is_empty() {
-        return Err(format!("no results found for '{query}'").into());
-    }
-
-    let anime = if results.len() == 1 || cli.select_nth {
-        let index = if results.len() == 1 {
-            0
-        } else {
-            read_index(results.len())?
-        };
-        results[index].clone()
-    } else {
-        for (index, anime) in results.iter().enumerate() {
-            println!("{:>2}. {}", index + 1, anime.title);
+    let (anime, resume_episode) = if cli.continue_history {
+        let store = history
+            .as_ref()
+            .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
+        let entries = store.read()?;
+        if entries.is_empty() {
+            return Err("watch history is empty".into());
         }
-        results[read_index(results.len())?].clone()
+
+        let mut recent = Vec::<HistoryEntry>::new();
+        for entry in entries.into_iter().rev() {
+            if !recent.iter().any(|item| item.anime_id == entry.anime_id) {
+                recent.push(entry);
+            }
+        }
+        for (index, entry) in recent.iter().enumerate() {
+            println!(
+                "{:>2}. {} — last watched episode {}",
+                index + 1,
+                entry.anime_title,
+                entry.episode_number
+            );
+        }
+        let selected_index = select_index(recent.len(), cli.select_index)?;
+        let entry = &recent[selected_index];
+        (
+            Anime::new(
+                entry.anime_id.clone(),
+                entry.anime_title.clone(),
+                format!("https://hianime.at/{}", entry.anime_id),
+            ),
+            Some(entry.episode_number.clone()),
+        )
+    } else {
+        let query = cli.query.as_deref().ok_or("a search query is required")?;
+        eprintln!("Searching HiAnime for: {query}");
+        let results = provider.search(query)?;
+        if results.is_empty() {
+            return Err(format!("no results found for '{query}'").into());
+        }
+        for (index, result) in results.iter().enumerate() {
+            println!("{:>2}. {}", index + 1, result.title);
+        }
+        let index = select_index(results.len(), cli.select_index)?;
+        (results[index].clone(), None)
     };
 
     println!("{}\n{}", anime.title, anime.url);
@@ -70,15 +111,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let selected: Vec<Episode> = if let Some(range) = cli.episode_range.as_deref() {
-        let requested = parse_episode_range(range)?;
-        let selected: Vec<_> = episodes
-            .into_iter()
-            .filter(|episode| requested.iter().any(|number| number == &episode.number))
-            .collect();
-        if selected.is_empty() {
-            return Err(format!("episode range '{range}' did not match available episodes").into());
-        }
-        selected
+        select_episode_range(episodes, range)?
+    } else if let Some(last_watched) = resume_episode.as_deref() {
+        let current = episodes
+            .iter()
+            .position(|episode| episode.number == last_watched)
+            .ok_or_else(|| {
+                format!(
+                    "history episode {last_watched} is not present in the current episode list"
+                )
+            })?;
+        let next = episodes.get(current + 1).ok_or("no next episode is available")?;
+        vec![next.clone()]
     } else {
         for (index, episode) in episodes.iter().enumerate() {
             println!(
@@ -97,33 +141,53 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let resolver = HiAnimeStreamResolver::new();
-    let player = Player::from_vlc_flag(cli.vlc);
+    let mode = std::env::var("ANI_CLI_MODE").unwrap_or_else(|_| "sub".to_owned());
+    let dubbed = cli.dubbed || mode.eq_ignore_ascii_case("dub");
+    let quality = cli
+        .quality
+        .clone()
+        .or_else(|| std::env::var("ANI_CLI_QUALITY").ok())
+        .unwrap_or_else(|| "best".to_owned());
+    let player = Player::from_vlc_flag(
+        cli.vlc
+            || std::env::var("ANI_CLI_PLAYER")
+                .is_ok_and(|value| value.to_ascii_lowercase().contains("vlc")),
+    );
+    let download_dir = std::env::var_os("ANI_CLI_DOWNLOAD_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    if cli.download {
+        std::fs::create_dir_all(&download_dir)?;
+    }
+
     for episode in &selected {
         eprintln!(
             "Resolving episode {} ({})...",
             episode.number,
-            if cli.dubbed { "dub" } else { "sub" }
+            if dubbed { "dub" } else { "sub" }
         );
-        let media = resolver.resolve(
-            episode,
-            cli.dubbed,
-            cli.quality.as_deref().unwrap_or("best"),
-        )?;
+        let media = resolver.resolve(episode, dubbed, &quality)?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
+
         if cli.download {
             let filename = format!(
                 "{} - Episode {}.mp4",
                 safe_filename(&anime.title),
                 safe_filename(&episode.number)
             );
-            let destination = PathBuf::from(filename);
+            let destination = download_dir.join(filename);
             let status = FfmpegDownloader::download(&media.stream, &destination)?;
             if !status.success() {
                 return Err(format!("ffmpeg exited with status {status}").into());
             }
-            if let Some(subtitle) = media.subtitle {
+            if let Some(subtitle) = media.subtitle.as_ref() {
                 let subtitle_path = destination.with_extension("vtt");
-                let response = reqwest::blocking::get(&subtitle.url)?.error_for_status()?;
+                let mut request = reqwest::blocking::Client::new().get(&subtitle.url);
+                if let Some(referer) = media.stream.referer.as_deref() {
+                    request = request.header(reqwest::header::REFERER, referer);
+                }
+                let response = request.send()?.error_for_status()?;
                 std::fs::write(subtitle_path, response.bytes()?)?;
             }
         } else {
@@ -134,8 +198,84 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
         }
+
+        if let Some(store) = history.as_ref() {
+            record_history(store, &anime, episode)?;
+        }
     }
+
     Ok(())
+}
+
+fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    let status = std::process::Command::new("log")
+        .args(["show", "--predicate", "process == \"logger\""])
+        .status()?;
+
+    #[cfg(target_os = "linux")]
+    let status = std::process::Command::new("journalctl")
+        .args(["-t", "ani-cli"])
+        .status()?;
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    return Err("--logview is supported only on Linux and macOS".into());
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if !status.success() {
+        return Err(format!("log viewer exited with status {status}").into());
+    }
+
+    Ok(())
+}
+
+fn record_history(
+    store: &HistoryStore,
+    anime: &Anime,
+    episode: &Episode,
+) -> io::Result<()> {
+    let mut entries = store.read()?;
+    if let Some(existing) = entries.iter_mut().find(|entry| entry.anime_id == anime.id) {
+        existing.episode_number = episode.number.clone();
+        existing.anime_title = anime.title.clone();
+    } else {
+        entries.push(HistoryEntry::new(
+            episode.number.clone(),
+            anime.id.clone(),
+            anime.title.clone(),
+        ));
+    }
+    store.write(&entries)
+}
+
+fn select_episode_range(
+    episodes: Vec<Episode>,
+    range: &str,
+) -> Result<Vec<Episode>, Box<dyn std::error::Error>> {
+    let requested = parse_episode_range(range)?;
+    let selected: Vec<_> = episodes
+        .into_iter()
+        .filter(|episode| requested.iter().any(|number| number == &episode.number))
+        .collect();
+    if selected.is_empty() {
+        return Err(format!("episode range '{range}' did not match available episodes").into());
+    }
+    Ok(selected)
+}
+
+fn select_index(
+    count: usize,
+    forced_one_based: Option<usize>,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    if let Some(number) = forced_one_based {
+        let index = number.checked_sub(1).ok_or("-S expects a positive selection number")?;
+        if index >= count {
+            return Err(format!("selection {number} is outside the valid range 1-{count}").into());
+        }
+        Ok(index)
+    } else {
+        read_index(count)
+    }
 }
 
 fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
@@ -195,5 +335,19 @@ mod tests {
         assert_eq!(parse_episode_range("2-4").unwrap(), vec!["2", "3", "4"]);
         assert!(parse_episode_range("0").is_err());
         assert!(parse_episode_range("4-2").is_err());
+    }
+
+    #[test]
+    fn filters_requested_episodes_in_provider_order() {
+        let episodes = vec![
+            Episode::new("3", None, "three"),
+            Episode::new("2", None, "two"),
+            Episode::new("1", None, "one"),
+        ];
+        let selected = select_episode_range(episodes, "1-2").unwrap();
+        assert_eq!(
+            selected.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+            vec!["2", "1"]
+        );
     }
 }
