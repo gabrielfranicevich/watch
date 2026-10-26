@@ -125,11 +125,7 @@ impl YtDlpDownloader {
 pub struct SubtitleDownloader;
 
 impl SubtitleDownloader {
-    pub fn download(
-        url: &str,
-        referer: Option<&str>,
-        destination: &Path,
-    ) -> io::Result<()> {
+    pub fn download(url: &str, referer: Option<&str>, destination: &Path) -> io::Result<()> {
         let client = Client::builder()
             .user_agent(
                 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
