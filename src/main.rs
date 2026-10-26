@@ -118,11 +118,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             .iter()
             .position(|episode| episode.number == last_watched)
             .ok_or_else(|| {
-                format!(
-                    "history episode {last_watched} is not present in the current episode list"
-                )
+                format!("history episode {last_watched} is not present in the current episode list")
             })?;
-        let next = episodes.get(current + 1).ok_or("no next episode is available")?;
+        let next = episodes
+            .get(current + 1)
+            .ok_or("no next episode is available")?;
         vec![next.clone()]
     } else {
         let labels: Vec<String> = episodes
@@ -202,9 +202,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
 
-    let current_episode = selected
-        .last()
-        .ok_or("no episode was selected")?;
+    let current_episode = selected.last().ok_or("no episode was selected")?;
     let mut current_index = episodes
         .iter()
         .position(|episode| episode.number == current_episode.number)
@@ -250,9 +248,7 @@ impl PlaybackConfig<'_> {
             if self.dubbed { "dub" } else { "sub" },
             self.quality
         );
-        let media = self
-            .resolver
-            .resolve(episode, self.dubbed, &self.quality)?;
+        let media = self.resolver.resolve(episode, self.dubbed, &self.quality)?;
         let title = format!("{} - Episode {}", anime.title, episode.number);
 
         if self.download {
@@ -308,11 +304,7 @@ impl PlaybackConfig<'_> {
         }
     }
 
-    fn record(
-        &self,
-        anime: &Anime,
-        episode: &Episode,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn record(&self, anime: &Anime, episode: &Episode) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(store) = self.history {
             record_history(store, anime, episode)?;
         }
@@ -409,7 +401,9 @@ fn run_playback_menu(
         wait_for_player(active_player)?;
         match playback.play_episode(anime, &episodes[*current_index], cli.no_detach)? {
             PlaybackResult::Detached(child) => *active_player = Some(child),
-            PlaybackResult::Attached(status) => ensure_success(status, playback.player.command_name())?,
+            PlaybackResult::Attached(status) => {
+                ensure_success(status, playback.player.command_name())?
+            }
             PlaybackResult::Downloaded => return Ok(ExitCode::SUCCESS),
         }
     }
@@ -426,10 +420,7 @@ fn exit_code(status: ExitStatus) -> ExitCode {
     ExitCode::from(status.code().unwrap_or(1).clamp(0, 255) as u8)
 }
 
-fn ensure_success(
-    status: ExitStatus,
-    program: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn ensure_success(status: ExitStatus, program: &str) -> Result<(), Box<dyn std::error::Error>> {
     if status.success() {
         Ok(())
     } else {
@@ -455,11 +446,7 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
     ensure_success(status, "log viewer")
 }
 
-fn record_history(
-    store: &HistoryStore,
-    anime: &Anime,
-    episode: &Episode,
-) -> io::Result<()> {
+fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io::Result<()> {
     let mut entries = store.read()?;
     if let Some(existing) = entries.iter_mut().find(|entry| entry.anime_id == anime.id) {
         existing.episode_number = episode.number.clone();
