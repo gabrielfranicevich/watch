@@ -418,24 +418,27 @@ mod tests {
         let player = Player::from_configuration(false, false, false, Some("/opt/mpv/mpv.exe"));
         assert_eq!(player.command_name(), "/opt/mpv/mpv.exe");
         let args = player.arguments(&stream(), None, "Example");
-        assert!(args.iter().any(|arg| arg == "--referrer=https://embed.example/"));
+        assert!(
+            args.iter()
+                .any(|arg| arg == "--referrer=https://embed.example/")
+        );
         assert!(args.iter().any(|arg| arg == "--force-media-title=Example"));
     }
 
     #[test]
     fn configured_custom_player_receives_generic_flags_and_stream_url() {
-        let player = Player::from_configuration(false, false, false, Some("/usr/bin/custom-player"));
-        let args = player.arguments_with_extra(
-            &stream(),
-            None,
-            "Example",
-            &["--custom-flag".to_owned()],
-        );
+        let player =
+            Player::from_configuration(false, false, false, Some("/usr/bin/custom-player"));
+        let args =
+            player.arguments_with_extra(&stream(), None, "Example", &["--custom-flag".to_owned()]);
         let args: Vec<_> = args
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(args, vec!["--custom-flag", "https://cdn.example/video.m3u8"]);
+        assert_eq!(
+            args,
+            vec!["--custom-flag", "https://cdn.example/video.m3u8"]
+        );
     }
 
     #[test]

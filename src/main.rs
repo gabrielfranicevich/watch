@@ -37,11 +37,6 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
 
-    let source = effective_source(
-        cli.continue_history,
-        cli.next_episode_countdown,
-        std::env::var("ANI_CLI_DEFAULT_SOURCE").ok().as_deref(),
-    )?;
     let history = paths::history_file().map(HistoryStore::new);
     if cli.delete_history {
         let store = history
@@ -64,6 +59,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         update_rust_installation(&branch)?;
         return Ok(ExitCode::SUCCESS);
     }
+    let source = effective_source(
+        cli.continue_history,
+        cli.next_episode_countdown,
+        std::env::var("ANI_CLI_DEFAULT_SOURCE").ok().as_deref(),
+    )?;
     if source == "nextep" {
         let query = match cli.query.as_deref() {
             Some(query) => query.to_owned(),
@@ -183,14 +183,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .or_else(|| std::env::var("ANI_CLI_QUALITY").ok())
         .unwrap_or_else(|| "best".to_owned());
     let env_player = std::env::var("ANI_CLI_PLAYER").ok();
-    let configured_player_lower = env_player
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
     let default_iina_path = "/Applications/IINA.app/Contents/MacOS/iina-cli";
-    let use_iina_default = env_player.is_none()
-        && cfg!(target_os = "macos")
-        && Path::new(default_iina_path).is_file();
+    let use_iina_default =
+        env_player.is_none() && cfg!(target_os = "macos") && Path::new(default_iina_path).is_file();
     let player = Player::from_configuration(
         cli.vlc,
         cli.syncplay,

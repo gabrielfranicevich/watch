@@ -108,7 +108,7 @@ impl HiAnimeStreamResolver {
             .send()?
             .error_for_status()?
             .text()?;
-        let servers = Html::parse_fragment(&servers_body.replace("\\\\", ""));
+        let servers = Html::parse_fragment(&normalize_server_html(&servers_body));
         let selector = Selector::parse(".server-item")
             .map_err(|_| StreamResolveError::InvalidData("invalid server selector".into()))?;
         let mode = if dubbed { "dub" } else { "sub" };
@@ -203,6 +203,10 @@ impl HiAnimeStreamResolver {
     }
 }
 
+fn normalize_server_html(body: &str) -> String {
+    body.replace('\\', "")
+}
+
 fn extract_window_blob(html: &str) -> Option<&str> {
     let marker = "window.__P=\"";
     let start = html.find(marker)? + marker.len();
@@ -232,6 +236,17 @@ fn origin_with_slash(url: &str) -> Result<String, StreamResolveError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removes_json_escape_backslashes_before_parsing_server_html() {
+        let body = r#"<div class=\"server-item\" data-type=\"sub\" data-server-name=\"ZokoAnime\" data-hash=\"YWJj\"></div>"#;
+        let normalized = normalize_server_html(body);
+        let document = Html::parse_fragment(&normalized);
+        let selector = Selector::parse(".server-item").unwrap();
+        let server = document.select(&selector).next().unwrap();
+        assert_eq!(server.value().attr("data-type"), Some("sub"));
+        assert_eq!(server.value().attr("data-hash"), Some("YWJj"));
+    }
 
     #[test]
     fn extracts_embed_blob_without_consuming_following_markup() {
