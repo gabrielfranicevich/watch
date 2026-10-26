@@ -274,4 +274,54 @@ mod tests {
         assert_eq!(results[0].title, "Frieren");
     }
 
+    #[test]
+    fn search_to_episode_listing_workflow_uses_fixture_server_only() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut request = [0_u8; 4096];
+                let count = stream.read(&mut request).unwrap();
+                let request = String::from_utf8_lossy(&request[..count]).into_owned();
+                let body = if request.starts_with("GET /search?keyword=Frieren ") {
+                    r#"<div class="film-detail"><h3 class="film-name"><a href="/watch/frieren-123" title="Frieren">Frieren</a></h3></div>"#
+                } else if request.starts_with("GET /api/theme/episode/list/123 ") {
+                    r#"<a class="ep-item" data-number="1" data-id="episode-100"></a><a class="ep-item" data-number="2" data-id="episode-101"></a>"#
+                } else {
+                    panic!("unexpected provider request: {request}");
+                };
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{}",
+                    body.len(),
+                    body
+                )
+                .unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+
+        let provider = HiAnimeProvider::with_base_url(&format!("http://{address}"));
+        let results = provider.search("Frieren").unwrap();
+        assert_eq!(results.len(), 1);
+        let episodes = provider.episodes(&results[0]).unwrap();
+        let requests = server.join().unwrap();
+
+        assert_eq!(episodes.len(), 2);
+        assert_eq!(episodes[0].number, "1");
+        assert_eq!(episodes[1].number, "2");
+        assert!(requests[0].starts_with("GET /search?keyword=Frieren "));
+        assert!(requests[1].starts_with("GET /api/theme/episode/list/123 "));
+    }
+
 }

@@ -157,12 +157,16 @@ impl MediaDownloader {
         Self::download_with_extra(stream, destination, &[])
     }
 
+    fn should_try_yt_dlp(stream: &Stream) -> bool {
+        stream.audio_url.is_none()
+    }
+
     pub fn download_with_extra(
         stream: &Stream,
         destination: &Path,
         extra_flags: &[String],
     ) -> io::Result<ExitStatus> {
-        if stream.audio_url.is_none() {
+        if Self::should_try_yt_dlp(stream) {
             match YtDlpDownloader::download_with_extra(stream, destination, extra_flags) {
                 Ok(status) if status.success() => return Ok(status),
                 Ok(_) => {}
@@ -345,4 +349,19 @@ mod tests {
         let args = YtDlpDownloader::arguments(&stream, Path::new("episode.mp4"));
         assert!(!args.iter().any(|arg| arg == "--referer"));
     }
+    #[test]
+    fn media_downloader_uses_yt_dlp_only_for_single_streams() {
+        let video_only = Stream::new(
+            "https://cdn.example/video.m3u8",
+            Some("1080p".into()),
+            Some("https://embed.example/".into()),
+        );
+        let separate_audio = video_only
+            .clone()
+            .with_audio(Some("https://cdn.example/audio.m3u8".into()));
+
+        assert!(MediaDownloader::should_try_yt_dlp(&video_only));
+        assert!(!MediaDownloader::should_try_yt_dlp(&separate_audio));
+    }
+
 }
