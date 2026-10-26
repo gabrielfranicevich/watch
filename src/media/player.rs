@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 use std::io;
-use std::process::{Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::domain::{stream::Stream, subtitle::Subtitle};
 
@@ -28,26 +28,40 @@ impl Player {
         subtitle: Option<&Subtitle>,
         title: &str,
     ) -> Vec<OsString> {
+        self.arguments_with_extra(stream, subtitle, title, &[])
+    }
+
+    pub fn arguments_with_extra(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        extra_flags: &[String],
+    ) -> Vec<OsString> {
         let mut args = Vec::new();
         match self {
             Self::Mpv => {
                 args.push(OsString::from("--force-window"));
-                args.push(OsString::from(format!("--title={title}")));
+                args.push(OsString::from(format!("--force-media-title={title}")));
                 if let Some(referer) = stream.referer.as_deref() {
                     args.push(OsString::from(format!("--referrer={referer}")));
                 }
                 if let Some(subtitle) = subtitle {
                     args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
                 }
+                args.extend(extra_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
             }
             Self::Vlc => {
+                args.push(OsString::from("--play-and-exit"));
+                args.push(OsString::from(format!("--meta-title={title}")));
                 if let Some(referer) = stream.referer.as_deref() {
                     args.push(OsString::from(format!("--http-referrer={referer}")));
                 }
                 if let Some(subtitle) = subtitle {
                     args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
                 }
+                args.extend(extra_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
             }
         }
@@ -60,9 +74,36 @@ impl Player {
         subtitle: Option<&Subtitle>,
         title: &str,
     ) -> io::Result<ExitStatus> {
+        self.play_with_extra(stream, subtitle, title, &[])
+    }
+
+    pub fn play_with_extra(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        extra_flags: &[String],
+    ) -> io::Result<ExitStatus> {
         Command::new(self.command_name())
-            .args(self.arguments(stream, subtitle, title))
+            .args(self.arguments_with_extra(stream, subtitle, title, extra_flags))
             .status()
+    }
+
+    /// Start the player in the background, leaving the terminal available for
+    /// ani-cli's episode controls.
+    pub fn launch_detached(
+        self,
+        stream: &Stream,
+        subtitle: Option<&Subtitle>,
+        title: &str,
+        extra_flags: &[String],
+    ) -> io::Result<Child> {
+        Command::new(self.command_name())
+            .args(self.arguments_with_extra(stream, subtitle, title, extra_flags))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
     }
 }
 
@@ -88,6 +129,7 @@ mod tests {
             .collect();
         assert!(args.contains(&"--referrer=https://embed.example/".to_owned()));
         assert!(args.contains(&"--sub-file=https://cdn.example/sub.vtt".to_owned()));
+        assert!(args.contains(&"--force-media-title=Example Anime".to_owned()));
         assert_eq!(
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
@@ -95,13 +137,34 @@ mod tests {
     }
 
     #[test]
-    fn vlc_arguments_include_referer_when_required() {
+    fn vlc_arguments_include_referer_and_exit_after_play() {
         let args = Player::Vlc.arguments(&stream(), None, "Example Anime");
         let args: Vec<_> = args
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert!(args.contains(&"--http-referrer=https://embed.example/".to_owned()));
+        assert!(args.contains(&"--play-and-exit".to_owned()));
+        assert!(args.contains(&"--meta-title=Example Anime".to_owned()));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("https://cdn.example/video.m3u8")
+        );
+    }
+
+    #[test]
+    fn appends_extra_flags_before_the_media_url() {
+        let args = Player::Mpv.arguments_with_extra(
+            &stream(),
+            None,
+            "Example Anime",
+            &["--no-terminal".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"--no-terminal".to_owned()));
         assert_eq!(
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
