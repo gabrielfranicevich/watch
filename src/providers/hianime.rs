@@ -1,5 +1,4 @@
 use reqwest::blocking::Client;
-use scraper::{Element, Html, Selector};
 use std::time::Duration;
 
 use crate::domain::{anime::Anime, episode::Episode};
@@ -72,62 +71,8 @@ impl HiAnimeProvider {
         let status = response.status();
         let body = response.text()?;
         ensure_provider_response(status, &body)?;
-        let document = Html::parse_document(&body);
-        let selector = Selector::parse("div.film-detail h3.film-name a")
-            .map_err(|_| ProviderError::InvalidSelector("div.film-detail h3.film-name a"))?;
-        let mut results = Vec::new();
-
-        for element in document.select(&selector) {
-            let mut ancestor = element.parent_element();
-            let mut in_sidebar = false;
-            while let Some(parent) = ancestor {
-                if parent.value().attr("id") == Some("main-sidebar") {
-                    in_sidebar = true;
-                    break;
-                }
-                ancestor = parent.parent_element();
-            }
-            if in_sidebar {
-                continue;
-            }
-
-            let Some(href) = element.value().attr("href") else {
-                continue;
-            };
-            let Some(title) = element
-                .value()
-                .attr("title")
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            else {
-                continue;
-            };
-            let id = href
-                .trim_matches('/')
-                .rsplit('/')
-                .next()
-                .unwrap_or_default();
-            if id.is_empty() {
-                continue;
-            }
-            let url = if href.starts_with("http://") || href.starts_with("https://") {
-                href.to_owned()
-            } else {
-                format!(
-                    "{}{}",
-                    self.base_url,
-                    if href.starts_with('/') {
-                        href.to_owned()
-                    } else {
-                        format!("/{href}")
-                    }
-                )
-            };
-            if !results.iter().any(|anime: &Anime| anime.id == id) {
-                results.push(Anime::new(id, title, url));
-            }
-        }
-        Ok(results)
+        super::hianime_parser::parse_search_results(&body, &self.base_url)
+            .map_err(ProviderError::InvalidSelector)
     }
 
     pub fn episodes(&self, anime: &Anime) -> Result<Vec<Episode>, ProviderError> {
@@ -137,28 +82,8 @@ impl HiAnimeProvider {
         let status = response.status();
         let body = response.text()?;
         ensure_provider_response(status, &body)?;
-        let document = Html::parse_fragment(&body.replace("\\", ""));
-        let selector =
-            Selector::parse(".ep-item").map_err(|_| ProviderError::InvalidSelector(".ep-item"))?;
-        let mut episodes = Vec::new();
-
-        for element in document.select(&selector) {
-            let Some(number) = element
-                .value()
-                .attr("data-number")
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            else {
-                continue;
-            };
-            let Some(id) = element.value().attr("data-id").filter(|s| !s.is_empty()) else {
-                continue;
-            };
-            let watch_url = format!("{}/watch/{}?ep={}", self.base_url, anime.id, id);
-            episodes.push(Episode::new(number, None, watch_url));
-        }
-
-        Ok(episodes)
+        super::hianime_parser::parse_episodes(&body, &self.base_url, &anime.id)
+            .map_err(ProviderError::InvalidSelector)
     }
 }
 
