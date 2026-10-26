@@ -98,7 +98,7 @@ impl Player {
             Self::Iina => "iina-cli",
             Self::FlatpakMpv => "flatpak",
             Self::AndroidMpv | Self::AndroidVlc => "am",
-            Self::Configured(command) if self.kind() == PlayerKind::FlatpakMpv => "flatpak",
+            Self::Configured(_) if self.kind() == PlayerKind::FlatpakMpv => "flatpak",
             Self::Configured(command) => command,
         }
     }
