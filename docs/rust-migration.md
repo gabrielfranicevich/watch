@@ -19,6 +19,7 @@ cargo run --release -- --nextep-countdown "Frieren"
 
 ## Compatibility settings
 
+- `ANI_CLI_DEFAULT_SOURCE=search|history|nextep`: default source/action when no source flag is specified.
 - `ANI_CLI_MODE=sub|dub`: default language mode.
 - `ANI_CLI_QUALITY=best|worst|1080p|720p...`: default stream quality.
 - `ANI_CLI_EXACT=1`: require a normalized exact title match.

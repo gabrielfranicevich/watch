@@ -37,6 +37,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
 
+    let source = effective_source(
+        cli.continue_history,
+        cli.next_episode_countdown,
+        std::env::var("ANI_CLI_DEFAULT_SOURCE").ok().as_deref(),
+    )?;
     let history = paths::history_file().map(HistoryStore::new);
     if cli.delete_history {
         let store = history
@@ -59,7 +64,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         update_rust_installation(&branch)?;
         return Ok(ExitCode::SUCCESS);
     }
-    if cli.next_episode_countdown {
+    if source == "nextep" {
         let query = match cli.query.as_deref() {
             Some(query) => query.to_owned(),
             None => read_search_query()?,
@@ -69,7 +74,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 
     let provider = HiAnimeProvider::new();
-    let (anime, resume_episode) = if cli.continue_history {
+    let (anime, resume_episode) = if source == "history" {
         let store = history
             .as_ref()
             .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
@@ -715,6 +720,32 @@ fn select_items(
     }
 }
 
+fn effective_source(
+    continue_history: bool,
+    next_episode_countdown: bool,
+    configured: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if continue_history && next_episode_countdown {
+        return Err("--continue and --nextep-countdown cannot be used together".into());
+    }
+
+    let source = if continue_history {
+        "history"
+    } else if next_episode_countdown {
+        "nextep"
+    } else {
+        configured.unwrap_or("search")
+    };
+
+    match source {
+        "search" | "history" | "nextep" => Ok(source.to_owned()),
+        other => Err(format!(
+            "invalid ANI_CLI_DEFAULT_SOURCE '{other}'; expected search, history, or nextep"
+        )
+        .into()),
+    }
+}
+
 fn read_search_query() -> Result<String, Box<dyn std::error::Error>> {
     print!("Search anime: ");
     io::stdout().flush()?;
@@ -755,6 +786,21 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selects_source_from_cli_flags_and_environment() {
+        assert_eq!(effective_source(false, false, None).unwrap(), "search");
+        assert_eq!(effective_source(false, false, Some("history")).unwrap(), "history");
+        assert_eq!(effective_source(false, false, Some("nextep")).unwrap(), "nextep");
+        assert_eq!(effective_source(true, false, Some("search")).unwrap(), "history");
+        assert_eq!(effective_source(false, true, Some("search")).unwrap(), "nextep");
+    }
+
+    #[test]
+    fn rejects_invalid_or_conflicting_sources() {
+        assert!(effective_source(false, false, Some("bad-value")).is_err());
+        assert!(effective_source(true, true, None).is_err());
+    }
 
     #[test]
     fn updater_arguments_pin_repository_branch_and_install_root() {

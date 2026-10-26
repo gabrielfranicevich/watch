@@ -28,7 +28,7 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update ani-cli
 
-Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, quality selection, external menu backends, downloads, subtitles and watch history. The automatic updater and next-episode countdown are not yet available.
+Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
 ";
 
 #[derive(Debug, Default, PartialEq, Eq)]
