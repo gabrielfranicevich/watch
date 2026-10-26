@@ -1,9 +1,11 @@
 //! Core library for the ani-cli Rust implementation.
 
+pub mod cli;
+pub mod domain;
+
 /// Current package version, exposed for diagnostics and tests.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Return the package version.
 pub fn version() -> &'static str {
     VERSION
 }
