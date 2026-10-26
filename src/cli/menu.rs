@@ -47,22 +47,24 @@ pub fn select(
             command.arg(prompt);
         }
     }
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
 
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(error)
-            if error.kind() == io::ErrorKind::NotFound && !explicitly_configured =>
-        {
+        Err(error) if error.kind() == io::ErrorKind::NotFound && !explicitly_configured => {
             return Ok(MenuOutcome::Unavailable);
         }
         Err(error) => return Err(error),
     };
 
     {
-        let stdin = child.stdin.as_mut().ok_or_else(|| {
-            io::Error::other("menu process did not expose standard input")
-        })?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| io::Error::other("menu process did not expose standard input"))?;
         for (index, item) in items.iter().enumerate() {
             writeln!(stdin, "{}\t{}", index + 1, item.replace('\t', " "))?;
         }
