@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{
-    into_stream, parse_default_audio_url, parse_master_playlist, select_quality, HlsVariant,
+    HlsVariant, into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
 };
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
@@ -276,11 +276,13 @@ mod tests {
     #[test]
     fn extracts_unique_quality_choices_in_descending_resolution_order() {
         let playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,RESOLUTION=640x360\n360.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n720-a.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=950000,RESOLUTION=1280x720\n720-b.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080\n1080.m3u8\n";
-        let variants =
-            parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
+        let variants = parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
         let qualities = quality_options(&variants);
         assert_eq!(
-            qualities.iter().map(|option| option.value.as_str()).collect::<Vec<_>>(),
+            qualities
+                .iter()
+                .map(|option| option.value.as_str())
+                .collect::<Vec<_>>(),
             vec!["1080p", "720p", "360p"]
         );
         assert!(qualities.iter().all(|option| option.label == option.value));

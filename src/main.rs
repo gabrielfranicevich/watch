@@ -117,8 +117,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 );
                 continue;
             }
-            let Some(next_episode) =
-                next_episode_after(&candidate_episodes, &entry.episode_number)
+            let Some(next_episode) = next_episode_after(&candidate_episodes, &entry.episode_number)
             else {
                 eprintln!(
                     "Skipping '{}' in history because it has no next episode",
@@ -127,7 +126,12 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 continue;
             };
             let next_episode_number = next_episode.number.clone();
-            candidates.push((entry, candidate_anime, candidate_episodes, next_episode_number));
+            candidates.push((
+                entry,
+                candidate_anime,
+                candidate_episodes,
+                next_episode_number,
+            ));
         }
         if candidates.is_empty() {
             return Err("no unwatched series in history".into());
@@ -141,11 +145,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             .collect();
         let selected_index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
         let (entry, candidate_anime, episodes, _) = candidates.remove(selected_index);
-        (
-            candidate_anime,
-            Some(entry.episode_number),
-            Some(episodes),
-        )
+        (candidate_anime, Some(entry.episode_number), Some(episodes))
     } else {
         let query = match cli.query.as_deref() {
             Some(query) => query.to_owned(),
