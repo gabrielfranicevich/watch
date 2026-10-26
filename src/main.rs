@@ -10,7 +10,7 @@ use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
 use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
-use ani_cli::media::downloader::MediaDownloader;
+use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::player::Player;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::hianime::HiAnimeProvider;
@@ -368,21 +368,23 @@ impl PlaybackConfig<'_> {
         if self.download {
             let filename = format!("{}.mp4", episode_file_stem(&anime.title, &episode.number));
             let destination = self.download_dir.join(filename);
+            if let Some(subtitle) = media.subtitle.as_ref() {
+                let subtitle_path = destination.with_extension("vtt");
+                if let Err(error) = SubtitleDownloader::download(
+                    &subtitle.url,
+                    media.stream.referer.as_deref(),
+                    &subtitle_path,
+                ) {
+                    eprintln!("ani-cli: warning: could not download subtitles: {error}");
+                }
+            }
+
             let status = MediaDownloader::download_with_extra(
                 &media.stream,
                 &destination,
                 &self.player_flags,
             )?;
             ensure_success(status, "ffmpeg")?;
-            if let Some(subtitle) = media.subtitle.as_ref() {
-                let subtitle_path = destination.with_extension("vtt");
-                let mut request = reqwest::blocking::Client::new().get(&subtitle.url);
-                if let Some(referer) = media.stream.referer.as_deref() {
-                    request = request.header(reqwest::header::REFERER, referer);
-                }
-                let response = request.send()?.error_for_status()?;
-                std::fs::write(subtitle_path, response.bytes()?)?;
-            }
             self.record(anime, episode)?;
             return Ok(PlaybackResult::Downloaded);
         }

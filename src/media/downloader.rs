@@ -2,8 +2,10 @@ use std::ffi::OsString;
 use std::io;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
+use std::time::Duration;
 
 use crate::domain::stream::Stream;
+use reqwest::blocking::Client;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FfmpegDownloader;
@@ -119,6 +121,36 @@ impl YtDlpDownloader {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubtitleDownloader;
+
+impl SubtitleDownloader {
+    pub fn download(
+        url: &str,
+        referer: Option<&str>,
+        destination: &Path,
+    ) -> io::Result<()> {
+        let client = Client::builder()
+            .user_agent(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+            )
+            .timeout(Duration::from_secs(10))
+            .build()
+            .map_err(io::Error::other)?;
+
+        let mut request = client.get(url);
+        if let Some(referer) = referer {
+            request = request.header(reqwest::header::REFERER, referer);
+        }
+        let response = request
+            .send()
+            .and_then(reqwest::blocking::Response::error_for_status)
+            .map_err(io::Error::other)?;
+        let content = response.bytes().map_err(io::Error::other)?;
+        std::fs::write(destination, content)
+    }
+}
+
 /// Prefer yt-dlp for a single HLS source and fall back to FFmpeg. When a
 /// separate audio rendition exists, FFmpeg must mux the two inputs explicitly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,6 +182,58 @@ impl MediaDownloader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subtitle_download_forwards_referer_and_writes_response() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut connection, _) = listener.accept().unwrap();
+            connection
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0_u8; 4096];
+            let count = connection.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]).into_owned();
+            let body = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n";
+            write!(
+                connection,
+                "HTTP/1.1 200 OK\r\nContent-Type: text/vtt\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+            request
+        });
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let destination = std::env::temp_dir().join(format!(
+            "ani-cli-subtitle-{}-{nonce}.vtt",
+            std::process::id()
+        ));
+        SubtitleDownloader::download(
+            &format!("http://{address}/subtitle.vtt"),
+            Some("https://embed.example/"),
+            &destination,
+        )
+        .unwrap();
+        let request = server.join().unwrap();
+
+        assert!(request.starts_with("GET /subtitle.vtt HTTP/1.1"));
+        assert!(request.contains("referer: https://embed.example/"));
+        assert!(request.to_ascii_lowercase().contains("user-agent:"));
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n"
+        );
+        std::fs::remove_file(destination).unwrap();
+    }
 
     #[test]
     fn ffmpeg_forwards_referer_and_stream_as_distinct_arguments() {
