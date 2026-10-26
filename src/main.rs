@@ -1,3 +1,4 @@
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, ExitStatus};
@@ -50,7 +51,13 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     if cli.update {
-        return Err("--update is not implemented yet: automatic self-update needs a verified Rust release artifact".into());
+        let branch = cli
+            .query
+            .clone()
+            .or_else(|| std::env::var("ANI_CLI_BRANCH").ok())
+            .unwrap_or_else(|| "develop".to_owned());
+        update_rust_installation(&branch)?;
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.next_episode_countdown {
         let query = match cli.query.as_deref() {
@@ -469,6 +476,68 @@ fn ensure_success(status: ExitStatus, program: &str) -> Result<(), Box<dyn std::
     }
 }
 
+fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if !valid_branch_name(branch) {
+        return Err(format!("invalid Git branch name '{branch}'").into());
+    }
+
+    let executable = std::env::current_exe()?;
+    let bin_dir = executable
+        .parent()
+        .ok_or("cannot determine the current executable directory")?;
+    if bin_dir.file_name() != Some(OsStr::new("bin")) {
+        return Err(format!(
+            "cannot infer Cargo installation root from {}; update manually or install with cargo install",
+            executable.display()
+        )
+        .into());
+    }
+    let install_root = bin_dir
+        .parent()
+        .ok_or("cannot determine Cargo installation root")?;
+
+    eprintln!("Updating ani-cli from branch '{branch}'...");
+    let status = Command::new("cargo")
+        .args(updater_arguments(install_root, branch))
+        .status()
+        .map_err(|error| {
+            if error.kind() == io::ErrorKind::NotFound {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "cargo was not found; install the Rust toolchain to use --update",
+                )
+            } else {
+                error
+            }
+        })?;
+    ensure_success(status, "cargo install")?;
+    eprintln!("ani-cli update completed.");
+    Ok(())
+}
+
+fn updater_arguments(install_root: &Path, branch: &str) -> Vec<OsString> {
+    vec![
+        OsString::from("install"),
+        OsString::from("--force"),
+        OsString::from("--locked"),
+        OsString::from("--git"),
+        OsString::from("https://github.com/gabrielfranicevich/ani-cli"),
+        OsString::from("--branch"),
+        OsString::from(branch),
+        OsString::from("--root"),
+        install_root.as_os_str().to_owned(),
+    ]
+}
+
+fn valid_branch_name(branch: &str) -> bool {
+    !branch.is_empty()
+        && !branch.starts_with('-')
+        && !branch.contains("..")
+        && branch
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "-_./".contains(character))
+}
+
 fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     let status = Command::new("log")
@@ -686,6 +755,32 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updater_arguments_pin_repository_branch_and_install_root() {
+        let args = updater_arguments(Path::new("/home/user/.cargo"), "develop");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "--branch" && pair[1] == "develop"
+        ));
+        assert!(args.windows(2).any(
+            |pair| pair[0] == "--root" && pair[1] == "/home/user/.cargo"
+        ));
+        assert!(args.contains(&"--force".to_owned()));
+        assert!(args.contains(&"--locked".to_owned()));
+    }
+
+    #[test]
+    fn rejects_unsafe_branch_names_for_the_updater() {
+        assert!(valid_branch_name("develop"));
+        assert!(valid_branch_name("feature/rust-port"));
+        assert!(!valid_branch_name("--help"));
+        assert!(!valid_branch_name("../main"));
+        assert!(!valid_branch_name(""));
+    }
 
     #[test]
     fn filename_replaces_platform_invalid_characters() {

@@ -31,4 +31,4 @@ cargo run --release -- --nextep-countdown "Frieren"
 
 ## Pending compatibility
 
-The automatic self-updater (`--update`) is intentionally not implemented until the project has a versioned Rust release artifact and a safe replacement strategy for the executable. `--nextep-countdown` queries AnimeSchedule and depends on that provider's live API/page structure.
+`--update` uses `cargo install --force --locked --git ... --branch ...` and therefore requires Cargo, network access, and an installation path whose parent is named `bin` (the normal Cargo layout). Windows may reject replacement of a currently running executable; in that case, update after closing it or reinstall manually. `--nextep-countdown` queries AnimeSchedule and depends on that provider's live API/page structure.
