@@ -1,5 +1,5 @@
 use std::ffi::{OsStr, OsString};
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, ExitStatus};
 
@@ -778,13 +778,15 @@ fn select_items(
         return Ok(vec![index]);
     }
 
-    let backend = if cli.rofi {
-        Some("rofi".to_owned())
-    } else if cli.dmenu {
-        Some("dmenu".to_owned())
-    } else {
-        std::env::var("ANI_CLI_MENU").ok()
-    };
+    let stdin_is_terminal = io::stdin().is_terminal();
+    let configured_backend = std::env::var("ANI_CLI_MENU").ok();
+    let backend = preferred_menu_backend(
+        cli,
+        stdin_is_terminal,
+        configured_backend.as_deref(),
+        !stdin_is_terminal && command_available("dmenu"),
+        !stdin_is_terminal && command_available("rofi"),
+    );
 
     match menu::select(labels, prompt, backend.as_deref(), multi)? {
         MenuOutcome::Selected(mut indices) => {
@@ -804,6 +806,64 @@ fn select_items(
             Ok(vec![read_index(labels.len())?])
         }
     }
+}
+
+fn preferred_menu_backend(
+    cli: &ani_cli::cli::args::Cli,
+    stdin_is_terminal: bool,
+    configured: Option<&str>,
+    dmenu_available: bool,
+    rofi_available: bool,
+) -> Option<String> {
+    if cli.rofi {
+        return Some("rofi".to_owned());
+    }
+    if cli.dmenu {
+        return Some("dmenu".to_owned());
+    }
+
+    // Match the shell implementation: on non-interactive stdin, prefer dmenu
+    // and let rofi override it when both are installed.
+    if !stdin_is_terminal {
+        if dmenu_available {
+            return Some("dmenu".to_owned());
+        }
+        if rofi_available {
+            return Some("rofi".to_owned());
+        }
+    }
+
+    configured
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned)
+}
+
+fn command_available(program: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+
+    std::env::split_paths(&path).any(|directory| {
+        if directory.join(program).is_file() {
+            return true;
+        }
+
+        #[cfg(windows)]
+        {
+            let extensions = std::env::var_os("PATHEXT")
+                .unwrap_or_else(|| OsString::from(".COM;.EXE;.BAT;.CMD"));
+            extensions
+                .to_string_lossy()
+                .split(';')
+                .filter(|extension| !extension.is_empty())
+                .any(|extension| directory.join(format!("{program}{extension}")).is_file())
+        }
+
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    })
 }
 
 fn env_enabled(name: &str) -> bool {
@@ -880,6 +940,46 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_menu_flags_override_environment_and_terminal_detection() {
+        let rofi = ani_cli::cli::args::Cli::parse(["--rofi"]).unwrap();
+        let dmenu = ani_cli::cli::args::Cli::parse(["--dmenu"]).unwrap();
+        assert_eq!(
+            preferred_menu_backend(&rofi, true, Some("fzf"), true, true),
+            Some("rofi".to_owned())
+        );
+        assert_eq!(
+            preferred_menu_backend(&dmenu, false, Some("fzf"), false, true),
+            Some("dmenu".to_owned())
+        );
+    }
+
+    #[test]
+    fn non_terminal_input_prefers_rofi_then_dmenu_like_the_shell_version() {
+        let cli = ani_cli::cli::args::Cli::default();
+        assert_eq!(
+            preferred_menu_backend(&cli, false, Some("fzf"), true, true),
+            Some("rofi".to_owned())
+        );
+        assert_eq!(
+            preferred_menu_backend(&cli, false, Some("fzf"), true, false),
+            Some("dmenu".to_owned())
+        );
+    }
+
+    #[test]
+    fn interactive_terminal_uses_configured_menu_backend() {
+        let cli = ani_cli::cli::args::Cli::default();
+        assert_eq!(
+            preferred_menu_backend(&cli, true, Some("fzf"), true, true),
+            Some("fzf".to_owned())
+        );
+        assert_eq!(
+            preferred_menu_backend(&cli, true, Some("  "), false, false),
+            None
+        );
+    }
 
     #[test]
     fn supports_legacy_boolean_environment_flags() {
