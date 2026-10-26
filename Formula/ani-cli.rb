@@ -2,7 +2,7 @@ class AniCli < Formula
   desc "Terminal client to browse, stream, and download anime"
   homepage "https://github.com/gabrielfranicevich/anime"
   head "https://github.com/gabrielfranicevich/anime.git", branch: "develop"
-  license "Unlicense"
+  license "GPL-3.0-only"
 
   depends_on "rust" => :build
   depends_on "ffmpeg"
