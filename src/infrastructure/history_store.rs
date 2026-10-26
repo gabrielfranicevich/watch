@@ -72,7 +72,7 @@ fn parse_history_line(line: &str) -> Option<HistoryEntry> {
 }
 
 fn clean_field(value: &str) -> String {
-    value.replace(['\t', '\n', '\r'], " ")
+    value.replace('\t', " ").replace('\n', " ").replace('\r', " ")
 }
 
 fn suffix_path(path: &Path, suffix: &str) -> PathBuf {
