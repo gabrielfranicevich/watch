@@ -31,10 +31,17 @@ Options:
 Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
 ";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceOverride {
+    History,
+    NextEpisode,
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Cli {
     pub query: Option<String>,
     pub continue_history: bool,
+    pub source_override: Option<SourceOverride>,
     pub download: bool,
     pub delete_history: bool,
     pub logview: bool,
@@ -83,7 +90,10 @@ impl Cli {
             match arg.as_str() {
                 "-h" | "--help" => cli.help = true,
                 "-V" | "--version" => cli.version = true,
-                "-c" | "--continue" => cli.continue_history = true,
+                "-c" | "--continue" => {
+                    cli.continue_history = true;
+                    cli.source_override = Some(SourceOverride::History);
+                },
                 "-d" | "--download" => cli.download = true,
                 "-D" | "--delete" => cli.delete_history = true,
                 "-l" | "--logview" => cli.logview = true,
@@ -109,7 +119,10 @@ impl Cli {
                     index += 1;
                     cli.quality = Some(required_value(&args, index, arg)?.clone());
                 }
-                "-N" | "--nextep-countdown" => cli.next_episode_countdown = true,
+                "-N" | "--nextep-countdown" => {
+                    cli.next_episode_countdown = true;
+                    cli.source_override = Some(SourceOverride::NextEpisode);
+                },
                 "-U" | "--update" => cli.update = true,
                 "--dub" => cli.dubbed = true,
                 "--rofi" => cli.rofi = true,
@@ -208,6 +221,15 @@ mod tests {
     #[test]
     fn rejects_conflicting_interactive_menus() {
         assert!(Cli::parse(["--rofi", "--dmenu"]).is_err());
+    }
+
+    #[test]
+    fn last_source_flag_wins_when_continue_and_countdown_are_both_given() {
+        let countdown = Cli::parse(["--continue", "--nextep-countdown"]).unwrap();
+        assert_eq!(countdown.source_override, Some(SourceOverride::NextEpisode));
+
+        let history = Cli::parse(["--nextep-countdown", "--continue"]).unwrap();
+        assert_eq!(history.source_override, Some(SourceOverride::History));
     }
 
     #[test]

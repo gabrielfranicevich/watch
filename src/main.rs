@@ -60,17 +60,21 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     let source = effective_source(
-        cli.continue_history,
-        cli.next_episode_countdown,
+        cli.source_override,
         std::env::var("ANI_CLI_DEFAULT_SOURCE").ok().as_deref(),
     )?;
+    let mut search_query = cli.query.clone();
     if source == "nextep" {
-        let query = match cli.query.as_deref() {
-            Some(query) => query.to_owned(),
+        let query = match search_query.clone() {
+            Some(query) => query,
             None => read_search_query()?,
         };
-        AnimeScheduleProvider::new().show_countdown(&query)?;
-        return Ok(ExitCode::SUCCESS);
+        if let Err(error) = AnimeScheduleProvider::new().show_countdown(&query) {
+            eprintln!("ani-cli: warning: could not fetch next-episode countdown: {error}");
+        }
+        // The original script prints the countdown and then continues into
+        // the normal anime search/playback flow using the same query.
+        search_query = Some(query);
     }
 
     let provider = HiAnimeProvider::new();
@@ -148,7 +152,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         let (entry, candidate_anime, episodes, _) = candidates.remove(selected_index);
         (candidate_anime, Some(entry.episode_number), Some(episodes))
     } else {
-        let query = match cli.query.as_deref() {
+        let query = match search_query.as_deref() {
             Some(query) => query.to_owned(),
             None => read_search_query()?,
         };
@@ -958,20 +962,13 @@ fn is_enabled(value: Option<&str>) -> bool {
 }
 
 fn effective_source(
-    continue_history: bool,
-    next_episode_countdown: bool,
+    source_override: Option<ani_cli::cli::args::SourceOverride>,
     configured: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    if continue_history && next_episode_countdown {
-        return Err("--continue and --nextep-countdown cannot be used together".into());
-    }
-
-    let source = if continue_history {
-        "history"
-    } else if next_episode_countdown {
-        "nextep"
-    } else {
-        configured.unwrap_or("search")
+    let source = match source_override {
+        Some(ani_cli::cli::args::SourceOverride::History) => "history",
+        Some(ani_cli::cli::args::SourceOverride::NextEpisode) => "nextep",
+        None => configured.unwrap_or("search"),
     };
 
     match source {
@@ -1103,30 +1100,19 @@ mod tests {
     }
 
     #[test]
-    fn selects_source_from_cli_flags_and_environment() {
-        assert_eq!(effective_source(false, false, None).unwrap(), "search");
-        assert_eq!(
-            effective_source(false, false, Some("history")).unwrap(),
-            "history"
-        );
-        assert_eq!(
-            effective_source(false, false, Some("nextep")).unwrap(),
-            "nextep"
-        );
-        assert_eq!(
-            effective_source(true, false, Some("search")).unwrap(),
-            "history"
-        );
-        assert_eq!(
-            effective_source(false, true, Some("search")).unwrap(),
-            "nextep"
-        );
+    fn selects_source_from_cli_override_or_environment() {
+        use ani_cli::cli::args::SourceOverride::{History, NextEpisode};
+
+        assert_eq!(effective_source(None, None).unwrap(), "search");
+        assert_eq!(effective_source(None, Some("history")).unwrap(), "history");
+        assert_eq!(effective_source(None, Some("nextep")).unwrap(), "nextep");
+        assert_eq!(effective_source(Some(History), Some("search")).unwrap(), "history");
+        assert_eq!(effective_source(Some(NextEpisode), Some("history")).unwrap(), "nextep");
     }
 
     #[test]
-    fn rejects_invalid_or_conflicting_sources() {
-        assert!(effective_source(false, false, Some("bad-value")).is_err());
-        assert!(effective_source(true, true, None).is_err());
+    fn rejects_invalid_default_source_environment_value() {
+        assert!(effective_source(None, Some("bad-value")).is_err());
     }
 
     #[test]
