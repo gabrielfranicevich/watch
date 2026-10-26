@@ -243,18 +243,17 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         Player::Mpv
     } else if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
         Player::from_configuration(cli.vlc, cli.syncplay, false, env_player.as_deref())
-    } else if use_iina_default && command_available("iina") {
-        Player::from_configuration(false, false, false, Some("iina"))
-    } else if use_iina_default {
-        Player::Iina
-    } else if use_flatpak_default {
-        Player::FlatpakMpv
-    } else if cfg!(target_os = "windows") || command_available("mpv") {
-        Player::Mpv
-    } else if command_available("vlc") {
-        Player::Vlc
     } else {
-        return Err("no supported player found; install mpv or VLC, or set ANI_CLI_PLAYER".into());
+        match select_default_player(
+            use_iina_default,
+            command_available("iina"),
+            use_flatpak_default,
+            command_available("mpv"),
+            command_available("vlc"),
+        ) {
+            Ok(player) => player,
+            Err(message) => return Err(message.into()),
+        }
     };
     let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
@@ -803,6 +802,32 @@ fn preferred_menu_backend(
         .map(str::to_owned)
 }
 
+fn select_default_player(
+    use_iina_default: bool,
+    iina_command_available: bool,
+    use_flatpak_default: bool,
+    mpv_available: bool,
+    vlc_available: bool,
+) -> Result<Player, &'static str> {
+    if use_iina_default && iina_command_available {
+        return Ok(Player::from_configuration(false, false, false, Some("iina")));
+    }
+    if use_iina_default {
+        return Ok(Player::Iina);
+    }
+    if use_flatpak_default {
+        return Ok(Player::FlatpakMpv);
+    }
+    if mpv_available {
+        return Ok(Player::Mpv);
+    }
+    if vlc_available {
+        return Ok(Player::Vlc);
+    }
+
+    Err("no supported player found; install MPV or VLC, or set ANI_CLI_PLAYER")
+}
+
 fn player_required(download_only: bool) -> bool {
     !download_only
 }
@@ -971,6 +996,42 @@ mod tests {
                 std::path::PathBuf::from(name)
             });
         }
+    }
+
+    #[test]
+    fn default_player_falls_back_to_vlc_when_mpv_is_unavailable() {
+        assert_eq!(
+            select_default_player(false, false, false, false, true),
+            Ok(Player::Vlc)
+        );
+    }
+
+    #[test]
+    fn default_player_prefers_mpv_when_it_is_available() {
+        assert_eq!(
+            select_default_player(false, false, false, true, true),
+            Ok(Player::Mpv)
+        );
+    }
+
+    #[test]
+    fn default_player_reports_when_no_supported_player_is_available() {
+        assert_eq!(
+            select_default_player(false, false, false, false, false),
+            Err("no supported player found; install MPV or VLC, or set ANI_CLI_PLAYER")
+        );
+    }
+
+    #[test]
+    fn default_player_preserves_iina_and_flatpak_preferences() {
+        assert_eq!(
+            select_default_player(true, true, false, true, true),
+            Ok(Player::from_configuration(false, false, false, Some("iina")))
+        );
+        assert_eq!(
+            select_default_player(false, false, true, false, true),
+            Ok(Player::FlatpakMpv)
+        );
     }
 
     #[test]

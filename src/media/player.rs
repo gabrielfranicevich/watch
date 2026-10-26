@@ -345,9 +345,11 @@ impl Player {
         media_flags: &[String],
     ) -> io::Result<ExitStatus> {
         self.prepare_playback(stream, subtitle);
-        Command::new(self.command_name())
+        let program = self.command_name();
+        Command::new(program)
             .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .status()
+            .map_err(|error| contextualize_program_error(error, program))
     }
 
     /// Start the player in the background, leaving the terminal available for
@@ -371,12 +373,14 @@ impl Player {
         media_flags: &[String],
     ) -> io::Result<Child> {
         self.prepare_playback(stream, subtitle);
-        Command::new(self.command_name())
+        let program = self.command_name();
+        Command::new(program)
             .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
+            .map_err(|error| contextualize_program_error(error, program))
     }
     fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) {
         if !matches!(self, Self::AndroidMpv) {
@@ -392,6 +396,19 @@ impl Player {
             let path = config_path.join("mpv.config.mp4");
             let _ = std::fs::write(path, config);
         }
+    }
+}
+
+fn contextualize_program_error(error: io::Error, program: &str) -> io::Error {
+    if error.kind() == io::ErrorKind::NotFound {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "playback program `{program}` was not found; install it and ensure it is on PATH, or set ANI_CLI_PLAYER to its executable path"
+            ),
+        )
+    } else {
+        error
     }
 }
 
@@ -721,6 +738,17 @@ mod tests {
             args,
             vec!["--custom-flag", "https://cdn.example/video.m3u8"]
         );
+    }
+
+    #[test]
+    fn missing_playback_program_error_names_the_executable_and_configuration_option() {
+        let error = contextualize_program_error(
+            io::Error::new(io::ErrorKind::NotFound, "program not found"),
+            "mpv.exe",
+        );
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("mpv.exe"));
+        assert!(error.to_string().contains("ANI_CLI_PLAYER"));
     }
 
     #[test]
