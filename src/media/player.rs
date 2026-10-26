@@ -193,9 +193,6 @@ impl Player {
                 if let Some(referer) = stream.referer.as_deref() {
                     args.push(OsString::from(format!("--http-referrer={referer}")));
                 }
-                if let Some(subtitle) = subtitle {
-                    args.push(OsString::from(format!("--sub-file={}", subtitle.url)));
-                }
                 args.extend(command_flags.iter().map(OsString::from));
                 args.push(OsString::from(&stream.url));
 
@@ -469,6 +466,22 @@ mod tests {
         assert_eq!(
             args.last().map(String::as_str),
             Some("https://cdn.example/video.m3u8")
+        );
+    }
+
+    #[test]
+    fn vlc_uses_input_slave_for_subtitle_without_mpv_sub_file_flag() {
+        let subtitle = Subtitle::new("https://cdn.example/sub.vtt", Some("English".into()));
+        let args = Player::Vlc.arguments(&stream(), Some(&subtitle), "Example");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(!args.iter().any(|arg| arg.starts_with("--sub-file=")));
+        assert!(
+            args.iter()
+                .any(|arg| arg == ":input-slave=https://cdn.example/sub.vtt")
         );
     }
 

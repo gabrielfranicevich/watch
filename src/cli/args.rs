@@ -22,7 +22,7 @@ Options:
       --dub                Play dubbed version
       --rofi               Use rofi for selection
       --dmenu              Use dmenu for selection
-      --skip               Skip intro (mpv only)
+      --skip               Skip intro with MPV, Flatpak MPV, or Syncplay
       --no-detach           Keep player attached to terminal
       --exit-after-play    Return the player exit code
   -N, --nextep-countdown   Show countdown to next episode
