@@ -25,6 +25,7 @@ enum PlayerKind {
     FlatpakMpv,
     AndroidMpv,
     AndroidVlc,
+    Catt,
     Custom,
 }
 
@@ -97,6 +98,7 @@ impl Player {
             Self::Iina => "iina-cli",
             Self::FlatpakMpv => "flatpak",
             Self::AndroidMpv | Self::AndroidVlc => "am",
+            Self::Configured(command) if self.kind() == PlayerKind::FlatpakMpv => "flatpak",
             Self::Configured(command) => command,
         }
     }
@@ -111,12 +113,15 @@ impl Player {
             Self::AndroidMpv => PlayerKind::AndroidMpv,
             Self::AndroidVlc => PlayerKind::AndroidVlc,
             Self::Configured(command) => {
+                let command_lower = command.to_ascii_lowercase();
                 let name = std::path::Path::new(command)
                     .file_name()
                     .and_then(|value| value.to_str())
                     .unwrap_or(command)
                     .to_ascii_lowercase();
-                if name.contains("syncplay") {
+                if command_lower.contains("flatpak") && command_lower.contains("mpv") {
+                    PlayerKind::FlatpakMpv
+                } else if name.contains("syncplay") {
                     PlayerKind::Syncplay
                 } else if name.contains("vlc") {
                     PlayerKind::Vlc
@@ -124,6 +129,8 @@ impl Player {
                     PlayerKind::Iina
                 } else if name.contains("mpv") {
                     PlayerKind::Mpv
+                } else if name.contains("catt") {
+                    PlayerKind::Catt
                 } else {
                     PlayerKind::Custom
                 }
@@ -296,6 +303,11 @@ impl Player {
                 );
                 args.push(OsString::from(title));
                 args.extend(command_flags.iter().map(OsString::from));
+            }
+            PlayerKind::Catt => {
+                args.push(OsString::from("cast"));
+                args.extend(command_flags.iter().map(OsString::from));
+                args.push(OsString::from(&stream.url));
             }
             PlayerKind::Custom => {
                 args.extend(command_flags.iter().map(OsString::from));
@@ -648,6 +660,48 @@ mod tests {
                 .any(|arg| arg == "--referrer=https://embed.example/")
         );
         assert!(args.iter().any(|arg| arg == "--force-media-title=Example"));
+    }
+
+    #[test]
+    fn configured_flatpak_mpv_path_runs_the_flatpak_app() {
+        let configured =
+            "/home/user/.local/share/flatpak/app/io.mpv.Mpv/x86_64/stable/active/files/bin/mpv";
+        let player = Player::from_configuration(false, false, false, Some(configured));
+        assert_eq!(player.command_name(), "flatpak");
+        assert!(player.supports_intro_skipping());
+
+        let args = player.arguments(&stream(), None, "Example");
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "io.mpv.Mpv");
+        assert_eq!(args.last().map(String::as_str), Some("https://cdn.example/video.m3u8"));
+    }
+
+    #[test]
+    fn configured_catt_player_uses_cast_subcommand() {
+        let player = Player::from_configuration(false, false, false, Some("catt"));
+        let args = player.arguments_with_extra(
+            &stream(),
+            None,
+            "Example",
+            &["--device".to_owned(), "Living Room".to_owned()],
+        );
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            vec![
+                "cast",
+                "--device",
+                "Living Room",
+                "https://cdn.example/video.m3u8"
+            ]
+        );
     }
 
     #[test]
