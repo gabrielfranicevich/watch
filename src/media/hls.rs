@@ -21,7 +21,7 @@ impl fmt::Display for HlsError {
 
 impl Error for HlsError {}
 
-pub fn parse_master_playlist(body: &str, master_url: &str, referer: Option<&str>) -> Result<Vec<HlsVariant>, HlsError> {
+pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVariant>, HlsError> {
     if !body.lines().any(|line| line.trim() == "#EXTM3U") {
         return Err(HlsError("response is not an HLS playlist".into()));
     }
@@ -50,7 +50,6 @@ pub fn parse_master_playlist(body: &str, master_url: &str, referer: Option<&str>
     if variants.is_empty() {
         return Err(HlsError("HLS master playlist contains no stream variants".into()));
     }
-    let _ = referer;
     Ok(variants)
 }
 
@@ -128,7 +127,7 @@ mod tests {
 
     #[test]
     fn parses_variants_and_resolves_relative_urls() {
-        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8", None).unwrap();
+        let variants = parse_master_playlist(PLAYLIST, "https://cdn.example/hls/master.m3u8").unwrap();
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0].url, "https://cdn.example/hls/360/index.m3u8");
         assert_eq!(variants[1].url, "https://cdn.example/1080/index.m3u8");
@@ -145,6 +144,6 @@ mod tests {
 
     #[test]
     fn rejects_non_playlist_response() {
-        assert!(parse_master_playlist("not a playlist", "https://cdn.example/master", None).is_err());
+        assert!(parse_master_playlist("not a playlist", "https://cdn.example/master").is_err());
     }
 }
