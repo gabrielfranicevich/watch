@@ -153,13 +153,7 @@ impl Player {
         media_flags: &[String],
     ) -> io::Result<ExitStatus> {
         Command::new(self.command_name())
-            .args(self.arguments_with_options(
-                stream,
-                subtitle,
-                title,
-                command_flags,
-                media_flags,
-            ))
+            .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
             .status()
     }
 
@@ -262,15 +256,20 @@ mod tests {
         );
     }
 
-
     #[test]
     fn forwards_external_audio_to_mpv_and_vlc() {
         let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
         let mpv = Player::Mpv.arguments(&stream, None, "Example");
-        assert!(mpv.iter().any(|arg| arg == "--audio-file=https://cdn.example/audio.m3u8"));
+        assert!(
+            mpv.iter()
+                .any(|arg| arg == "--audio-file=https://cdn.example/audio.m3u8")
+        );
 
         let vlc = Player::Vlc.arguments(&stream, None, "Example");
-        assert!(vlc.iter().any(|arg| arg == ":input-slave=https://cdn.example/audio.m3u8"));
+        assert!(
+            vlc.iter()
+                .any(|arg| arg == ":input-slave=https://cdn.example/audio.m3u8")
+        );
     }
 
     #[test]

@@ -6,7 +6,9 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
-use crate::media::hls::{into_stream, parse_default_audio_url, parse_master_playlist, select_quality};
+use crate::media::hls::{
+    into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
+};
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
 
@@ -247,7 +249,10 @@ mod tests {
             Some("12345".to_owned())
         );
         assert_eq!(mal_id_from_embed("https://embed.example/watch"), None);
-        assert_eq!(mal_id_from_embed("https://embed.example/mal/nope/watch"), None);
+        assert_eq!(
+            mal_id_from_embed("https://embed.example/mal/nope/watch"),
+            None
+        );
     }
 
     #[test]

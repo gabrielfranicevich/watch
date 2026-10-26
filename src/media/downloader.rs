@@ -71,7 +71,6 @@ mod tests {
         assert_eq!(args.last().map(String::as_str), Some("episode.mkv"));
     }
 
-
     #[test]
     fn maps_video_and_external_audio_when_present() {
         let stream = Stream::new(
@@ -85,11 +84,18 @@ mod tests {
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert!(args.windows(2).any(
-            |pair| pair[0] == "-i" && pair[1] == "https://cdn.example/audio.m3u8"
-        ));
-        assert!(args.windows(2).any(|pair| pair[0] == "-map" && pair[1] == "0:v:0"));
-        assert!(args.windows(2).any(|pair| pair[0] == "-map" && pair[1] == "1:a:0"));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-i" && pair[1] == "https://cdn.example/audio.m3u8")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-map" && pair[1] == "0:v:0")
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "-map" && pair[1] == "1:a:0")
+        );
     }
 
     #[test]
