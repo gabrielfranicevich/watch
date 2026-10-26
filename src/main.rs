@@ -1106,7 +1106,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["1", "2"]
         );
-        assert!(select_fixed_episodes(&episodes, None, None).unwrap().is_none());
+        assert!(
+            select_fixed_episodes(&episodes, None, None)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
