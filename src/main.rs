@@ -120,7 +120,7 @@ fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
 
 fn safe_filename(value: &str) -> String {
     value.chars().map(|character| {
-        if character.is_control() || ['<', '>', ':', '"', '/', '\\\\', '|', '?', '*'].contains(&character) {
+        if character.is_control() || ['<', '>', ':', '"', '/', '\\', '|', '?', '*'].contains(&character) {
             '_'
         } else {
             character
