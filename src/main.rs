@@ -228,18 +228,17 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && !command_available("mpv")
         && command_available("flatpak")
         && flatpak_mpv_installed();
-    let player = if cli.syncplay
-        || cli.vlc
-        || env_player.is_some()
-        || use_iina_default
-        || cfg!(target_os = "android")
-    {
+    let player = if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
         Player::from_configuration(
             cli.vlc,
             cli.syncplay,
-            use_iina_default,
+            false,
             env_player.as_deref(),
         )
+    } else if use_iina_default && command_available("iina") {
+        Player::from_configuration(false, false, false, Some("iina"))
+    } else if use_iina_default {
+        Player::Iina
     } else if use_flatpak_default {
         Player::FlatpakMpv
     } else if cfg!(target_os = "windows") || command_available("mpv") {

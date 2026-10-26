@@ -132,7 +132,10 @@ impl Player {
     }
 
     pub fn supports_intro_skipping(&self) -> bool {
-        matches!(self.kind(), PlayerKind::Mpv | PlayerKind::Syncplay)
+        matches!(
+            self.kind(),
+            PlayerKind::Mpv | PlayerKind::FlatpakMpv | PlayerKind::Syncplay
+        )
     }
 
     pub fn arguments(
@@ -555,6 +558,11 @@ mod tests {
         assert!(args.contains(&"Frieren Episode 4".to_owned()));
         assert!(args.contains(&"--debug".to_owned()));
         assert_eq!(Player::AndroidMpv.command_name(), "am");
+    }
+
+    #[test]
+    fn flatpak_mpv_supports_intro_skip_options() {
+        assert!(Player::FlatpakMpv.supports_intro_skipping());
     }
 
     #[test]
