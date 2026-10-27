@@ -111,11 +111,11 @@ pub fn read_paged_selection(
                 _ => {
                     writeln!(
                         output,
-                        "\r\nInvalid selection. Enter {} from 1 to {}.",
+                        "\r\nInvalid selection. {} from 1 to {}.",
                         if multi {
-                            "one or more numbers separated by spaces"
+                            "Choose one or more entries"
                         } else {
-                            "one number"
+                            "Choose an entry"
                         },
                         labels.len()
                     )?;
@@ -198,7 +198,7 @@ pub fn read_paged_selection(
             Key::Character('p' | 'P') if input.is_empty() && page > 0 => {
                 page -= 1;
                 input.clear();
-                line = prompt_line(prompt, page, page_count, multi);
+                line = prompt_line(prompt, page, page_count);
                 previous_width = 0;
                 render_page(
                     &mut output,
@@ -272,7 +272,7 @@ fn render_page<W: Write>(
         writeln!(output, "{:>index_width$}. {label}", index + 1)?;
     }
 
-    let line = prompt_line(view.prompt, view.page, view.page_count, view.multi);
+    let line = prompt_line(view.prompt, view.page, view.page_count);
     *previous_width = 0;
     write_prompt(output, &line, input, previous_width)
 }
