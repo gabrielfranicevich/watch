@@ -17,7 +17,7 @@ class AniCli < Formula
   end
 
   test do
-    assert_match "ani-cli", shell_output("#{bin}/watch --version")
+    assert_match "watch", shell_output("#{bin}/watch --version")
     assert_match "Usage:", shell_output("#{bin}/watch --help")
   end
 end

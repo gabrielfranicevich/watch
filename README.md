@@ -1,4 +1,4 @@
-# ani-cli
+# watch
 
 Search anime, select episodes, and stream or download them from your terminal.
 
@@ -6,16 +6,17 @@ Search anime, select episodes, and stream or download them from your terminal.
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
-ani-cli searches HiAnime, resolves available HLS streams, and hands playback or downloads to tools installed on your machine. It does not host video files.
+watch searches HiAnime, resolves available HLS streams, and hands playback or downloads to tools installed on your machine. It does not host video files.
 
 > **Project status:** the Rust implementation is developed on `develop`. Prebuilt binaries and updated third-party packages are not published yet; some package managers may still provide the historical shell version from `main`.
 
 <details>
 <summary>Contents</summary>
 
-- [Why ani-cli?](#why-ani-cli)
+- [Why watch?](#why-watch)
 - [Quick start](#quick-start)
 - [Examples](#examples)
+- [Interactive selection](#interactive-selection)
 - [What it supports](#what-it-supports)
 - [Common options](#common-options)
 - [Runtime dependencies](#runtime-dependencies)
@@ -32,41 +33,51 @@ Install stable Rust 1.85 or newer and Git, then install the CLI and search for a
 
 ~~~sh
 cargo install --git https://github.com/gabrielfranicevich/anime --branch develop
-ani-cli "Frieren"
+watch "Frieren"
 ~~~
 
-Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run ani-cli. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
+Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
+
+On Linux, `watch` may already refer to the system process-monitoring utility. If the wrong command runs, put Cargo’s binary directory (`~/.cargo/bin`) before system directories in `PATH`, or invoke `~/.cargo/bin/watch` explicitly. The Cargo package metadata and legacy `ANI_CLI_*` environment variable names remain unchanged.
 
 ## Examples
 
 ~~~sh
 # Search and play interactively
-ani-cli "Frieren"
+watch "Frieren"
 
 # Prefer 720p when the source offers it
-ani-cli --quality 720p "Frieren"
+watch --quality 720p "Frieren"
 
 # Download episodes 1 through 3
-ani-cli --download --episode 1-3 "Frieren"
+watch --download --episode 1-3 "Frieren"
 
 # Download individual episodes
-ani-cli --download --episode "1 3 5" "Frieren"
+watch --download --episode "1 3 5" "Frieren"
 
 # Render video inside a supported terminal
-ani-cli --inline "Frieren"
+watch --inline "Frieren"
 
 # Continue from watch history
-ani-cli --continue
+watch --continue
 
 # Show the next-episode countdown
-ani-cli --nextep-countdown "Frieren"
+watch --nextep-countdown "Frieren"
 ~~~
 
-Run `ani-cli --help` for the complete option list.
+Run `watch --help` for the complete option list.
 
-## Why ani-cli?
+## Interactive selection
 
-ani-cli is for terminal users who want to search for anime, choose episodes, resume from watch history, and download media through one command-line workflow. It coordinates these steps while leaving playback and media processing to tools installed on your system.
+- A single anime result is selected automatically with a message saying it is the only result. The same rule applies when an anime has only one available episode.
+- The built-in numbered menu displays up to 15 results per page. Press `n` for the next page and `p` for the previous page; item numbers remain global across pages.
+- Press `Backspace` with no number entered to go back. From episode selection it returns to the anime results; from the anime results it starts a fresh search. If the only anime result was auto-selected, Backspace from its episode list returns to the search prompt instead of reopening that same result.
+- Press `q` or `Esc` to cancel the current selection.
+- When `fzf` is available, it can filter and scroll the complete list. Backspace is reserved for navigating to the previous step rather than deleting text from the `fzf` filter.
+
+## Why watch?
+
+watch is for terminal users who want to search for anime, choose episodes, resume from watch history, and download media through one command-line workflow. It coordinates these steps while leaving playback and media processing to tools installed on your system.
 
 ## What it supports
 
@@ -102,7 +113,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 
 | Tool | When it is needed |
 | --- | --- |
-| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to ani-cli. `--inline` requires MPV with a terminal video output driver. |
+| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to watch. `--inline` requires MPV with a terminal video output driver. |
 | FFmpeg | Downloads and muxing separate audio/video streams. |
 | yt-dlp | Optional; preferred for supported single-stream downloads. |
 | fzf, rofi, or dmenu | Optional selection backends. |
@@ -148,4 +159,4 @@ Install players and command-line tools with your operating system's package mana
 
 ## License
 
-ani-cli is distributed under **GPL-3.0-only**. See [LICENSE](LICENSE).
+watch is distributed under **GPL-3.0-only**. See [LICENSE](LICENSE).

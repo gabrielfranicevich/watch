@@ -13,7 +13,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ~~~
 
-Run the CLI from source with `cargo run --release -- "Frieren"`. To inspect command-line behavior without searching the provider, use `cargo run -- --help` or `cargo run -- --version`.
+The installed executable is `watch`. Run it from source with `cargo run --release --bin watch -- "Frieren"`. To inspect command-line behavior without searching the provider, use `cargo run --bin watch -- --help` or `cargo run --bin watch -- --version`. On Linux, `watch` may conflict with the system process-monitoring utility; make sure Cargo’s binary directory is earlier in `PATH`.
 
 ## Source layout
 

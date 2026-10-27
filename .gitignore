@@ -10,3 +10,11 @@ Thumbs.db
 *~
 .vscode/
 .idea/
+
+# Local environment, logs, and transient download files
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.part

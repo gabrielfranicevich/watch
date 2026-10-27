@@ -4,7 +4,7 @@ The Rust implementation is developed on `develop`. The historical shell implemen
 
 ## Build and run
 
-Install stable Rust 1.85 or newer. From a checkout:
+Install stable Rust 1.85 or newer. The executable is named `watch`; the Cargo package metadata and `ANI_CLI_*` compatibility settings retain their historical names. From a checkout:
 
 ~~~sh
 cargo check --all-targets
@@ -12,13 +12,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 cargo fmt --all -- --check
 
-cargo run --release -- "Frieren"
-cargo run --release -- --download --episode 1-3 "Frieren"
-cargo run --release -- --continue
-cargo run --release -- --nextep-countdown "Frieren"
+cargo run --release --bin watch -- "Frieren"
+cargo run --release --bin watch -- --download --episode 1-3 "Frieren"
+cargo run --release --bin watch -- --continue
+cargo run --release --bin watch -- --nextep-countdown "Frieren"
 ~~~
 
-Player selection depends on the platform and which executables are available. On Windows, ani-cli checks for MPV and falls back to VLC when MPV is unavailable; if neither is available, install one or set `ANI_CLI_PLAYER` to an executable path. Linux can use Flatpak MPV when regular MPV is unavailable. macOS can use IINA, MPV, or VLC when installed. Termux/Android playback uses Android app integration and depends on the installed player. Syncplay and intro skipping require their respective external tools.
+On Linux, `watch` may conflict with the system process-monitoring utility; ensure Cargo’s binary directory is first on `PATH` or invoke `~/.cargo/bin/watch` explicitly. Player selection depends on the platform and which executables are available. On Windows, watch checks for MPV and falls back to VLC when MPV is unavailable; if neither is available, install one or set `ANI_CLI_PLAYER` to an executable path. Linux can use Flatpak MPV when regular MPV is unavailable. macOS can use IINA, MPV, or VLC when installed. Termux/Android playback uses Android app integration and depends on the installed player. Syncplay and intro skipping require their respective external tools.
 
 Downloads use yt-dlp when available for a compatible single media stream and FFmpeg as a fallback. Separate audio renditions are muxed with FFmpeg.
 

@@ -25,3 +25,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ocular-d/trailing-spaces@0.0.2
+
+  markdown-layout:
+    name: Markdown layout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep Markdown documentation under docs
+        shell: bash
+        run: |
+          test -f README.md
+          test -f docs/tutorial.md
+          unexpected="$(find . -type f -name '*.md' ! -path './README.md' ! -path './docs/*' ! -path './.git/*' -print)"
+          if [ -n "$unexpected" ]; then
+            printf 'Markdown files must live under docs/ (except README.md):\n%s\n' "$unexpected"
+            exit 1
+          fi

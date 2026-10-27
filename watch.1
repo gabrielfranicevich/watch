@@ -83,6 +83,9 @@ Use dmenu for selection.
 .B --skip
 Skip the intro when the selected player supports ani-skip.
 .TP
+.B --inline, --here
+Render video inside the terminal using a supported MPV graphics protocol.
+.TP
 .B --no-detach
 Keep playback attached to the terminal.
 .TP
@@ -94,6 +97,24 @@ Show the next-episode countdown before continuing into search/playback.
 .TP
 .B -U, --update
 Update the Rust installation from the selected Git branch using Cargo.
+.SH INTERACTIVE CONTROLS
+A single anime result or single available episode is selected automatically and reported to the user.
+.PP
+The built-in numbered menu shows 15 entries per page. Press
+.B n
+for the next page or
+.B p
+for the previous page. Selection numbers refer to the full list.
+.PP
+Press
+.B Backspace
+with an empty selection to return to the previous step. Backspace from anime results returns to the search prompt. Press
+.B q
+or
+.B Esc
+to cancel. When
+.B fzf
+is used, Backspace is reserved for navigating back instead of editing its filter.
 .SH ENVIRONMENT
 .TP
 .B ANI_CLI_DEFAULT_SOURCE
