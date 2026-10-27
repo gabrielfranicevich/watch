@@ -174,40 +174,6 @@ pub fn read_paged_selection(
                     &mut previous_width,
                 )?;
             }
-            Key::Character('n' | 'N') if input.is_empty() && page + 1 < page_count => {
-                page += 1;
-                input.clear();
-                line = prompt_line(prompt, page, page_count);
-                previous_width = 0;
-                render_page(
-                    &mut output,
-                    &PageView {
-                        labels,
-                        prompt,
-                        page,
-                        page_count,
-                    },
-                    &input,
-                    &mut previous_width,
-                )?;
-            }
-            Key::Character('p' | 'P') if input.is_empty() && page > 0 => {
-                page -= 1;
-                input.clear();
-                line = prompt_line(prompt, page, page_count);
-                previous_width = 0;
-                render_page(
-                    &mut output,
-                    &PageView {
-                        labels,
-                        prompt,
-                        page,
-                        page_count,
-                    },
-                    &input,
-                    &mut previous_width,
-                )?;
-            }
             Key::Character(character)
                 if character.is_ascii_digit() || (multi && character == ' ') =>
             {
