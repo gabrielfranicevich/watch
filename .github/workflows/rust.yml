@@ -67,8 +67,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install Android SDK and NDK
+      - name: Install Android SDK tools
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android NDK
         run: sdkmanager "ndk;27.2.12479018"
