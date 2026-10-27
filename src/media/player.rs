@@ -429,6 +429,12 @@ impl Player {
       return;
     }
 
+    if stream.referer.is_some() {
+      eprintln!(
+        "watch: this stream requires MPV-Android to send a Referer header.          In Android Settings, grant MPV-Android (is.xyz.mpv)          \"Allow access to manage all files\"; otherwise the player may open and immediately stop."
+      );
+    }
+
     let config_path = std::path::Path::new("/storage/emulated/0/mpv");
     if let Err(error) = ensure_android_mpv_config(config_path, &config) {
       eprintln!(
