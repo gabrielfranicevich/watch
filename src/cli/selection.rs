@@ -95,7 +95,6 @@ pub fn read_paged_selection(
             prompt,
             page,
             page_count,
-            multi,
         },
         &input,
         &mut previous_width,
@@ -153,7 +152,6 @@ pub fn read_paged_selection(
                         prompt,
                         page,
                         page_count,
-                        multi,
                     },
                     &input,
                     &mut previous_width,
@@ -171,7 +169,6 @@ pub fn read_paged_selection(
                         prompt,
                         page,
                         page_count,
-                        multi,
                     },
                     &input,
                     &mut previous_width,
@@ -189,7 +186,6 @@ pub fn read_paged_selection(
                         prompt,
                         page,
                         page_count,
-                        multi,
                     },
                     &input,
                     &mut previous_width,
@@ -207,7 +203,6 @@ pub fn read_paged_selection(
                         prompt,
                         page,
                         page_count,
-                        multi,
                     },
                     &input,
                     &mut previous_width,
@@ -244,7 +239,6 @@ struct PageView<'a> {
     prompt: &'a str,
     page: usize,
     page_count: usize,
-    multi: bool,
 }
 
 fn render_page<W: Write>(
