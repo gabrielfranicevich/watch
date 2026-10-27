@@ -249,11 +249,14 @@ mod tests {
         )];
 
         store.write(&entries).unwrap();
+        store.backup_legacy_entries().unwrap();
+
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
             "3\tanime/frieren\tFrieren\tprovider:monoschinos\n"
         );
         assert_eq!(store.read().unwrap(), entries);
+        assert!(!suffix_path(&path, ".v4").exists());
         remove_history_artifacts(&path);
     }
 
