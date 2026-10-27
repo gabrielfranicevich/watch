@@ -21,8 +21,9 @@ use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
+use ani_cli::providers::catalog::{AnimeOption, ProviderAnime, ProviderCatalog};
 use ani_cli::providers::hianime::HiAnimeProvider;
-use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
+use ani_cli::providers::site::{ProviderId, ProviderStreamResolver};
 
 fn main() -> ExitCode {
     match run() {
@@ -89,6 +90,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 
     let provider = HiAnimeProvider::new();
+    let catalog = ProviderCatalog::new();
     let mut active_source = if source == "history" {
         "history".to_owned()
     } else {
@@ -97,7 +99,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let mut pending_query = search_query;
     let mut cached_choices: Option<Vec<AnimeChoice>> = None;
 
-    let (anime, episodes, selected): (Anime, Vec<Episode>, Vec<Episode>) = loop {
+    let (anime, episodes, selected, active_provider): (Anime, Vec<Episode>, Vec<Episode>, ProviderId) = loop {
         let choices = if let Some(cached) = cached_choices.take() {
             cached
         } else if active_source == "history" {
@@ -110,7 +112,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 Some(query) => query,
                 None => read_search_query(&cli)?,
             };
-            search_anime_choices(&provider, &query)?
+            search_anime_choices(&catalog, &query)?
         };
 
         if choices.is_empty() {
@@ -129,11 +131,31 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             Err(error) => return Err(error),
         };
 
-        let choice = choices[selected_index].clone();
+        let mut choice = choices[selected_index].clone();
+        if choice.sources.len() > 1 {
+            let provider_labels: Vec<String> = choice.sources
+                .iter()
+                .map(|source| format!("{} — {}", source.provider.name(), source.anime.url))
+                .collect();
+            let provider_index = match select_item(&provider_labels, "Select provider: ", None, &cli) {
+                Ok(index) => index,
+                Err(error) if is_back_requested(error.as_ref()) => {
+                    cached_choices = Some(choices);
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let selected_source = choice.sources[provider_index].clone();
+            choice.provider = selected_source.provider;
+            choice.anime = selected_source.anime;
+        }
         println!("{}\n{}", choice.anime.title, choice.anime.url);
         let episodes = match choice.prefetched_episodes.clone() {
             Some(episodes) => episodes,
-            None => provider.episodes(&choice.anime)?,
+            None => catalog.episodes(&ProviderAnime {
+                provider: choice.provider,
+                anime: choice.anime.clone(),
+            })?,
         };
         if episodes.is_empty() {
             return Err(format!("no episodes found for '{}'", choice.anime.title).into());
@@ -187,10 +209,10 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 .collect()
         };
 
-        break (choice.anime, episodes, selected_episodes);
+        break (choice.anime, episodes, selected_episodes, choice.provider);
     };
 
-    let resolver = HiAnimeStreamResolver::new();
+    let resolver = catalog.resolver(active_provider);
     let mode = std::env::var("ANI_CLI_MODE").unwrap_or_else(|_| "sub".to_owned());
     let dubbed = cli.dubbed || mode.eq_ignore_ascii_case("dub");
     let quality = cli
@@ -302,7 +324,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
 }
 
 struct PlaybackConfig<'a> {
-    resolver: &'a HiAnimeStreamResolver,
+    resolver: &'a ProviderStreamResolver,
     player: Player,
     player_flags: Vec<String>,
     dubbed: bool,
@@ -696,20 +718,24 @@ fn ordered_episode_indices(mut indices: Vec<usize>) -> Vec<usize> {
 struct AnimeChoice {
     label: String,
     anime: Anime,
+    provider: ProviderId,
+    sources: Vec<ProviderAnime>,
     resume_episode: Option<String>,
     prefetched_episodes: Option<Vec<Episode>>,
 }
 
 fn search_anime_choices(
-    provider: &HiAnimeProvider,
+    catalog: &ProviderCatalog,
     query: &str,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
-    eprintln!("Searching HiAnime for: {query}");
-    let mut results = provider.search(query)?;
+    eprintln!("Searching anime providers for: {query}");
+    let mut results = catalog.search(query)?;
     let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
     if exact {
         let normalized_query = normalize_title(query);
-        results.retain(|result| normalize_title(&result.title) == normalized_query);
+        results.retain(|result| {
+            result.sources.iter().any(|source| normalize_title(&source.anime.title) == normalized_query)
+        });
     }
     if results.is_empty() {
         let message = if exact {
@@ -720,15 +746,20 @@ fn search_anime_choices(
         return Err(message.into());
     }
 
-    Ok(results
+    results
         .into_iter()
-        .map(|anime| AnimeChoice {
-            label: anime.title.clone(),
-            anime,
-            resume_episode: None,
-            prefetched_episodes: None,
+        .map(|option: AnimeOption| {
+            let primary = option.sources.first().ok_or("provider catalog returned a title without sources")?;
+            Ok(AnimeChoice {
+                label: option.label,
+                anime: primary.anime.clone(),
+                provider: primary.provider,
+                sources: option.sources,
+                resume_episode: None,
+                prefetched_episodes: None,
+            })
         })
-        .collect())
+        .collect()
 }
 
 fn history_anime_choices(
@@ -788,6 +819,8 @@ fn history_anime_choices(
                 entry.anime_title, next_episode.number
             ),
             anime,
+            provider: ProviderId::HiAnime,
+            sources: Vec::new(),
             resume_episode: Some(entry.episode_number),
             prefetched_episodes: Some(episodes),
         });
