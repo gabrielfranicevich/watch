@@ -666,6 +666,7 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
     ensure_success(status, "log viewer")
 }
 
+#[cfg(test)]
 fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io::Result<()> {
     record_history_for_provider(store, anime, episode, ProviderId::HiAnime)
 }
