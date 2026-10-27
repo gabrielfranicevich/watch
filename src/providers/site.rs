@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, time::Duration};
+use std::{collections::HashSet, fmt, thread, time::Duration};
 
 use reqwest::{Url, blocking::Client};
 use scraper::{Html, Selector};
@@ -332,42 +332,74 @@ impl SiteProvider {
   }
 
   pub fn search(&self, query: &str) -> Result<Vec<Anime>, SiteError> {
+    let routes: Vec<_> = self
+      .id
+      .search_routes()
+      .iter()
+      .map(|route| self.search_url(route, query).map(|url| (*route, url)))
+      .collect::<Result<_, _>>()?;
+
+    // Search every supported route concurrently. Sites often change their search
+    // parameter or path, and a later route can return results the first one misses.
+    let handles: Vec<_> = routes
+      .into_iter()
+      .map(|(route, url)| {
+        let client = self.client.clone();
+        let provider = self.id;
+        let query = query.to_owned();
+        thread::spawn(move || {
+          let response = client.get(url).send().map_err(|error| {
+            SiteError(format!(
+              "{} search request failed: {error}",
+              provider.name()
+            ))
+          })?;
+          let status = response.status();
+          let final_url = response.url().to_string();
+          let body = response.text().map_err(|error| {
+            SiteError(format!(
+              "{} search response failed: {error}",
+              provider.name()
+            ))
+          })?;
+          if is_verification_page(&body) {
+            return Err(SiteError(format!(
+              "{} returned an anti-bot verification page",
+              provider.name()
+            )));
+          }
+          if !status.is_success() {
+            return Err(SiteError(format!(
+              "{} returned HTTP status {status}",
+              provider.name()
+            )));
+          }
+          let results = parse_search_results(&body, &final_url, provider, &query);
+          let _ = route;
+          Ok(results)
+        })
+      })
+      .collect();
+
+    let mut results = Vec::new();
     let mut last_error = "no search route returned recognizable results".to_owned();
-    for route in self.id.search_routes() {
-      let url = self.search_url(route, query)?;
-      let response = match self.client.get(url).send() {
-        Ok(response) => response,
-        Err(error) => {
-          last_error = format!("request failed: {error}");
-          continue;
-        }
-      };
-      let status = response.status();
-      let final_url = response.url().to_string();
-      let body = match response.text() {
-        Ok(body) => body,
-        Err(error) => {
-          last_error = format!("could not read response: {error}");
-          continue;
-        }
-      };
-      if is_verification_page(&body) {
-        last_error = "site returned an anti-bot verification page".to_owned();
-        continue;
-      }
-      if !status.is_success() {
-        last_error = format!("site returned HTTP status {status}");
-        continue;
-      }
-      let results = parse_search_results(&body, &final_url, self.id, query);
-      if !results.is_empty() {
-        return Ok(results);
+    for handle in handles {
+      match handle.join() {
+        Ok(Ok(route_results)) => results.extend(route_results),
+        Ok(Err(error)) => last_error = error.to_string(),
+        Err(_) => last_error = "search route worker panicked".to_owned(),
       }
     }
-    Err(SiteError(format!(
-      "{} search failed: {last_error}",
-      self.id.name()
-    )))
+
+    let mut seen = HashSet::new();
+    results.retain(|anime| seen.insert(anime.id.clone()));
+    if results.is_empty() {
+      return Err(SiteError(format!(
+        "{} search failed: {last_error}",
+        self.id.name()
+      )));
+    }
+    Ok(results)
   }
 
   fn search_url(&self, route: &SearchRoute, query: &str) -> Result<Url, SiteError> {
