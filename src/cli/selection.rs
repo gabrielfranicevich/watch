@@ -330,9 +330,7 @@ fn key_from_windows_event(
         VK_ESCAPE => Key::Escape,
         VK_LEFT => Key::Left,
         VK_RIGHT => Key::Right,
-        VK_C if control_key_state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0 => {
-            Key::Cancel
-        }
+        VK_C if control_key_state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0 => Key::Cancel,
         _ => match char::from_u32(unicode_char as u32) {
             Some(character) if character != '\0' => key_from_character(character),
             _ => Key::Other,
@@ -668,9 +666,15 @@ mod tests {
         assert_eq!(key_from_windows_event(true, 0x25, 0, 0), Some(Key::Left));
         assert_eq!(key_from_windows_event(true, 0x27, 0, 0), Some(Key::Right));
         assert_eq!(key_from_windows_event(true, 0x1b, 0, 0), Some(Key::Escape));
-        assert_eq!(key_from_windows_event(true, 0x08, 0, 0), Some(Key::Backspace));
+        assert_eq!(
+            key_from_windows_event(true, 0x08, 0, 0),
+            Some(Key::Backspace)
+        );
         assert_eq!(key_from_windows_event(true, 0x0d, 0, 0), Some(Key::Enter));
-        assert_eq!(key_from_windows_event(true, 0x43, 3, 0x0008), Some(Key::Cancel));
+        assert_eq!(
+            key_from_windows_event(true, 0x43, 3, 0x0008),
+            Some(Key::Cancel)
+        );
         assert_eq!(
             key_from_windows_event(true, 0x51, 'q' as u16, 0),
             Some(Key::Character('q'))
