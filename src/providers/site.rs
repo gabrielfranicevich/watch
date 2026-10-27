@@ -1135,7 +1135,7 @@ mod tests {
           .unwrap();
         let mut request = Vec::new();
         let mut buffer = [0_u8; 2048];
-        while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+        while !request.windows(4).any(|part| part == b"\r\n\r\n") {
           let count = connection.read(&mut buffer).unwrap();
           if count == 0 {
             break;
@@ -1158,7 +1158,7 @@ mod tests {
         };
         write!(
           connection,
-          "HTTP/1.1 200 OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{}",
+          "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
           body.len(),
           body
         )
