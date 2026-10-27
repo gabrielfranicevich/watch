@@ -9,7 +9,7 @@ use ani_cli::application::{
     effective_source, next_episode_after, normalize_title, select_fixed_episodes,
 };
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
-use ani_cli::cli::selection::read_selection;
+use ani_cli::cli::selection::{read_paged_selection, read_selection, BackRequested, SelectionOutcome};
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
@@ -26,7 +26,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("ani-cli: {error}");
+            eprintln!("watch: {error}");
             ExitCode::from(1)
         }
     }
@@ -39,7 +39,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     if cli.version {
-        println!("ani-cli {}", ani_cli::version());
+        println!("watch {}", ani_cli::version());
         return Ok(ExitCode::SUCCESS);
     }
     if cli.inline_playback && (!io::stdin().is_terminal() || !io::stdout().is_terminal()) {
@@ -79,7 +79,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             None => read_search_query(&cli)?,
         };
         if let Err(error) = AnimeScheduleProvider::new().show_countdown(&query) {
-            eprintln!("ani-cli: warning: could not fetch next-episode countdown: {error}");
+            eprintln!("watch: warning: could not fetch next-episode countdown: {error}");
         }
         // The original script prints the countdown and then continues into
         // the normal anime search/playback flow using the same query.
@@ -87,139 +87,104 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 
     let provider = HiAnimeProvider::new();
-    let (anime, resume_episode, prefetched_episodes) = if source == "history" {
-        let store = history
-            .as_ref()
-            .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
-        store.backup_legacy_entries()?;
-        let entries = store.read()?;
-        if entries.is_empty() {
-            return Err("watch history is empty".into());
+    let mut active_source = if source == "history" {
+        "history".to_owned()
+    } else {
+        "search".to_owned()
+    };
+    let mut pending_query = search_query;
+    let mut cached_choices: Option<Vec<AnimeChoice>> = None;
+
+    let (anime, selected): (Anime, Vec<Episode>) = loop {
+        let choices = if let Some(cached) = cached_choices.take() {
+            cached
+        } else if active_source == "history" {
+            let store = history
+                .as_ref()
+                .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
+            history_anime_choices(&provider, store)?
+        } else {
+            let query = match pending_query.take() {
+                Some(query) => query,
+                None => read_search_query(&cli)?,
+            };
+            search_anime_choices(&provider, &query)?
+        };
+
+        if choices.is_empty() {
+            return Err("no anime choices available".into());
         }
 
-        let mut recent = Vec::<HistoryEntry>::new();
-        for entry in entries.into_iter().rev() {
-            if !recent.iter().any(|item| item.anime_id == entry.anime_id) {
-                recent.push(entry);
+        let labels: Vec<String> = choices.iter().map(|choice| choice.label.clone()).collect();
+        let selected_index = match select_item(&labels, "Select anime: ", cli.select_index, &cli) {
+            Ok(index) => index,
+            Err(error) if is_back_requested(error.as_ref()) => {
+                active_source = "search".to_owned();
+                pending_query = None;
+                cached_choices = None;
+                continue;
             }
+            Err(error) => return Err(error),
+        };
+
+        let choice = choices[selected_index].clone();
+        println!("{}\n{}", choice.anime.title, choice.anime.url);
+        let episodes = match choice.prefetched_episodes.clone() {
+            Some(episodes) => episodes,
+            None => provider.episodes(&choice.anime)?,
+        };
+        if episodes.is_empty() {
+            return Err(format!("no episodes found for '{}'", choice.anime.title).into());
         }
 
-        let mut candidates = Vec::new();
-        for entry in recent {
-            let candidate_anime = Anime::new(
-                entry.anime_id.clone(),
-                entry.anime_title.clone(),
-                format!("https://hianime.at/{}", entry.anime_id),
-            );
-            let candidate_episodes = match provider.episodes(&candidate_anime) {
-                Ok(episodes) => episodes,
-                Err(error) => {
-                    eprintln!(
-                        "Skipping '{}' in history because its episode list could not be loaded: {error}",
-                        entry.anime_title
-                    );
+        let selected_episodes = if let Some(selected) = select_fixed_episodes(
+            &episodes,
+            cli.episode_range.as_deref(),
+            choice.resume_episode.as_deref(),
+        )? {
+            selected
+        } else {
+            let episode_labels: Vec<String> = episodes
+                .iter()
+                .map(|episode| {
+                    format!(
+                        "Episode {}{}",
+                        episode.number,
+                        episode
+                            .title
+                            .as_deref()
+                            .map(|title| format!(" — {title}"))
+                            .unwrap_or_default()
+                    )
+                })
+                .collect();
+
+            let indices = match select_items(&episode_labels, "Select episode: ", None, true, &cli) {
+                Ok(indices) => indices,
+                Err(error) if is_back_requested(error.as_ref()) => {
+                    if choices.len() > 1 {
+                        let mut choices = choices;
+                        choices[selected_index].prefetched_episodes = Some(episodes);
+                        cached_choices = Some(choices);
+                    } else {
+                        // With one result, returning to its list would immediately
+                        // select it again, so return to the search prompt instead.
+                        active_source = "search".to_owned();
+                        pending_query = None;
+                        cached_choices = None;
+                    }
                     continue;
                 }
+                Err(error) => return Err(error),
             };
-            if !candidate_episodes
-                .iter()
-                .any(|episode| episode.number == entry.episode_number)
-            {
-                eprintln!(
-                    "Skipping '{}' in history because episode {} is no longer available",
-                    entry.anime_title, entry.episode_number
-                );
-                continue;
-            }
-            let Some(next_episode) = next_episode_after(&candidate_episodes, &entry.episode_number)
-            else {
-                eprintln!(
-                    "Skipping '{}' in history because it has no next episode",
-                    entry.anime_title
-                );
-                continue;
-            };
-            let next_episode_number = next_episode.number.clone();
-            candidates.push((
-                entry,
-                candidate_anime,
-                candidate_episodes,
-                next_episode_number,
-            ));
-        }
-        if candidates.is_empty() {
-            return Err("no unwatched series in history".into());
-        }
 
-        let labels: Vec<String> = candidates
-            .iter()
-            .map(|(entry, _, _, next_episode)| {
-                format!("{} — next episode {}", entry.anime_title, next_episode)
-            })
-            .collect();
-        let selected_index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
-        let (entry, candidate_anime, episodes, _) = candidates.remove(selected_index);
-        (candidate_anime, Some(entry.episode_number), Some(episodes))
-    } else {
-        let query = match search_query.as_deref() {
-            Some(query) => query.to_owned(),
-            None => read_search_query(&cli)?,
+            indices
+                .into_iter()
+                .map(|index| episodes[index].clone())
+                .collect()
         };
-        eprintln!("Searching HiAnime for: {query}");
-        let mut results = provider.search(&query)?;
-        let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
-        if exact {
-            let normalized_query = normalize_title(&query);
-            results.retain(|result| normalize_title(&result.title) == normalized_query);
-        }
-        if results.is_empty() {
-            let message = if exact {
-                format!("no exact match found for '{query}'")
-            } else {
-                format!("no results found for '{query}'")
-            };
-            return Err(message.into());
-        }
-        let labels: Vec<String> = results.iter().map(|result| result.title.clone()).collect();
-        let index = select_item(&labels, "Select anime: ", cli.select_index, &cli)?;
-        (results[index].clone(), None, None)
-    };
 
-    println!("{}\n{}", anime.title, anime.url);
-    let episodes = match prefetched_episodes {
-        Some(episodes) => episodes,
-        None => provider.episodes(&anime)?,
-    };
-    if episodes.is_empty() {
-        return Err(format!("no episodes found for '{}'", anime.title).into());
-    }
-
-    let selected: Vec<Episode> = if let Some(selected) = select_fixed_episodes(
-        &episodes,
-        cli.episode_range.as_deref(),
-        resume_episode.as_deref(),
-    )? {
-        selected
-    } else {
-        let labels: Vec<String> = episodes
-            .iter()
-            .map(|episode| {
-                format!(
-                    "Episode {}{}",
-                    episode.number,
-                    episode
-                        .title
-                        .as_deref()
-                        .map(|title| format!(" — {title}"))
-                        .unwrap_or_default()
-                )
-            })
-            .collect();
-        let indices = select_items(&labels, "Select episode: ", None, true, &cli)?;
-        indices
-            .into_iter()
-            .map(|index| episodes[index].clone())
-            .collect()
+        break (choice.anime, selected_episodes);
     };
 
     let resolver = HiAnimeStreamResolver::new();
@@ -399,7 +364,7 @@ impl PlaybackConfig<'_> {
                     media.stream.referer.as_deref(),
                     &subtitle_path,
                 ) {
-                    eprintln!("ani-cli: warning: could not download subtitles: {error}");
+                    eprintln!("watch: warning: could not download subtitles: {error}");
                 }
             }
 
@@ -617,7 +582,7 @@ fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::Erro
         .parent()
         .ok_or("cannot determine Cargo installation root")?;
 
-    eprintln!("Updating ani-cli from branch '{branch}'...");
+    eprintln!("Updating watch from branch '{branch}'...");
     let status = Command::new("cargo")
         .args(updater_arguments(install_root, branch))
         .status()
@@ -632,7 +597,7 @@ fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::Erro
             }
         })?;
     ensure_success(status, "cargo install")?;
-    eprintln!("ani-cli update completed.");
+    eprintln!("watch update completed.");
     Ok(())
 }
 
@@ -724,6 +689,114 @@ fn ordered_episode_indices(mut indices: Vec<usize>) -> Vec<usize> {
     indices
 }
 
+#[derive(Debug, Clone)]
+struct AnimeChoice {
+    label: String,
+    anime: Anime,
+    resume_episode: Option<String>,
+    prefetched_episodes: Option<Vec<Episode>>,
+}
+
+fn search_anime_choices(
+    provider: &HiAnimeProvider,
+    query: &str,
+) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
+    eprintln!("Searching HiAnime for: {query}");
+    let mut results = provider.search(query)?;
+    let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
+    if exact {
+        let normalized_query = normalize_title(query);
+        results.retain(|result| normalize_title(&result.title) == normalized_query);
+    }
+    if results.is_empty() {
+        let message = if exact {
+            format!("no exact match found for '{query}'")
+        } else {
+            format!("no results found for '{query}'")
+        };
+        return Err(message.into());
+    }
+
+    Ok(results
+        .into_iter()
+        .map(|anime| AnimeChoice {
+            label: anime.title.clone(),
+            anime,
+            resume_episode: None,
+            prefetched_episodes: None,
+        })
+        .collect())
+}
+
+fn history_anime_choices(
+    provider: &HiAnimeProvider,
+    store: &HistoryStore,
+) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
+    store.backup_legacy_entries()?;
+    let entries = store.read()?;
+    if entries.is_empty() {
+        return Err("watch history is empty".into());
+    }
+
+    let mut recent = Vec::<HistoryEntry>::new();
+    for entry in entries.into_iter().rev() {
+        if !recent.iter().any(|item| item.anime_id == entry.anime_id) {
+            recent.push(entry);
+        }
+    }
+
+    let mut choices = Vec::new();
+    for entry in recent {
+        let anime = Anime::new(
+            entry.anime_id.clone(),
+            entry.anime_title.clone(),
+            format!("https://hianime.at/{}", entry.anime_id),
+        );
+        let episodes = match provider.episodes(&anime) {
+            Ok(episodes) => episodes,
+            Err(error) => {
+                eprintln!(
+                    "Skipping '{}' in history because its episode list could not be loaded: {error}",
+                    entry.anime_title
+                );
+                continue;
+            }
+        };
+        if !episodes
+            .iter()
+            .any(|episode| episode.number == entry.episode_number)
+        {
+            eprintln!(
+                "Skipping '{}' in history because episode {} is no longer available",
+                entry.anime_title, entry.episode_number
+            );
+            continue;
+        }
+        let Some(next_episode) = next_episode_after(&episodes, &entry.episode_number) else {
+            eprintln!(
+                "Skipping '{}' in history because it has no next episode",
+                entry.anime_title
+            );
+            continue;
+        };
+        choices.push(AnimeChoice {
+            label: format!("{} — next episode {}", entry.anime_title, next_episode.number),
+            anime,
+            resume_episode: Some(entry.episode_number),
+            prefetched_episodes: Some(episodes),
+        });
+    }
+
+    if choices.is_empty() {
+        return Err("no unwatched series in history".into());
+    }
+    Ok(choices)
+}
+
+fn is_back_requested(error: &(dyn std::error::Error + 'static)) -> bool {
+    error.downcast_ref::<BackRequested>().is_some()
+}
+
 fn select_item(
     labels: &[String],
     prompt: &str,
@@ -757,6 +830,18 @@ fn select_items(
         return Ok(vec![index]);
     }
 
+    if labels.len() == 1 {
+        let kind = if prompt.to_ascii_lowercase().contains("episode") {
+            "episode"
+        } else if prompt.to_ascii_lowercase().contains("anime") {
+            "anime option"
+        } else {
+            "option"
+        };
+        println!("Only one {kind} available; selecting it automatically: {}", labels[0]);
+        return Ok(vec![0]);
+    }
+
     let backend = menu_backend_for_cli(cli);
 
     match menu::select(labels, prompt, backend.as_deref(), multi)? {
@@ -769,11 +854,27 @@ fn select_items(
             }
         }
         MenuOutcome::Cancelled => Err("selection cancelled".into()),
+        MenuOutcome::Back => Err(Box::new(BackRequested)),
         MenuOutcome::Unavailable => {
-            for (index, label) in labels.iter().enumerate() {
-                println!("{:>2}. {}", index + 1, label);
+            if io::stdin().is_terminal() && io::stdout().is_terminal() {
+                match read_paged_selection(labels, prompt, multi)? {
+                    SelectionOutcome::Selected(indices) => {
+                        let indices = ordered_episode_indices(indices);
+                        if indices.is_empty() {
+                            Err("selection cancelled".into())
+                        } else {
+                            Ok(indices)
+                        }
+                    }
+                    SelectionOutcome::Back => Err(Box::new(BackRequested)),
+                    SelectionOutcome::Cancelled => Err("selection cancelled".into()),
+                }
+            } else {
+                for (index, label) in labels.iter().enumerate() {
+                    println!("{:>2}. {}", index + 1, label);
+                }
+                Ok(vec![read_index(labels.len())?])
             }
-            Ok(vec![read_index(labels.len())?])
         }
     }
 }

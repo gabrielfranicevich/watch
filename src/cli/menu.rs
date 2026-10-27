@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 pub enum MenuOutcome {
     Selected(Vec<usize>),
     Cancelled,
+    Back,
     Unavailable,
 }
 
@@ -98,7 +99,7 @@ pub fn select(
     let mut command = Command::new(program);
     match program.rsplit('/').next().unwrap_or(program) {
         "fzf" => {
-            command.args(["--reverse", "--cycle", "--prompt", prompt]);
+            command.args(["--reverse", "--cycle", "--prompt", prompt, "--expect=backspace"]);
             if multi {
                 command.arg("--multi");
             }
@@ -159,6 +160,10 @@ pub fn select(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.lines().next() == Some("backspace") {
+        return Ok(MenuOutcome::Back);
+    }
+
     let mut selected = Vec::new();
     for line in stdout.lines() {
         if let Some(index) = parse_selected_index(line, items) {

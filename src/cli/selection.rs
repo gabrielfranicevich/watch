@@ -82,7 +82,7 @@ pub fn read_paged_selection(
     let page_count = labels.len().div_ceil(PAGE_SIZE);
     let mut page = 0;
     let mut input = String::new();
-    let line = prompt_line(prompt, page, page_count, multi);
+    let mut line = prompt_line(prompt, page, page_count, multi);
     let mut previous_width = 0;
 
     render_page(
@@ -139,6 +139,7 @@ pub fn read_paged_selection(
             Key::Character('n' | 'N') if input.is_empty() && page + 1 < page_count => {
                 page += 1;
                 input.clear();
+                line = prompt_line(prompt, page, page_count, multi);
                 previous_width = 0;
                 render_page(
                     &mut output,
@@ -154,6 +155,7 @@ pub fn read_paged_selection(
             Key::Character('p' | 'P') if input.is_empty() && page > 0 => {
                 page -= 1;
                 input.clear();
+                line = prompt_line(prompt, page, page_count, multi);
                 previous_width = 0;
                 render_page(
                     &mut output,
@@ -204,8 +206,7 @@ fn render_page<W: Write>(
     input: &str,
     previous_width: &mut usize,
 ) -> io::Result<()> {
-    let start = page * PAGE_SIZE;
-    let end = (start + PAGE_SIZE).min(labels.len());
+    let range = page_bounds(labels.len(), page);
     let index_width = labels.len().to_string().len();
     writeln!(
         output,
@@ -214,7 +215,7 @@ fn render_page<W: Write>(
         page + 1,
         page_count
     )?;
-    for (index, label) in labels.iter().enumerate().take(end).skip(start) {
+    for (index, label) in labels.iter().enumerate().take(range.end).skip(range.start) {
         writeln!(output, "{:>index_width$}. {label}", index + 1)?;
     }
 
