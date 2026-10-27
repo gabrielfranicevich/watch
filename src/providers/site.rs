@@ -211,6 +211,7 @@ impl SiteProvider {
                 }
             };
             let status = response.status();
+            let final_url = response.url().to_string();
             let body = match response.text() {
                 Ok(body) => body,
                 Err(error) => {
@@ -226,7 +227,7 @@ impl SiteProvider {
                 last_error = format!("site returned HTTP status {status}");
                 continue;
             }
-            let results = parse_search_results(&body, &self.base_url, self.id, query);
+            let results = parse_search_results(&body, &final_url, self.id, query);
             if !results.is_empty() {
                 return Ok(results);
             }
@@ -260,7 +261,7 @@ impl SiteProvider {
             return Err(SiteError(format!("{} returned HTTP status {status} while loading episodes", self.id.name())));
         }
 
-        let mut episodes = parse_episode_links(&body, &self.base_url, &anime.url);
+        let mut episodes = parse_episode_links(&body, &anime.url, &anime.url);
         if episodes.is_empty() {
             if let Ok(url) = Url::parse(&anime.url) {
                 if is_episode_page(&url) {
