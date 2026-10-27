@@ -5,7 +5,6 @@ use scraper::{Html, Selector};
 
 use crate::domain::{anime::Anime, episode::Episode, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{into_stream, parse_default_audio_url, parse_master_playlist, select_quality};
-use super::hianime::HiAnimeProvider;
 use super::hianime_stream::{HiAnimeStreamResolver, QualityOption, ResolvedMedia, StreamResolveError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -475,9 +474,13 @@ impl SiteStreamResolver {
         let document = Html::parse_document(&body);
         let subtitle = find_subtitle(&document, page_url);
         let media_candidates = extract_media_urls(&body, page_url);
-        for candidate in media_candidates.iter().filter(|url| url.to_ascii_lowercase().contains(".m3u8"))
-            .chain(media_candidates.iter().filter(|url| url.to_ascii_lowercase().contains(".mp4")))
-        {
+        for candidate in media_candidates.iter().filter(|url| url.to_ascii_lowercase().contains(".m3u8")) {
+            if let Ok(mut media) = self.resolve_media_url(candidate, page_url, quality) {
+                if media.subtitle.is_none() { media.subtitle = subtitle.clone(); }
+                return Ok(media);
+            }
+        }
+        for candidate in media_candidates.iter().filter(|url| url.to_ascii_lowercase().contains(".mp4")) {
             if let Ok(mut media) = self.resolve_media_url(candidate, page_url, quality) {
                 if media.subtitle.is_none() { media.subtitle = subtitle.clone(); }
                 return Ok(media);
