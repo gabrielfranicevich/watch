@@ -163,7 +163,11 @@ fn clean_display_title(title: &str) -> String {
     ] {
         if title.to_lowercase().ends_with(&suffix.to_lowercase()) {
             title.truncate(title.len() - suffix.len());
-            title = title.trim().to_owned();
+            title = title
+                .trim()
+                .trim_end_matches([':', '-', '–', '—', '|'])
+                .trim()
+                .to_owned();
         }
     }
     title
