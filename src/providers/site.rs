@@ -343,7 +343,7 @@ impl SiteProvider {
     // parameter or path, and a later route can return results the first one misses.
     let handles: Vec<_> = routes
       .into_iter()
-      .map(|(route, url)| {
+      .map(|(_route, url)| {
         let client = self.client.clone();
         let provider = self.id;
         let query = query.to_owned();
@@ -375,7 +375,6 @@ impl SiteProvider {
             )));
           }
           let results = parse_search_results(&body, &final_url, provider, &query);
-          let _ = route;
           Ok(results)
         })
       })
