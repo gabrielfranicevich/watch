@@ -7,7 +7,7 @@ This tutorial covers installation, searching, playback, downloads, and watch his
 Install stable Rust 1.85 or newer and Git, then run:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/anime --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
 watch --version
 ~~~
 
@@ -16,8 +16,8 @@ If `watch` is not found, make sure Cargo's binary directory (`~/.cargo/bin`, or 
 To build from a checkout instead:
 
 ~~~sh
-git clone --branch develop https://github.com/gabrielfranicevich/anime.git
-cd anime
+git clone --branch develop https://github.com/gabrielfranicevich/watch.git
+cd watch
 cargo build --release
 ./target/release/watch --version
 ~~~
@@ -148,4 +148,4 @@ Use `auto` or unset the variable to restore detection. To see the output drivers
 
 **The command is not found after Cargo installation.** Add Cargo's binary directory to your `PATH`, then open a new terminal.
 
-For platform caveats, see the [Rust migration notes](rust-migration.md). To report a reproducible problem, include the watch version, operating system, command, expected behavior, and error output in a [GitHub issue](https://github.com/gabrielfranicevich/anime/issues).
+For platform caveats, see the [Rust migration notes](rust-migration.md). To report a reproducible problem, include the watch version, operating system, command, expected behavior, and error output in a [GitHub issue](https://github.com/gabrielfranicevich/watch/issues).
