@@ -414,16 +414,47 @@ impl Player {
       return;
     }
 
-    let config_path = std::path::Path::new("/storage/emulated/0/mpv");
-    if std::fs::create_dir_all(config_path).is_err() {
+    let config = android_mpv_config(stream, subtitle);
+    if config.is_empty() {
       return;
     }
-    let config = android_mpv_config(stream, subtitle);
-    if !config.is_empty() {
-      let path = config_path.join("mpv.config.mp4");
-      let _ = std::fs::write(path, config);
+
+    let config_path = std::path::Path::new("/storage/emulated/0/mpv");
+    if let Err(error) = ensure_android_mpv_config(config_path, &config) {
+      eprintln!(
+        "watch: warning: could not configure MPV for this stream: {error}. \
+         Run `termux-setup-storage` and allow MPV-Android access to shared storage; \
+         streams requiring a Referer header may otherwise fail."
+      );
     }
   }
+}
+
+fn ensure_android_mpv_config(config_dir: &std::path::Path, config: &str) -> io::Result<()> {
+  std::fs::create_dir_all(config_dir)?;
+
+  let stream_config = config_dir.join("mpv.config.mp4");
+  std::fs::write(&stream_config, config)?;
+
+  // MPV-Android does not automatically load arbitrary files in shared storage.
+  // Ensure its standard shared-storage config includes the per-stream options.
+  let main_config = config_dir.join("mpv.conf");
+  let include_line = format!("include={}", stream_config.display());
+  let existing = std::fs::read_to_string(&main_config).unwrap_or_default();
+  if existing.lines().any(|line| line.trim() == include_line) {
+    return Ok(());
+  }
+
+  use std::io::Write as _;
+  let mut file = std::fs::OpenOptions::new()
+    .create(true)
+    .append(true)
+    .open(main_config)?;
+  if !existing.is_empty() && !existing.ends_with('\n') {
+    file.write_all(b"\n")?;
+  }
+  writeln!(file, "{include_line}")?;
+  Ok(())
 }
 
 fn contextualize_program_error(error: io::Error, program: &str) -> io::Error {
@@ -666,6 +697,37 @@ mod tests {
         "audio-file=https://cdn.example/audio.m3u8\n"
       )
     );
+  }
+
+  #[test]
+  fn android_mpv_config_is_included_by_the_standard_config_and_preserves_user_settings() {
+    let config_dir = std::env::temp_dir().join(format!(
+      "watch-mpv-config-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+    ));
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(config_dir.join("mpv.conf"), "hwdec=auto").unwrap();
+
+    ensure_android_mpv_config(&config_dir, "referrer=https://embed.example/\n").unwrap();
+    ensure_android_mpv_config(&config_dir, "referrer=https://embed.example/\n").unwrap();
+
+    let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
+    assert!(main_config.starts_with("hwdec=auto\n"));
+    let include_line = format!("include={}/mpv.config.mp4", config_dir.display());
+    assert_eq!(
+      main_config.lines().filter(|line| *line == include_line).count(),
+      1
+    );
+    assert_eq!(
+      std::fs::read_to_string(config_dir.join("mpv.config.mp4")).unwrap(),
+      "referrer=https://embed.example/\n"
+    );
+
+    std::fs::remove_dir_all(config_dir).unwrap();
   }
 
   #[test]
