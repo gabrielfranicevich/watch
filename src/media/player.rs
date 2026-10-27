@@ -290,6 +290,8 @@ impl Player {
             "0",
             "-a",
             "android.intent.action.VIEW",
+            "-t",
+            "video/any",
             "-d",
           ]
           .into_iter()
@@ -650,6 +652,11 @@ mod tests {
       .collect();
     assert_eq!(args[0], "start");
     assert_eq!(args[1], "--user");
+    assert!(
+      args
+        .windows(2)
+        .any(|pair| pair[0] == "-t" && pair[1] == "video/any")
+    );
     assert!(
       args
         .windows(2)
