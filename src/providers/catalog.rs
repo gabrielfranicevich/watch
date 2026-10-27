@@ -165,7 +165,7 @@ fn clean_display_title(title: &str) -> String {
             title.truncate(title.len() - suffix.len());
             title = title
                 .trim()
-                .trim_end_matches(|character: char| matches!(character, ':' | '-' | '–' | '—' | '|'))
+                .trim_end_matches([':', '-', '–', '—', '|'])
                 .trim()
                 .to_owned();
         }
