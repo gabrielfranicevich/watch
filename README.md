@@ -6,7 +6,7 @@ Search anime, select episodes, and stream or download them from your terminal.
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
-watch searches HiAnime, resolves available HLS streams, and hands playback or downloads to tools installed on your machine. It does not host video files.
+watch searches English and Spanish anime providers, groups duplicate titles by language, and hands playable media or downloads to tools installed on your machine. It does not host video files.
 
 > **Project status:** the Rust implementation is developed on `develop`. Prebuilt binaries and updated third-party packages are not published yet; some package managers may still provide the historical shell version from `main`.
 
@@ -81,7 +81,8 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 
 ## What it supports
 
-- HiAnime title search and episode selection.
+- Parallel title search across HiAnime, Gogoanime, AniWatch, 9anime, AnimeKai, MonosChinos, TioAnime, Animeblix, AnimeFenix, and JKAnime.
+- Duplicate titles are grouped by normalized title and language; when a title appears in both languages it is listed as separate `(en)` and `(es)` choices, and you can choose the provider after selecting a title.
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
 - Downloads using yt-dlp when suitable, FFmpeg fallback, and FFmpeg muxing for separate audio/video streams.
@@ -143,7 +144,7 @@ Install players and command-line tools with your operating system's package mana
 
 ## Caveats
 
-- HiAnime markup, stream hosts, and anti-bot responses can change without notice. CI does not guarantee live-provider availability.
+- Provider markup, stream hosts, search routes, and anti-bot responses can change without notice. Non-HiAnime providers use shared HTML and direct HLS/MP4 extraction; sites with encrypted or custom embedded players may require provider-specific resolver updates. CI does not guarantee live-provider availability.
 - Prebuilt release binaries are not published for the Rust port yet. See the [migration notes](docs/rust-migration.md) for platform caveats.
 - The client does not host or own the media it locates. You are responsible for complying with applicable laws and service terms; read the [disclaimer](docs/disclaimer.md).
 
