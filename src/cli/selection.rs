@@ -174,6 +174,7 @@ pub fn read_paged_selection(
                     &mut previous_width,
                 )?;
             }
+            Key::Left | Key::Right => {}
             Key::Character(character)
                 if character.is_ascii_digit() || (multi && character == ' ') =>
             {
