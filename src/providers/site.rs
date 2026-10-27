@@ -1125,7 +1125,7 @@ mod tests {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
-    let server = thread::spawn(move || {
+    let server = std::thread::spawn(move || {
       let mut requested_paths = Vec::new();
       for _ in 0..2 {
         let (mut connection, _) = listener.accept().unwrap();
