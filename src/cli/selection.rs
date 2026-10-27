@@ -222,15 +222,16 @@ pub fn read_paged_selection(
 }
 
 fn prompt_line(prompt: &str, page: usize, page_count: usize) -> String {
+    let prompt = prompt.trim().trim_end_matches(':');
     if page_count > 1 {
         format!(
             "{} [page {}/{}; ←/→ page; Backspace back; Esc cancel]: ",
-            prompt.trim_end(),
+            prompt,
             page + 1,
             page_count
         )
     } else {
-        format!("{}: ", prompt.trim_end())
+        format!("{prompt}: ")
     }
 }
 
