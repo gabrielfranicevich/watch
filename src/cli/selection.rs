@@ -304,6 +304,45 @@ fn key_from_character(character: char) -> Key {
     }
 }
 
+
+#[cfg(any(windows, test))]
+fn key_from_windows_event(
+    key_down: bool,
+    virtual_key_code: u16,
+    unicode_char: u16,
+    control_key_state: u32,
+) -> Option<Key> {
+    if !key_down {
+        return None;
+    }
+
+    const VK_RETURN: u16 = 0x0d;
+    const VK_BACK: u16 = 0x08;
+    const VK_ESCAPE: u16 = 0x1b;
+    const VK_LEFT: u16 = 0x25;
+    const VK_RIGHT: u16 = 0x27;
+    const VK_C: u16 = 0x43;
+    const LEFT_CTRL_PRESSED: u32 = 0x0008;
+    const RIGHT_CTRL_PRESSED: u32 = 0x0004;
+
+    let key = match virtual_key_code {
+        VK_RETURN => Key::Enter,
+        VK_BACK => Key::Backspace,
+        VK_ESCAPE => Key::Escape,
+        VK_LEFT => Key::Left,
+        VK_RIGHT => Key::Right,
+        VK_C if control_key_state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0 => {
+            Key::Cancel
+        }
+        _ => match char::from_u32(unicode_char as u32) {
+            Some(character) if character != '\0' => key_from_character(character),
+            _ => Key::Other,
+        },
+    };
+
+    Some(key)
+}
+
 #[cfg(unix)]
 struct RawModeGuard {
     original: libc::termios,
@@ -388,17 +427,44 @@ impl Drop for RawModeGuard {
 }
 
 #[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct WindowsKeyEvent {
+    key_down: i32,
+    _repeat_count: u16,
+    virtual_key_code: u16,
+    _virtual_scan_code: u16,
+    unicode_char: u16,
+    control_key_state: u32,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+union WindowsInputEvent {
+    key: WindowsKeyEvent,
+    _padding: [u32; 4],
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct WindowsInputRecord {
+    event_type: u16,
+    event: WindowsInputEvent,
+}
+
+#[cfg(windows)]
 #[link(name = "Kernel32")]
 unsafe extern "system" {
     fn GetStdHandle(n_std_handle: u32) -> *mut std::ffi::c_void;
     fn GetConsoleMode(handle: *mut std::ffi::c_void, mode: *mut u32) -> i32;
     fn SetConsoleMode(handle: *mut std::ffi::c_void, mode: u32) -> i32;
-    fn ReadConsoleW(
+    fn ReadConsoleInputW(
         handle: *mut std::ffi::c_void,
-        buffer: *mut u16,
-        chars_to_read: u32,
-        chars_read: *mut u32,
-        control: *mut std::ffi::c_void,
+        records: *mut WindowsInputRecord,
+        length: u32,
+        records_read: *mut u32,
     ) -> i32;
 }
 
@@ -460,44 +526,40 @@ fn read_key_platform() -> io::Result<Key> {
 
 #[cfg(windows)]
 fn read_key_platform() -> io::Result<Key> {
-    let handle = unsafe { GetStdHandle((-10i32) as u32) };
-    let mut value = 0u16;
-    let mut chars_read = 0u32;
-    if unsafe { ReadConsoleW(handle, &mut value, 1, &mut chars_read, std::ptr::null_mut()) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    if chars_read == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "terminal input closed",
-        ));
-    }
-    if value == 0 || value == 0xe0 {
-        let mut scan_code = 0u16;
-        let mut scan_chars_read = 0u32;
-        if unsafe {
-            ReadConsoleW(
-                handle,
-                &mut scan_code,
-                1,
-                &mut scan_chars_read,
-                std::ptr::null_mut(),
-            )
-        } == 0
-        {
+    const STD_INPUT_HANDLE: u32 = (-10i32) as u32;
+    const KEY_EVENT: u16 = 0x0001;
+
+    let handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) };
+    loop {
+        let mut record = WindowsInputRecord {
+            event_type: 0,
+            event: WindowsInputEvent { _padding: [0; 4] },
+        };
+        let mut records_read = 0u32;
+        let success = unsafe { ReadConsoleInputW(handle, &mut record, 1, &mut records_read) };
+        if success == 0 {
             return Err(io::Error::last_os_error());
         }
-        if scan_chars_read == 0 {
-            return Ok(Key::Other);
+        if records_read == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "terminal input closed",
+            ));
         }
-        return Ok(match scan_code {
-            75 => Key::Left,
-            77 => Key::Right,
-            _ => Key::Other,
-        });
+        if record.event_type != KEY_EVENT {
+            continue;
+        }
+
+        let event = unsafe { record.event.key };
+        if let Some(key) = key_from_windows_event(
+            event.key_down != 0,
+            event.virtual_key_code,
+            event.unicode_char,
+            event.control_key_state,
+        ) {
+            return Ok(key);
+        }
     }
-    let character = char::from_u32(value as u32).unwrap_or('\0');
-    Ok(key_from_character(character))
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -600,5 +662,39 @@ mod tests {
         assert_eq!(key_from_character('\u{8}'), Key::Backspace);
         assert_eq!(key_from_character('\u{3}'), Key::Cancel);
         assert_eq!(key_from_character('\u{1b}'), Key::Escape);
+    }
+
+
+    #[test]
+    fn maps_windows_console_key_events() {
+        assert_eq!(
+            key_from_windows_event(true, 0x25, 0, 0),
+            Some(Key::Left)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x27, 0, 0),
+            Some(Key::Right)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x1b, 0, 0),
+            Some(Key::Escape)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x08, 0, 0),
+            Some(Key::Backspace)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x0d, 0, 0),
+            Some(Key::Enter)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x43, 3, 0x0008),
+            Some(Key::Cancel)
+        );
+        assert_eq!(
+            key_from_windows_event(true, 0x51, 'q' as u16, 0),
+            Some(Key::Character('q'))
+        );
+        assert_eq!(key_from_windows_event(false, 0x25, 0, 0), None);
     }
 }
