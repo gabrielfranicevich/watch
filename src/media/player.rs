@@ -450,7 +450,7 @@ fn ensure_android_mpv_config(config_dir: &std::path::Path, config: &str) -> io::
   let main_config = config_dir.join("mpv.conf");
   let include_line = format!("include={}", stream_config.display());
   let existing = std::fs::read_to_string(&main_config).unwrap_or_default();
-  if existing.lines().any(|line| line.trim() == include_line) {
+  if existing.lines().any(|line| line.trim() == include_line.as_str()) {
     return Ok(());
   }
 
@@ -733,7 +733,7 @@ mod tests {
     assert!(main_config.starts_with("hwdec=auto\n"));
     let include_line = format!("include={}/mpv.config.mp4", config_dir.display());
     assert_eq!(
-      main_config.lines().filter(|line| *line == include_line).count(),
+      main_config.lines().filter(|line| line.trim() == include_line.as_str()).count(),
       1
     );
     assert_eq!(
