@@ -111,6 +111,7 @@ impl HiAnimeStreamResolver {
             "{}/api/theme/episode/servers?episodeId={episode_id}",
             self.base_url
         );
+        eprintln!("Stream resolution: requesting episode server list...");
         let servers_response = self.client.get(servers_url).send()?;
         let servers_body = provider_response_body(servers_response)?;
         let servers = Html::parse_fragment(&normalize_server_html(&servers_body));
@@ -141,6 +142,7 @@ impl HiAnimeStreamResolver {
         let referer = origin_with_slash(&embed_url)?;
         let mal_id = mal_id_from_embed(&embed_url);
 
+        eprintln!("Stream resolution: fetching embedded player...");
         let embed_response = self.client.get(&embed_url).send()?;
         let embed_body = provider_response_body(embed_response)?;
         let blob = extract_window_blob(&embed_body).ok_or_else(|| {
@@ -167,6 +169,7 @@ impl HiAnimeStreamResolver {
                 StreamResolveError::InvalidData("HiAnime embed config has no HLS source".into())
             })?;
 
+        eprintln!("Stream resolution: fetching HLS playlist...");
         let playlist_response = self
             .client
             .get(master_url)
@@ -196,6 +199,7 @@ impl HiAnimeStreamResolver {
             .and_then(|item| item.get("src").and_then(Value::as_str))
             .map(|url| Subtitle::new(url, Some("default".into())));
 
+        eprintln!("Stream resolution: HLS stream selected successfully.");
         Ok(ResolvedMedia {
             stream,
             subtitle,

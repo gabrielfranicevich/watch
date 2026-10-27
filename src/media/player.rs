@@ -83,7 +83,9 @@ impl Player {
 
     pub fn command_name(&self) -> &str {
         match self {
-            Self::Mpv if cfg!(target_os = "windows") => "mpv.exe",
+            // The .com launcher keeps MPV attached to the Windows console so
+            // terminal video outputs can write graphics data to stdout.
+            Self::Mpv if cfg!(target_os = "windows") => "mpv.com",
             Self::Mpv => "mpv",
             Self::Vlc if cfg!(target_os = "windows") => "vlc.exe",
             Self::Vlc => "vlc",
@@ -143,6 +145,33 @@ impl Player {
             self.kind(),
             PlayerKind::Mpv | PlayerKind::FlatpakMpv | PlayerKind::Syncplay
         )
+    }
+
+    pub fn supports_terminal_video(&self) -> bool {
+        matches!(self.kind(), PlayerKind::Mpv | PlayerKind::FlatpakMpv)
+    }
+
+    pub fn terminal_video_output_help(&self) -> io::Result<String> {
+        let program = self.command_name();
+        let mut command = Command::new(program);
+        if self.kind() == PlayerKind::FlatpakMpv {
+            command.args(["run", "io.mpv.Mpv"]);
+        }
+        let output = command
+            .arg("--vo=help")
+            .output()
+            .map_err(|error| contextualize_program_error(error, program))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let text = format!("{stdout}\n{stderr}");
+        if output.status.success() {
+            Ok(text)
+        } else {
+            Err(io::Error::other(format!(
+                "{program} --vo=help failed: {}",
+                text.trim()
+            )))
+        }
     }
 
     pub fn arguments(
@@ -655,7 +684,7 @@ mod tests {
     #[test]
     fn command_names_follow_host_platform_for_standard_players() {
         if cfg!(target_os = "windows") {
-            assert_eq!(Player::Mpv.command_name(), "mpv.exe");
+            assert_eq!(Player::Mpv.command_name(), "mpv.com");
             assert_eq!(Player::Vlc.command_name(), "vlc.exe");
             assert_eq!(Player::Syncplay.command_name(), "syncplay.exe");
         }
@@ -749,6 +778,15 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
         assert!(error.to_string().contains("mpv.exe"));
         assert!(error.to_string().contains("ANI_CLI_PLAYER"));
+    }
+
+    #[test]
+    fn only_mpv_variants_support_terminal_video_output() {
+        assert!(Player::Mpv.supports_terminal_video());
+        assert!(Player::FlatpakMpv.supports_terminal_video());
+        assert!(Player::Configured("/opt/mpv".to_owned()).supports_terminal_video());
+        assert!(!Player::Vlc.supports_terminal_video());
+        assert!(!Player::Syncplay.supports_terminal_video());
     }
 
     #[test]

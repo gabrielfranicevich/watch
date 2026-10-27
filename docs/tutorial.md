@@ -93,7 +93,29 @@ ani-cli --dmenu "Frieren"
 
 Set `ANI_CLI_PLAYER` to a supported player name or executable path, and `ANI_CLI_MENU` to `fzf`, `rofi`, or `dmenu`. `ANI_CLI_PLAYER_FLAGS` and `ANI_CLI_MENU_FLAGS` pass additional arguments to the corresponding tools.
 
-## 7. Useful commands
+## 7. Play inside the terminal
+
+Use `--inline` (or its alias, `--here`) to render the video in the terminal instead of opening a regular video window:
+
+~~~sh
+ani-cli --inline "Frieren"
+ani-cli "Frieren" --here
+~~~
+
+This mode requires MPV with a terminal video output driver and an interactive terminal on both stdin and stdout. Before playback, ani-cli runs `mpv --vo=help` using the selected MPV executable, chooses a compiled-in terminal driver, and disables the normal video window. On Windows, ani-cli launches MPV through `mpv.com`, the console launcher, so terminal video output has a console handle; keep `mpv.com` and `mpv.exe` together on `PATH`. Kitty-protocol terminals prefer Kitty graphics; Windows defaults to Sixel because MPV's `tct` driver only works on Windows in ANSI-compatible terminals such as mintty.
+
+Terminal detection is heuristic and cannot guarantee that a particular terminal actually renders a protocol. On non-Windows systems, ani-cli can fall back to `tct` when a graphics driver is missing. On Windows, it deliberately does not fall back to `tct` automatically: if the installed MPV lacks Sixel output, it reports an error rather than starting audio-only playback. You can explicitly request `tct` only when using an ANSI-compatible terminal:
+
+~~~sh
+# Choose a backend explicitly
+ANI_CLI_TERMINAL_BACKEND=kitty ani-cli --inline "Frieren"
+ANI_CLI_TERMINAL_BACKEND=sixel ani-cli --inline "Frieren"
+ANI_CLI_TERMINAL_BACKEND=tct ani-cli --inline "Frieren"
+~~~
+
+Use `auto` or unset the variable to restore detection. To see the output drivers in your MPV build, run `mpv --vo=help`. Inline mode is incompatible with `--download`, `--vlc`, and `--syncplay`; use a regular player for those workflows.
+
+## 8. Useful commands
 
 | Command | Result |
 | --- | --- |
@@ -108,9 +130,11 @@ Set `ANI_CLI_PLAYER` to a supported player name or executable path, and `ANI_CLI
 
 **Search fails or returns a verification page.** The upstream provider may be applying anti-bot checks or may have changed its page structure. Retry later; this is not necessarily an ani-cli configuration problem.
 
-**Playback fails with `program not found`.** ani-cli resolves the stream but delegates playback to an external player. Install MPV or VLC and make sure `mpv.exe` or `vlc.exe` is available through `PATH` in the environment where ani-cli runs. To use a custom location, set `ANI_CLI_PLAYER` to the executable path. You can also try `ani-cli --vlc "Frieren"` when VLC is installed.
+**Playback fails with `program not found`.** ani-cli resolves the stream but delegates playback to an external player. Install MPV or VLC and make sure `mpv.com`/`mpv.exe` or `vlc.exe` is available through `PATH` in the environment where ani-cli runs. On Windows inline playback uses the console launcher `mpv.com`, which is normally distributed beside `mpv.exe`. To use a custom location, set `ANI_CLI_PLAYER` to the executable path. You can also try `ani-cli --vlc "Frieren"` when VLC is installed.
 
 **Playback does not start for another reason.** Confirm that the selected player supports the stream and is accessible from your terminal, then inspect the error output.
+
+**Inline terminal playback is blank or garbled.** Run `mpv --vo=help` and check that MPV lists `kitty`, `sixel`, or `tct`. ani-cli checks this list before playback and reports an error if no terminal output driver is available. You can override `ANI_CLI_TERMINAL_BACKEND` with `kitty`, `sixel`, or `tct`. Kitty and Sixel require graphics-protocol support from the terminal emulator; `tct` draws frames using colored terminal cells.
 
 **Download fails.** Install FFmpeg and, if available, yt-dlp. Some stream sources may be unavailable or unsuitable for download even when playback works.
 

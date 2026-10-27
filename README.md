@@ -52,6 +52,9 @@ ani-cli --download --episode 1-3 "Frieren"
 # Download individual episodes
 ani-cli --download --episode "1 3 5" "Frieren"
 
+# Render video inside a supported terminal
+ani-cli --inline "Frieren"
+
 # Continue from watch history
 ani-cli --continue
 
@@ -89,6 +92,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 | `--rofi` / `--dmenu` | Use an external selection menu. |
 | `--skip` | Enable intro skipping where supported. |
 | `--no-detach` | Keep the player attached to the terminal. |
+| `--inline`, `--here` | Render video in the terminal using an available graphics protocol. On Windows, automatic mode requires MPV's Sixel output; `tct` is only used when explicitly selected. |
 | `--exit-after-play` | Return the player's exit code after playback. |
 | `-N, --nextep-countdown` | Show the next-episode countdown. |
 | `-D, --delete` / `-l, --logview` | Delete watch history or view logs. |
@@ -98,13 +102,13 @@ These paths depend on the provider, platform, media player, and external tools. 
 
 | Tool | When it is needed |
 | --- | --- |
-| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to ani-cli. |
+| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to ani-cli. `--inline` requires MPV with a terminal video output driver. |
 | FFmpeg | Downloads and muxing separate audio/video streams. |
 | yt-dlp | Optional; preferred for supported single-stream downloads. |
 | fzf, rofi, or dmenu | Optional selection backends. |
 | ani-skip | Optional intro skipping for supported MPV/Syncplay setups. |
 
-Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.exe` or `vlc.exe` is available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. Android/Termux support depends on the player app and intent integration; this project does not ship a native Android binary.
+Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.com` and `mpv.exe` (for inline playback) or `vlc.exe` are available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. For terminal video output and backend overrides, see the [tutorial](docs/tutorial.md#7-play-inside-the-terminal). Android/Termux support depends on the player app and intent integration; this project does not ship a native Android binary.
 
 ## Configuration
 
@@ -118,6 +122,7 @@ Install players and command-line tools with your operating system's package mana
 | `ANI_CLI_MENU_FLAGS` | Extra arguments for the menu program. |
 | `ANI_CLI_PLAYER` | Player executable or supported player name. |
 | `ANI_CLI_PLAYER_FLAGS` | Extra player/downloader arguments. |
+| `ANI_CLI_TERMINAL_BACKEND` | Inline output backend: `auto`, `kitty`, `sixel`, or `tct`. |
 | `ANI_CLI_DOWNLOAD_DIR` | Download destination directory. |
 | `ANI_CLI_HIST_DIR` | Directory for the compatible history file. |
 | `ANI_CLI_NO_DETACH=1` | Keep playback attached to the terminal. |

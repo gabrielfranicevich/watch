@@ -17,6 +17,7 @@ use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
 use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::player::Player;
+use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::hianime::HiAnimeProvider;
 use ani_cli::providers::hianime_stream::HiAnimeStreamResolver;
@@ -40,6 +41,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     if cli.version {
         println!("ani-cli {}", ani_cli::version());
         return Ok(ExitCode::SUCCESS);
+    }
+    if cli.inline_playback && (!io::stdin().is_terminal() || !io::stdout().is_terminal()) {
+        return Err("--inline requires an interactive terminal on stdin and stdout".into());
     }
 
     let history = paths::history_file().map(HistoryStore::new);
@@ -239,27 +243,34 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         && command_available("flatpak")
         && flatpak_mpv_installed();
     let player = if !player_required(cli.download) {
-        // Download-only mode does not spawn a player and must work without MPV/VLC.
         Player::Mpv
+    } else if cli.inline_playback {
+        select_terminal_player(
+            env_player.as_deref(),
+            use_flatpak_default,
+            command_available("mpv"),
+        )?
     } else if cli.syncplay || cli.vlc || env_player.is_some() || cfg!(target_os = "android") {
         Player::from_configuration(cli.vlc, cli.syncplay, false, env_player.as_deref())
     } else {
-        match select_default_player(
+        select_default_player(
             use_iina_default,
             command_available("iina"),
             use_flatpak_default,
             command_available("mpv"),
             command_available("vlc"),
-        ) {
-            Ok(player) => player,
-            Err(message) => return Err(message.into()),
-        }
+        )?
     };
-    let player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
+    let mut player_flags: Vec<String> = std::env::var("ANI_CLI_PLAYER_FLAGS")
         .unwrap_or_default()
         .split_whitespace()
         .map(str::to_owned)
         .collect();
+    if cli.inline_playback {
+        let available_outputs = playback_output_help(&player)?;
+        player_flags
+            .extend(TerminalVideoBackend::from_environment()?.mpv_flags(&available_outputs)?);
+    }
     let download_dir = std::env::var_os("ANI_CLI_DOWNLOAD_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
@@ -269,7 +280,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 
     let exit_after_play = cli.exit_after_play || env_enabled("ANI_CLI_EXIT_AFTER_PLAY");
-    let attached = cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
+    let attached =
+        cli.inline_playback || cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
     let mut playback = PlaybackConfig {
         resolver: &resolver,
         player,
@@ -412,6 +424,16 @@ impl PlaybackConfig<'_> {
         }
 
         if attached {
+            if let Some(driver) = self
+                .player_flags
+                .iter()
+                .find_map(|flag| flag.strip_prefix("--vo="))
+            {
+                eprintln!(
+                    "Starting inline playback with {} using video output {driver}...",
+                    self.player.command_name()
+                );
+            }
             let status = self.player.play_with_options(
                 &media.stream,
                 media.subtitle.as_ref(),
@@ -810,7 +832,12 @@ fn select_default_player(
     vlc_available: bool,
 ) -> Result<Player, &'static str> {
     if use_iina_default && iina_command_available {
-        return Ok(Player::from_configuration(false, false, false, Some("iina")));
+        return Ok(Player::from_configuration(
+            false,
+            false,
+            false,
+            Some("iina"),
+        ));
     }
     if use_iina_default {
         return Ok(Player::Iina);
@@ -830,6 +857,36 @@ fn select_default_player(
 
 fn player_required(download_only: bool) -> bool {
     !download_only
+}
+
+fn playback_output_help(player: &Player) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(player.terminal_video_output_help()?)
+}
+
+fn select_terminal_player(
+    configured_player: Option<&str>,
+    flatpak_mpv_available: bool,
+    mpv_available: bool,
+) -> Result<Player, &'static str> {
+    if let Some(configured_player) = configured_player.filter(|value| !value.trim().is_empty()) {
+        let player = Player::from_configuration(false, false, false, Some(configured_player));
+        return if player.supports_terminal_video() {
+            Ok(player)
+        } else {
+            Err("--inline requires MPV; set ANI_CLI_PLAYER to an MPV executable or unset it")
+        };
+    }
+
+    if flatpak_mpv_available {
+        return Ok(Player::FlatpakMpv);
+    }
+    if mpv_available {
+        return Ok(Player::Mpv);
+    }
+
+    Err(
+        "--inline requires MPV with terminal video output support; install MPV or set ANI_CLI_PLAYER",
+    )
 }
 
 fn flatpak_mpv_installed() -> bool {
@@ -1026,11 +1083,39 @@ mod tests {
     fn default_player_preserves_iina_and_flatpak_preferences() {
         assert_eq!(
             select_default_player(true, true, false, true, true),
-            Ok(Player::from_configuration(false, false, false, Some("iina")))
+            Ok(Player::from_configuration(
+                false,
+                false,
+                false,
+                Some("iina")
+            ))
         );
         assert_eq!(
             select_default_player(false, false, true, false, true),
             Ok(Player::FlatpakMpv)
+        );
+    }
+
+    #[test]
+    fn inline_mode_selects_mpv_or_flatpak_and_rejects_non_mpv_configuration() {
+        assert_eq!(
+            select_terminal_player(None, true, false),
+            Ok(Player::FlatpakMpv)
+        );
+        assert_eq!(select_terminal_player(None, false, true), Ok(Player::Mpv));
+        assert_eq!(
+            select_terminal_player(Some("/opt/mpv"), false, false),
+            Ok(Player::Configured("/opt/mpv".to_owned()))
+        );
+        assert_eq!(
+            select_terminal_player(Some("vlc"), false, true),
+            Err("--inline requires MPV; set ANI_CLI_PLAYER to an MPV executable or unset it")
+        );
+        assert_eq!(
+            select_terminal_player(None, false, false),
+            Err(
+                "--inline requires MPV with terminal video output support; install MPV or set ANI_CLI_PLAYER"
+            )
         );
     }
 

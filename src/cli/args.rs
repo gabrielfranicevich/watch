@@ -24,11 +24,12 @@ Options:
       --dmenu              Use dmenu for selection
       --skip               Skip intro with MPV, Flatpak MPV, or Syncplay
       --no-detach           Keep player attached to terminal
+      --inline, --here      Play in the terminal using graphics protocols when available
       --exit-after-play    Return the player exit code
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update ani-cli
 
-Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
+Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, optional inline terminal video, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
 ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,7 @@ pub struct Cli {
     pub dmenu: bool,
     pub skip_intro: bool,
     pub no_detach: bool,
+    pub inline_playback: bool,
     pub exit_after_play: bool,
     pub next_episode_countdown: bool,
     pub update: bool,
@@ -129,6 +131,7 @@ impl Cli {
                 "--dmenu" => cli.dmenu = true,
                 "--skip" => cli.skip_intro = true,
                 "--no-detach" => cli.no_detach = true,
+                "--inline" | "--here" => cli.inline_playback = true,
                 "--exit-after-play" => cli.exit_after_play = true,
                 _ if arg.starts_with('-') => {
                     return Err(ParseError(format!("unknown option '{arg}'")));
@@ -141,6 +144,16 @@ impl Cli {
         if cli.rofi && cli.dmenu {
             return Err(ParseError(
                 "--rofi and --dmenu cannot be used together".into(),
+            ));
+        }
+        if cli.inline_playback && cli.download {
+            return Err(ParseError(
+                "--inline cannot be combined with --download".into(),
+            ));
+        }
+        if cli.inline_playback && (cli.vlc || cli.syncplay) {
+            return Err(ParseError(
+                "--inline requires MPV and cannot be combined with --vlc or --syncplay".into(),
             ));
         }
 
@@ -251,6 +264,19 @@ mod tests {
     fn supports_help_and_version_flags() {
         assert!(Cli::parse(["--help"]).unwrap().help);
         assert!(Cli::parse(["-V"]).unwrap().version);
+    }
+
+    #[test]
+    fn parses_inline_terminal_playback_and_alias() {
+        assert!(Cli::parse(["--inline", "Frieren"]).unwrap().inline_playback);
+        assert!(Cli::parse(["Frieren", "--here"]).unwrap().inline_playback);
+    }
+
+    #[test]
+    fn rejects_inline_playback_conflicts() {
+        assert!(Cli::parse(["--inline", "--download"]).is_err());
+        assert!(Cli::parse(["--inline", "--vlc"]).is_err());
+        assert!(Cli::parse(["--syncplay", "--here"]).is_err());
     }
     #[test]
     fn preserves_legacy_operational_flags() {

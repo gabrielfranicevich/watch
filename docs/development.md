@@ -23,7 +23,7 @@ Run the CLI from source with `cargo run --release -- "Frieren"`. To inspect comm
 | `src/application.rs` | Source selection, episode-range rules, and cross-cutting use-case policies. |
 | `src/domain/` | Anime, episode, stream, subtitle, and history types. |
 | `src/providers/` | HiAnime and AnimeSchedule requests, stream resolution, and response parsing. |
-| `src/media/` | HLS parsing, playback arguments, downloads, and external media-tool integration. |
+| `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
 | `src/main.rs` | CLI orchestration and end-to-end application flow. |
 
