@@ -18,7 +18,6 @@ use ani_cli::domain::history::HistoryEntry;
 use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
 use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
-use ani_cli::media::playback_policy::{PlaybackTarget, choose_target};
 use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
