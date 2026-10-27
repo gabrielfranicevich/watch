@@ -9,10 +9,10 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 ## Android support status
 
 - [x] Add a pure playback-target policy with unit tests.
-- [x] Fall back from unsupported Android inline playback to an external Android player.
-- [x] Add an implicit Android VIEW intent as the default external playback route.
+- [ ] Implement and test automatic fallback from inline playback to external playback on Android.
+- [ ] Add a generic Android VIEW intent as a fallback when explicit MPV/VLC integration is unavailable.
 - [x] Add an ARM64 Android cross-compilation check to CI.
-- [ ] Run the Android CI job and resolve any NDK/toolchain issues.
+- [x] Run the Android ARM64 cross-compilation job successfully.
 - [ ] Validate playback, subtitles, referer-dependent streams, and history on a physical Termux device.
 - [ ] Extract the Rust application workflow from `src/main.rs` before building a native Android UI.
 - [ ] Build a separate Kotlin/Jetpack Compose app that reuses the Rust domain/provider layer.

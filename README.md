@@ -120,7 +120,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 | fzf, rofi, or dmenu | Optional selection backends. |
 | ani-skip | Optional intro skipping for supported MPV/Syncplay setups. |
 
-Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.com` and `mpv.exe` (for inline playback) or `vlc.exe` are available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. For terminal video output and backend overrides, see the [tutorial](docs/tutorial.md#7-play-inside-the-terminal). On Android/Termux, `--inline` attempts terminal video when the terminal and MPV build support it, then falls back to an external player if inline setup or launch fails. External playback currently relies on Android player/intent integration; a native Android app is not included yet.
+Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.com` and `mpv.exe` (for inline playback) or `vlc.exe` are available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. For terminal video output and backend overrides, see the [tutorial](docs/tutorial.md#7-play-inside-the-terminal). Android/Termux installation and current playback limitations are documented in the [Android guide](docs/android.md). A native Android app is not included yet.
 
 ## Configuration
 
@@ -150,6 +150,7 @@ Install players and command-line tools with your operating system's package mana
 
 ## Documentation and support
 
+- [Android / Termux installation guide](docs/android.md)
 - [Step-by-step tutorial](docs/tutorial.md)
 - [Development guide](docs/development.md)
 - [Contributing guide](docs/contributing.md)

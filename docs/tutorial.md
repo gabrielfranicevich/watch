@@ -34,20 +34,7 @@ On Windows, install tools in the same environment from which you launch watch. W
 
 ### Android / Termux
 
-The Rust CLI can be built directly in Termux on supported ARM64 devices. Install the build tools and clone the Android-support branch:
-
-~~~sh
-pkg update
-pkg install rust git clang
-git clone --branch android-support https://github.com/gabrielfranicevich/watch.git
-cd watch
-cargo build --release
-./target/release/watch --version
-~~~
-
-On Android, external playback uses an Android `VIEW` intent by default, allowing Android to offer a compatible installed app. If `ANI_CLI_PLAYER` names MPV or VLC, watch uses that app's explicit activity integration instead. Install a media player that can open the provider's stream format. The player app may not support referer-dependent HLS streams, external audio, or subtitles.
-
-The `--inline` option attempts MPV terminal output when a compatible interactive terminal and output driver are available. If inline setup or launching the inline player fails, watch switches to external playback. Terminal graphics protocols are not guaranteed to work in Termux, so external playback is the expected fallback. Android device playback has not yet been validated by this documentation change; report device model, Android version, Termux version, player app, command, and error output when troubleshooting.
+See the dedicated [Android / Termux installation guide](android.md) for installation, player setup, playback limitations, and troubleshooting. The CLI currently uses explicit Android MPV/VLC activity integration; automatic fallback to Android's generic media handler is not implemented yet.
 
 ## 3. Search and play
 
