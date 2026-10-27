@@ -403,11 +403,18 @@ impl Player {
   ) -> io::Result<Child> {
     self.prepare_playback(stream, subtitle);
     let program = self.command_name();
-    Command::new(program)
+    let mut command = Command::new(program);
+    command
       .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
-      .stdin(Stdio::null())
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
+      .stdin(Stdio::null());
+    if matches!(self, Self::AndroidMpv | Self::AndroidVlc) {
+      // Keep Android Activity Manager errors visible; the detached child is
+      // only the short-lived `am` command, not the media player process.
+      command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    } else {
+      command.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    command
       .spawn()
       .map_err(|error| contextualize_program_error(error, program))
   }
