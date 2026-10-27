@@ -21,10 +21,6 @@ pub fn choose_target(
         return Ok(PlaybackTarget::External);
     }
 
-    if inline_available {
-        return Ok(PlaybackTarget::Inline);
-    }
-
     Err("no supported playback target is available")
 }
 
