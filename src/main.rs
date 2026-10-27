@@ -815,6 +815,10 @@ fn select_item(
         .ok_or_else(|| "menu returned no selection".into())
 }
 
+fn single_item_index(labels: &[String]) -> Option<usize> {
+    (labels.len() == 1).then_some(0)
+}
+
 fn select_items(
     labels: &[String],
     prompt: &str,
@@ -836,19 +840,19 @@ fn select_items(
         return Ok(vec![index]);
     }
 
-    if labels.len() == 1 {
+    if let Some(index) = single_item_index(labels) {
         let kind = if prompt.to_ascii_lowercase().contains("episode") {
             "episode"
         } else if prompt.to_ascii_lowercase().contains("anime") {
-            "anime option"
+            "anime result"
         } else {
             "option"
         };
         println!(
             "Only one {kind} available; selecting it automatically: {}",
-            labels[0]
+            labels[index]
         );
-        return Ok(vec![0]);
+        return Ok(vec![index]);
     }
 
     let backend = menu_backend_for_cli(cli);
@@ -1457,6 +1461,19 @@ mod tests {
             vec![0, 1, 2, 3]
         );
         assert!(ordered_episode_indices(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn auto_selects_only_single_result_lists() {
+        assert_eq!(single_item_index(&[]), None);
+        assert_eq!(
+            single_item_index(&["Dragon Ball Super: Beerus".to_owned()]),
+            Some(0)
+        );
+        assert_eq!(
+            single_item_index(&["Frieren".to_owned(), "Blue Lock".to_owned()]),
+            None
+        );
     }
 
     #[test]
