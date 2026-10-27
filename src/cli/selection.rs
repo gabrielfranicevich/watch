@@ -483,7 +483,8 @@ fn read_key_platform() -> io::Result<Key> {
                 &mut scan_chars_read,
                 std::ptr::null_mut(),
             )
-        } == 0 {
+        } == 0
+        {
             return Err(io::Error::last_os_error());
         }
         if scan_chars_read == 0 {
@@ -577,7 +578,6 @@ mod tests {
         assert_eq!(page_bounds(31, 1), 15..30);
         assert_eq!(page_bounds(31, 2), 30..31);
     }
-
 
     #[test]
     fn page_prompt_only_shows_navigation_hints_for_multiple_pages() {
