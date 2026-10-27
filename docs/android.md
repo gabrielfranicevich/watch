@@ -8,7 +8,7 @@ This guide covers the **watch CLI** on Android through [Termux](https://termux.d
 - Runtime playback has **not** been verified on a physical Android device.
 - The current Android player integration launches the MPV Android activity by default. The `--vlc` option selects the VLC Android activity.
 - The CLI does **not yet** implement generic Android media-handler fallback or reliable inline-to-external fallback. The playback policy module has unit tests, but the policy is not integrated into the current playback flow.
-- MPV playback now writes per-stream referer/audio/subtitle settings and adds an `include=` line to MPV-Android's shared-storage `mpv.conf`. This requires shared-storage access to be granted to both Termux and MPV-Android; physical-device playback still needs verification.
+- MPV playback writes per-stream referer/audio/subtitle settings and adds an `include=` line to MPV-Android's shared-storage `mpv.conf`. Protected streams will fail if MPV-Android cannot read that file. Grant **Allow access to manage all files** to MPV-Android and shared-storage access to Termux. Physical-device playback still needs verification.
 
 ## 1. Install Termux
 
@@ -96,7 +96,9 @@ Grant Termux shared-storage access:
 termux-setup-storage
 ~~~
 
-Accept Android's permission prompt. Then, in Android settings, allow MPV-Android to manage/read shared files (the exact setting label varies by Android version). Restart playback after granting access. watch preserves existing settings in `mpv.conf` and avoids adding the same include line twice.
+Accept Android's permission prompt. Then open **Android Settings → Apps → MPV → Permissions** (the labels vary by Android version) and grant **Allow access to manage all files** / **All files access** to MPV-Android. A general media/photos permission may not be sufficient to read `/storage/emulated/0/mpv/mpv.conf`.
+
+watch preserves existing settings in `mpv.conf` and avoids adding the same include line twice. The stream's `Referer` is written to `mpv.config.mp4`; if MPV cannot read the include file, protected streams can open the player and then stop without playback.
 
 This permission is not required merely to clone and build watch. If watch reports that it could not configure MPV, check both apps' storage permissions before troubleshooting the stream itself.
 
@@ -104,11 +106,18 @@ This permission is not required merely to clone and build watch. If watch report
 
 ### `am` or activity launch fails
 
-Check that the player app is installed and updated. The current implementation invokes Android's `am` command and uses a fixed activity name for MPV/VLC. A generic Android app chooser is not implemented yet.
+Check that the player app is installed and updated. The current implementation invokes Android's `am` command. MPV is launched using its documented package-based `VIEW` intent; VLC still uses a fixed activity name. A generic Android app chooser is not implemented yet.
 
 ### MPV opens but video does not start
 
-Check the warning printed by watch. For streams that require a referer, Termux must be able to write to shared storage and MPV-Android must be able to read its `mpv.conf`. Run `termux-setup-storage`, grant MPV-Android shared-storage access in Android settings, and retry. watch now adds the per-stream config include automatically; it does not overwrite unrelated settings in `mpv.conf`.
+Check the warning printed by watch. For streams that require a referer:
+
+1. In Termux, run `termux-setup-storage` and accept the prompt.
+2. Open Android Settings → Apps → MPV → Permissions.
+3. Grant **Allow access to manage all files** / **All files access** to MPV-Android (`is.xyz.mpv`). A basic photos/media permission may not be enough.
+4. Rebuild or update watch to the latest `android-support` branch and retry.
+
+watch creates `/storage/emulated/0/mpv/mpv.conf` and includes the per-stream config automatically. If playback still fails after granting full file access, copy the complete Termux output, including the `Resolving episode...` and `Stream resolution:` messages; the remaining failure may be the provider stream rather than the Android intent.
 
 If playback still fails, test the stream in MPV-Android itself and capture the complete Termux output. Some providers reject requests independently of the referer, and separate audio/subtitle handling can still vary by stream.
 
