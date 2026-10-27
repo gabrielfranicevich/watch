@@ -319,7 +319,11 @@ fn title_key(value: &str) -> String {
 fn matches_query(title: &str, query: &str) -> bool {
     let key = title_key(title);
     let query_key = title_key(query);
-    (!query_key.is_empty() && key.contains(&query_key))
+    if query_key.is_empty() {
+        return false;
+    }
+
+    key.contains(&query_key)
         || query.split_whitespace().all(|term| {
             let term = title_key(term);
             !term.is_empty() && key.contains(&term)
@@ -623,6 +627,12 @@ fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_search_query_never_matches_every_title() {
+        assert!(!matches_query("Frieren: Beyond Journey's End", ""));
+        assert!(!matches_query("Frieren: Beyond Journey's End", "   "));
+    }
 
     #[test]
     fn provider_metadata_matches_requested_language_groups() {
