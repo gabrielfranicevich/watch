@@ -283,6 +283,9 @@ impl Player {
         args.extend(media_flags.iter().map(OsString::from));
       }
       PlayerKind::AndroidMpv => {
+        // Follow mpv-android's documented external intent interface: let
+        // Android resolve the exported VIEW activity by package rather than
+        // hard-coding an Activity class that can change between app builds.
         args.extend(
           [
             "start",
@@ -292,17 +295,15 @@ impl Player {
             "android.intent.action.VIEW",
             "-t",
             "video/any",
+            "-p",
+            "is.xyz.mpv",
             "-d",
           ]
           .into_iter()
           .map(OsString::from),
         );
         args.push(OsString::from(&stream.url));
-        args.extend(
-          ["-n", "is.xyz.mpv/.MPVActivity", "-e", "title"]
-            .into_iter()
-            .map(OsString::from),
-        );
+        args.extend(["-e", "title"].into_iter().map(OsString::from));
         args.push(OsString::from(title));
         args.extend(command_flags.iter().map(OsString::from));
       }
@@ -667,8 +668,9 @@ mod tests {
     assert!(
       args
         .windows(2)
-        .any(|pair| pair[0] == "-n" && pair[1] == "is.xyz.mpv/.MPVActivity")
+        .any(|pair| pair[0] == "-p" && pair[1] == "is.xyz.mpv")
     );
+    assert!(!args.iter().any(|arg| arg == "-n"));
     assert!(
       args
         .windows(2)
