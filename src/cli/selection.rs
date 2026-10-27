@@ -304,7 +304,6 @@ fn key_from_character(character: char) -> Key {
     }
 }
 
-
 #[cfg(any(windows, test))]
 fn key_from_windows_event(
     key_down: bool,
@@ -664,33 +663,14 @@ mod tests {
         assert_eq!(key_from_character('\u{1b}'), Key::Escape);
     }
 
-
     #[test]
     fn maps_windows_console_key_events() {
-        assert_eq!(
-            key_from_windows_event(true, 0x25, 0, 0),
-            Some(Key::Left)
-        );
-        assert_eq!(
-            key_from_windows_event(true, 0x27, 0, 0),
-            Some(Key::Right)
-        );
-        assert_eq!(
-            key_from_windows_event(true, 0x1b, 0, 0),
-            Some(Key::Escape)
-        );
-        assert_eq!(
-            key_from_windows_event(true, 0x08, 0, 0),
-            Some(Key::Backspace)
-        );
-        assert_eq!(
-            key_from_windows_event(true, 0x0d, 0, 0),
-            Some(Key::Enter)
-        );
-        assert_eq!(
-            key_from_windows_event(true, 0x43, 3, 0x0008),
-            Some(Key::Cancel)
-        );
+        assert_eq!(key_from_windows_event(true, 0x25, 0, 0), Some(Key::Left));
+        assert_eq!(key_from_windows_event(true, 0x27, 0, 0), Some(Key::Right));
+        assert_eq!(key_from_windows_event(true, 0x1b, 0, 0), Some(Key::Escape));
+        assert_eq!(key_from_windows_event(true, 0x08, 0, 0), Some(Key::Backspace));
+        assert_eq!(key_from_windows_event(true, 0x0d, 0, 0), Some(Key::Enter));
+        assert_eq!(key_from_windows_event(true, 0x43, 3, 0x0008), Some(Key::Cancel));
         assert_eq!(
             key_from_windows_event(true, 0x51, 'q' as u16, 0),
             Some(Key::Character('q'))
