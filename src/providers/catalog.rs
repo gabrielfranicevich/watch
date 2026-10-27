@@ -153,11 +153,15 @@ fn language_label(title: &str, language: Language, labelled: bool) -> String {
 fn clean_display_title(title: &str) -> String {
     let mut title = title.trim().to_owned();
     for suffix in [
+        " (English Subbed)", " (English Dubbed)", " (Spanish Subbed)",
+        " [English Subbed]", " [English Dubbed]", " [Spanish Subbed]",
+        " (Sub Español)", " (Sub Espanol)", " [Sub Español]", " [Sub Espanol]",
+        " (Español Latino)", " (Espanol Latino)", " [Español Latino]",
         " English Subbed", " English Dubbed", " English Sub", " English Dub",
         " Sub Español", " Sub Espanol", " Español Latino", " Espanol Latino",
         " Spanish Subbed",
     ] {
-        if title.to_ascii_lowercase().ends_with(&suffix.to_ascii_lowercase()) {
+        if title.to_lowercase().ends_with(&suffix.to_lowercase()) {
             title.truncate(title.len() - suffix.len());
             title = title.trim().to_owned();
         }
