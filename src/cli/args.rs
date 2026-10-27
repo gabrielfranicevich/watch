@@ -29,7 +29,7 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update watch
 
-Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, optional inline terminal video, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
+watch searches English and Spanish anime providers, merges duplicate titles by language, lets you choose a source, and supports episode selection, playback, downloads, subtitles, watch history, external menu backends, inline terminal video, the Cargo-based updater, and next-episode countdown.
 ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
