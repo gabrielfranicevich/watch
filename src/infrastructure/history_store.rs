@@ -44,7 +44,7 @@ impl HistoryStore {
         let entries = self.read()?;
         let (legacy, current): (Vec<_>, Vec<_>) = entries
             .into_iter()
-            .partition(|entry| !entry.anime_id.contains('-'));
+            .partition(|entry| entry.provider.is_none() && !entry.anime_id.contains('-'));
 
         if legacy.is_empty() {
             return Ok(());
@@ -94,12 +94,18 @@ impl HistoryStore {
                 .create_new(true)
                 .open(&temp_path)?;
             for entry in entries {
+                let provider = entry
+                    .provider
+                    .as_deref()
+                    .map(|provider| format!("\tprovider:{}", clean_field(provider)))
+                    .unwrap_or_default();
                 writeln!(
                     file,
-                    "{}\t{}\t{}",
+                    "{}\t{}\t{}{}",
                     clean_field(&entry.episode_number),
                     clean_field(&entry.anime_id),
-                    clean_field(&entry.anime_title)
+                    clean_field(&entry.anime_title),
+                    provider
                 )?;
             }
             file.sync_all()?;
@@ -114,14 +120,28 @@ impl HistoryStore {
 }
 
 fn parse_history_line(line: &str) -> Option<HistoryEntry> {
-    let mut fields = line.splitn(3, '\t');
+    let mut fields = line.splitn(4, '\t');
     let episode_number = fields.next()?;
     let anime_id = fields.next()?;
-    let anime_title = fields.next()?;
+    let title = fields.next()?;
     if episode_number.is_empty() || anime_id.is_empty() {
         return None;
     }
-    Some(HistoryEntry::new(episode_number, anime_id, anime_title))
+
+    let (anime_title, provider) = match fields.next() {
+        Some(value) if value.starts_with("provider:") && value.len() > "provider:".len() => {
+            (title.to_owned(), Some(value["provider:".len()..].to_owned()))
+        }
+        Some(value) => (format!("{title}\t{value}"), None),
+        None => (title.to_owned(), None),
+    };
+
+    Some(HistoryEntry {
+        episode_number: episode_number.to_owned(),
+        anime_id: anime_id.to_owned(),
+        anime_title,
+        provider,
+    })
 }
 
 fn clean_field(value: &str) -> String {
@@ -214,6 +234,38 @@ mod tests {
                 "Frieren: Beyond Journey's End"
             )]
         );
+        remove_history_artifacts(&path);
+    }
+
+    #[test]
+    fn reads_and_writes_provider_aware_history_without_changing_legacy_rows() {
+        let path = test_path();
+        let store = HistoryStore::new(&path);
+        let entries = vec![HistoryEntry::with_provider(
+            "3",
+            "anime/frieren",
+            "Frieren",
+            "monoschinos",
+        )];
+
+        store.write(&entries).unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "3\tanime/frieren\tFrieren\tprovider:monoschinos\n"
+        );
+        assert_eq!(store.read().unwrap(), entries);
+        remove_history_artifacts(&path);
+    }
+
+    #[test]
+    fn keeps_legacy_titles_with_extra_tabs_readable() {
+        let path = test_path();
+        fs::write(&path, "1\tfrieren-1\tA title\twith tabs\n").unwrap();
+
+        let entries = HistoryStore::new(&path).read().unwrap();
+
+        assert_eq!(entries[0].anime_title, "A title\twith tabs");
+        assert_eq!(entries[0].provider, None);
         remove_history_artifacts(&path);
     }
 
