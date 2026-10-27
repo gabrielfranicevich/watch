@@ -79,6 +79,25 @@ impl ProviderId {
         }
     }
 
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::HiAnime => "hianime",
+            Self::GoGoAnime => "gogoanime",
+            Self::AniWatch => "aniwatch",
+            Self::NineAnime => "9anime",
+            Self::AnimeKai => "animekai",
+            Self::MonosChinos => "monoschinos",
+            Self::TioAnime => "tioanime",
+            Self::AnimeBlix => "animeblix",
+            Self::AnimeFenix => "animefenix",
+            Self::JkAnime => "jkanime",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|provider| provider.key() == key)
+    }
+
     fn search_routes(self) -> &'static [SearchRoute] {
         match self {
             Self::HiAnime => &[],
