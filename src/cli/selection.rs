@@ -149,12 +149,12 @@ pub fn read_paged_selection(
                 render_page(
                     &mut output,
                     &PageView {
-            labels,
-            prompt,
-            page,
-            page_count,
-            multi,
-        },
+                        labels,
+                        prompt,
+                        page,
+                        page_count,
+                        multi,
+                    },
                     &input,
                     &mut previous_width,
                 )?;
@@ -167,12 +167,12 @@ pub fn read_paged_selection(
                 render_page(
                     &mut output,
                     &PageView {
-            labels,
-            prompt,
-            page,
-            page_count,
-            multi,
-        },
+                        labels,
+                        prompt,
+                        page,
+                        page_count,
+                        multi,
+                    },
                     &input,
                     &mut previous_width,
                 )?;
@@ -379,9 +379,7 @@ impl Drop for RawModeGuard {
     fn drop(&mut self) {
         #[cfg(unix)]
         {
-            let _ = unsafe {
-                libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.original)
-            };
+            let _ = unsafe { libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.original) };
         }
 
         #[cfg(windows)]
