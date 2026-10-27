@@ -9,7 +9,9 @@ use ani_cli::application::{
     effective_source, next_episode_after, normalize_title, select_fixed_episodes,
 };
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
-use ani_cli::cli::selection::{read_paged_selection, read_selection, BackRequested, SelectionOutcome};
+use ani_cli::cli::selection::{
+    BackRequested, SelectionOutcome, read_paged_selection, read_selection,
+};
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
@@ -159,7 +161,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 })
                 .collect();
 
-            let indices = match select_items(&episode_labels, "Select episode: ", None, true, &cli) {
+            let indices = match select_items(&episode_labels, "Select episode: ", None, true, &cli)
+            {
                 Ok(indices) => indices,
                 Err(error) if is_back_requested(error.as_ref()) => {
                     if choices.len() > 1 {
@@ -780,7 +783,10 @@ fn history_anime_choices(
             continue;
         };
         choices.push(AnimeChoice {
-            label: format!("{} — next episode {}", entry.anime_title, next_episode.number),
+            label: format!(
+                "{} — next episode {}",
+                entry.anime_title, next_episode.number
+            ),
             anime,
             resume_episode: Some(entry.episode_number),
             prefetched_episodes: Some(episodes),
@@ -838,7 +844,10 @@ fn select_items(
         } else {
             "option"
         };
-        println!("Only one {kind} available; selecting it automatically: {}", labels[0]);
+        println!(
+            "Only one {kind} available; selecting it automatically: {}",
+            labels[0]
+        );
         return Ok(vec![0]);
     }
 

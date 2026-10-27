@@ -41,7 +41,10 @@ where
     }
 
     loop {
-        write!(output, "Select an entry (1-{option_count}, or q to cancel): ")?;
+        write!(
+            output,
+            "Select an entry (1-{option_count}, or q to cancel): "
+        )?;
         output.flush()?;
 
         let mut line = String::new();
@@ -87,7 +90,13 @@ pub fn read_paged_selection(
 
     render_page(
         &mut output,
-        &PageView { labels, prompt, page, page_count, multi },
+        &PageView {
+            labels,
+            prompt,
+            page,
+            page_count,
+            multi,
+        },
         &input,
         &mut previous_width,
     )?;
@@ -139,7 +148,13 @@ pub fn read_paged_selection(
                 previous_width = 0;
                 render_page(
                     &mut output,
-                    &PageView { labels, prompt, page, page_count, multi },
+                    &PageView {
+            labels,
+            prompt,
+            page,
+            page_count,
+            multi,
+        },
                     &input,
                     &mut previous_width,
                 )?;
@@ -151,7 +166,13 @@ pub fn read_paged_selection(
                 previous_width = 0;
                 render_page(
                     &mut output,
-                    &PageView { labels, prompt, page, page_count, multi },
+                    &PageView {
+            labels,
+            prompt,
+            page,
+            page_count,
+            multi,
+        },
                     &input,
                     &mut previous_width,
                 )?;
@@ -358,8 +379,9 @@ impl Drop for RawModeGuard {
     fn drop(&mut self) {
         #[cfg(unix)]
         {
-            let _ =
-                unsafe { libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.original) };
+            let _ = unsafe {
+                libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.original)
+            };
         }
 
         #[cfg(windows)]
@@ -409,16 +431,7 @@ fn read_key_platform() -> io::Result<Key> {
     let handle = unsafe { GetStdHandle((-10i32) as u32) };
     let mut value = 0u16;
     let mut chars_read = 0u32;
-    if unsafe {
-        ReadConsoleW(
-            handle,
-            &mut value,
-            1,
-            &mut chars_read,
-            std::ptr::null_mut(),
-        )
-    } == 0
-    {
+    if unsafe { ReadConsoleW(handle, &mut value, 1, &mut chars_read, std::ptr::null_mut()) } == 0 {
         return Err(io::Error::last_os_error());
     }
     if chars_read == 0 {

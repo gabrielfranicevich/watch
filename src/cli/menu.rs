@@ -99,7 +99,13 @@ pub fn select(
     let mut command = Command::new(program);
     match program.rsplit('/').next().unwrap_or(program) {
         "fzf" => {
-            command.args(["--reverse", "--cycle", "--prompt", prompt, "--expect=backspace"]);
+            command.args([
+                "--reverse",
+                "--cycle",
+                "--prompt",
+                prompt,
+                "--expect=backspace",
+            ]);
             if multi {
                 command.arg("--multi");
             }
