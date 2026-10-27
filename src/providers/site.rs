@@ -181,11 +181,6 @@ impl SiteProvider {
         Self { id, client, base_url: id.base_url().to_owned() }
     }
 
-    #[cfg(test)]
-    fn with_base_url(id: ProviderId, base_url: &str) -> Self {
-        Self { id, client: Client::new(), base_url: base_url.trim_end_matches('/').to_owned() }
-    }
-
     pub fn search(&self, query: &str) -> Result<Vec<Anime>, SiteError> {
         let mut last_error = "no search route returned recognizable results".to_owned();
         for route in self.id.search_routes() {
@@ -266,18 +261,6 @@ impl SiteProvider {
         }
         Ok(episodes)
     }
-}
-
-fn encode_path_segment(value: &str) -> String {
-    let mut encoded = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.') {
-            encoded.push(byte as char);
-        } else {
-            encoded.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    encoded
 }
 
 fn is_verification_page(body: &str) -> bool {
