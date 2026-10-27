@@ -8,7 +8,7 @@ This guide covers the **watch CLI** on Android through [Termux](https://termux.d
 - Runtime playback has **not** been verified on a physical Android device.
 - The current Android player integration launches the MPV Android activity by default. The `--vlc` option selects the VLC Android activity.
 - The CLI does **not yet** implement generic Android media-handler fallback or reliable inline-to-external fallback. The playback policy module has unit tests, but the policy is not integrated into the current playback flow.
-- A stream may require a referer, separate audio, or subtitles that a player activity cannot receive correctly. Provider availability and player compatibility vary.
+- MPV playback now writes per-stream referer/audio/subtitle settings and adds an `include=` line to MPV-Android's shared-storage `mpv.conf`. This requires shared-storage access to be granted to both Termux and MPV-Android; physical-device playback still needs verification.
 
 ## 1. Install Termux
 
@@ -86,15 +86,19 @@ To try terminal playback:
 
 Inline playback requires MPV built with a compatible terminal video output driver and a terminal emulator that supports that output protocol. This is experimental on Android/Termux. Do not assume that `--inline` will automatically switch to an external player if it fails; automatic fallback is still pending.
 
-## 6. Optional Android storage access
+## 6. Storage access for MPV playback
 
-Only grant Termux shared-storage access if you need to access files in shared storage:
+Protected streams can require a `Referer` header. On Android, watch writes those per-stream options to `/storage/emulated/0/mpv/mpv.config.mp4` and ensures that `/storage/emulated/0/mpv/mpv.conf` includes that file. This is needed because launching MPV with an Android intent cannot pass arbitrary MPV command-line flags.
+
+Grant Termux shared-storage access:
 
 ~~~sh
 termux-setup-storage
 ~~~
 
-Accept Android's permission prompt. This creates Termux storage links under `~/storage`. Granting storage access is not required merely to clone and build the project in Termux's private home directory.
+Accept Android's permission prompt. Then, in Android settings, allow MPV-Android to manage/read shared files (the exact setting label varies by Android version). Restart playback after granting access. watch preserves existing settings in `mpv.conf` and avoids adding the same include line twice.
+
+This permission is not required merely to clone and build watch. If watch reports that it could not configure MPV, check both apps' storage permissions before troubleshooting the stream itself.
 
 ## 7. Troubleshooting
 
@@ -102,9 +106,11 @@ Accept Android's permission prompt. This creates Termux storage links under `~/s
 
 Check that the player app is installed and updated. The current implementation invokes Android's `am` command and uses a fixed activity name for MPV/VLC. A generic Android app chooser is not implemented yet.
 
-### The player opens but video does not start
+### MPV opens but video does not start
 
-Test the same URL in the player app if possible. The source may require a referer or may supply separate audio/subtitle streams. Those features are not guaranteed to transfer through Android's activity integration.
+Check the warning printed by watch. For streams that require a referer, Termux must be able to write to shared storage and MPV-Android must be able to read its `mpv.conf`. Run `termux-setup-storage`, grant MPV-Android shared-storage access in Android settings, and retry. watch now adds the per-stream config include automatically; it does not overwrite unrelated settings in `mpv.conf`.
+
+If playback still fails, test the stream in MPV-Android itself and capture the complete Termux output. Some providers reject requests independently of the referer, and separate audio/subtitle handling can still vary by stream.
 
 ### Inline playback fails
 
@@ -129,6 +135,6 @@ The following work remains before Android support should be considered complete:
 1. Integrate playback-target selection into the actual CLI playback flow.
 2. Implement and test fallback from inline playback to external playback when inline setup or process launch fails.
 3. Add an implicit Android `VIEW` intent fallback instead of requiring a fixed MPV/VLC activity.
-4. Make Android configuration, referer, audio, and subtitle handling reliable without hard-coded shared-storage paths.
+4. Verify MPV referer/audio/subtitle configuration on a physical Termux device and replace the hard-coded shared-storage path if device testing exposes compatibility issues.
 5. Test search and playback on a physical Termux device across MPV and VLC.
 6. Build the separate native Android app after extracting reusable application services from the CLI.
