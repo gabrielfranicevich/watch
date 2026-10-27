@@ -87,11 +87,7 @@ pub fn read_paged_selection(
 
     render_page(
         &mut output,
-        labels,
-        prompt,
-        page,
-        page_count,
-        multi,
+        &PageView { labels, prompt, page, page_count, multi },
         &input,
         &mut previous_width,
     )?;
@@ -143,11 +139,7 @@ pub fn read_paged_selection(
                 previous_width = 0;
                 render_page(
                     &mut output,
-                    labels,
-                    prompt,
-                    page,
-                    page_count,
-                    multi,
+                    &PageView { labels, prompt, page, page_count, multi },
                     &input,
                     &mut previous_width,
                 )?;
@@ -159,11 +151,7 @@ pub fn read_paged_selection(
                 previous_width = 0;
                 render_page(
                     &mut output,
-                    labels,
-                    prompt,
-                    page,
-                    page_count,
-                    multi,
+                    &PageView { labels, prompt, page, page_count, multi },
                     &input,
                     &mut previous_width,
                 )?;
@@ -196,30 +184,40 @@ fn prompt_line(prompt: &str, page: usize, page_count: usize, multi: bool) -> Str
     )
 }
 
-fn render_page<W: Write>(
-    output: &mut W,
-    labels: &[String],
-    prompt: &str,
+struct PageView<'a> {
+    labels: &'a [String],
+    prompt: &'a str,
     page: usize,
     page_count: usize,
     multi: bool,
+}
+
+fn render_page<W: Write>(
+    output: &mut W,
+    view: &PageView<'_>,
     input: &str,
     previous_width: &mut usize,
 ) -> io::Result<()> {
-    let range = page_bounds(labels.len(), page);
-    let index_width = labels.len().to_string().len();
+    let range = page_bounds(view.labels.len(), view.page);
+    let index_width = view.labels.len().to_string().len();
     writeln!(
         output,
         "\r\n{} (page {} of {}):",
-        prompt.trim_end(),
-        page + 1,
-        page_count
+        view.prompt.trim_end(),
+        view.page + 1,
+        view.page_count
     )?;
-    for (index, label) in labels.iter().enumerate().take(range.end).skip(range.start) {
+    for (index, label) in view
+        .labels
+        .iter()
+        .enumerate()
+        .take(range.end)
+        .skip(range.start)
+    {
         writeln!(output, "{:>index_width$}. {label}", index + 1)?;
     }
 
-    let line = prompt_line(prompt, page, page_count, multi);
+    let line = prompt_line(view.prompt, view.page, view.page_count, view.multi);
     *previous_width = 0;
     write_prompt(output, &line, input, previous_width)
 }
@@ -303,55 +301,57 @@ struct RawModeGuard;
 
 impl RawModeGuard {
     fn enable() -> io::Result<Self> {
-        #[cfg(unix)]
-        {
-            let mut original = std::mem::MaybeUninit::<libc::termios>::uninit();
-            if unsafe { libc::tcgetattr(libc::STDIN_FILENO, original.as_mut_ptr()) } == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            let original = unsafe { original.assume_init() };
-            let mut raw = original;
-            raw.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
-            raw.c_cc[libc::VMIN as usize] = 1;
-            raw.c_cc[libc::VTIME as usize] = 0;
-            if unsafe { libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &raw) } == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            return Ok(Self { original });
-        }
-
-        #[cfg(windows)]
-        {
-            let handle = unsafe { GetStdHandle((-10i32) as u32) };
-            if handle.is_null() || handle as isize == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            let mut original_mode = 0u32;
-            if unsafe { GetConsoleMode(handle, &mut original_mode) } == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            const ENABLE_PROCESSED_INPUT: u32 = 0x0001;
-            const ENABLE_LINE_INPUT: u32 = 0x0002;
-            const ENABLE_ECHO_INPUT: u32 = 0x0004;
-            let raw_mode =
-                original_mode & !(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-            if unsafe { SetConsoleMode(handle, raw_mode) } == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            return Ok(Self {
-                handle,
-                original_mode,
-            });
-        }
-
-        #[cfg(not(any(unix, windows)))]
-        {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "raw terminal input is not supported on this platform",
-            ))
-        }
+        enable_raw_mode()
     }
+}
+
+#[cfg(unix)]
+fn enable_raw_mode() -> io::Result<RawModeGuard> {
+    let mut original = std::mem::MaybeUninit::<libc::termios>::uninit();
+    if unsafe { libc::tcgetattr(libc::STDIN_FILENO, original.as_mut_ptr()) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    let original = unsafe { original.assume_init() };
+    let mut raw = original;
+    raw.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
+    raw.c_cc[libc::VMIN] = 1;
+    raw.c_cc[libc::VTIME] = 0;
+    if unsafe { libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &raw) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(RawModeGuard { original })
+}
+
+#[cfg(windows)]
+fn enable_raw_mode() -> io::Result<RawModeGuard> {
+    let handle = unsafe { GetStdHandle((-10i32) as u32) };
+    if handle.is_null() || handle as isize == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut original_mode = 0u32;
+    if unsafe { GetConsoleMode(handle, &mut original_mode) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    const ENABLE_PROCESSED_INPUT: u32 = 0x0001;
+    const ENABLE_LINE_INPUT: u32 = 0x0002;
+    const ENABLE_ECHO_INPUT: u32 = 0x0004;
+    let raw_mode =
+        original_mode & !(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+    if unsafe { SetConsoleMode(handle, raw_mode) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(RawModeGuard {
+        handle,
+        original_mode,
+    })
+}
+
+#[cfg(not(any(unix, windows)))]
+fn enable_raw_mode() -> io::Result<RawModeGuard> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "raw terminal input is not supported on this platform",
+    ))
 }
 
 impl Drop for RawModeGuard {
@@ -385,57 +385,58 @@ unsafe extern "system" {
 }
 
 fn read_key() -> io::Result<Key> {
-    #[cfg(unix)]
-    {
-        let mut byte = 0u8;
-        let read = unsafe {
-            libc::read(
-                libc::STDIN_FILENO,
-                (&mut byte as *mut u8).cast(),
-                1,
-            )
-        };
-        if read < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if read == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "terminal input closed",
-            ));
-        }
-        return Ok(key_from_character(byte as char));
-    }
+    read_key_platform()
+}
 
-    #[cfg(windows)]
-    {
-        let handle = unsafe { GetStdHandle((-10i32) as u32) };
-        let mut value = 0u16;
-        let mut chars_read = 0u32;
-        if unsafe {
-            ReadConsoleW(
-                handle,
-                &mut value,
-                1,
-                &mut chars_read,
-                std::ptr::null_mut(),
-            )
-        } == 0
-        {
-            return Err(io::Error::last_os_error());
-        }
-        if chars_read == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "terminal input closed",
-            ));
-        }
-        let character = char::from_u32(value as u32).unwrap_or('\0');
-        return Ok(key_from_character(character));
+#[cfg(unix)]
+fn read_key_platform() -> io::Result<Key> {
+    let mut byte = 0u8;
+    let read = unsafe { libc::read(libc::STDIN_FILENO, (&mut byte as *mut u8).cast(), 1) };
+    if read < 0 {
+        return Err(io::Error::last_os_error());
     }
+    if read == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "terminal input closed",
+        ));
+    }
+    Ok(key_from_character(byte as char))
+}
 
-    #[allow(unreachable_code)]
-    Ok(Key::Other)
+#[cfg(windows)]
+fn read_key_platform() -> io::Result<Key> {
+    let handle = unsafe { GetStdHandle((-10i32) as u32) };
+    let mut value = 0u16;
+    let mut chars_read = 0u32;
+    if unsafe {
+        ReadConsoleW(
+            handle,
+            &mut value,
+            1,
+            &mut chars_read,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    if chars_read == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "terminal input closed",
+        ));
+    }
+    let character = char::from_u32(value as u32).unwrap_or('\0');
+    Ok(key_from_character(character))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn read_key_platform() -> io::Result<Key> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "raw terminal input is not supported on this platform",
+    ))
 }
 
 #[cfg(test)]

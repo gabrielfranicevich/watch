@@ -95,7 +95,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let mut pending_query = search_query;
     let mut cached_choices: Option<Vec<AnimeChoice>> = None;
 
-    let (anime, selected): (Anime, Vec<Episode>) = loop {
+    let (anime, episodes, selected): (Anime, Vec<Episode>, Vec<Episode>) = loop {
         let choices = if let Some(cached) = cached_choices.take() {
             cached
         } else if active_source == "history" {
@@ -184,7 +184,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 .collect()
         };
 
-        break (choice.anime, selected_episodes);
+        break (choice.anime, episodes, selected_episodes);
     };
 
     let resolver = HiAnimeStreamResolver::new();
