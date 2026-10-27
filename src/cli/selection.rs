@@ -85,7 +85,7 @@ pub fn read_paged_selection(
     let page_count = labels.len().div_ceil(PAGE_SIZE);
     let mut page = 0;
     let mut input = String::new();
-    let mut line = prompt_line(prompt, page, page_count, multi);
+    let mut line = prompt_line(prompt, page, page_count);
     let mut previous_width = 0;
 
     render_page(
@@ -120,7 +120,7 @@ pub fn read_paged_selection(
                         labels.len()
                     )?;
                     input.clear();
-                    let updated_line = prompt_line(prompt, page, page_count, multi);
+                    let updated_line = prompt_line(prompt, page, page_count);
                     previous_width = 0;
                     write_prompt(&mut output, &updated_line, &input, &mut previous_width)?;
                 }
@@ -141,10 +141,46 @@ pub fn read_paged_selection(
                 writeln!(output)?;
                 return Ok(SelectionOutcome::Cancelled);
             }
+            Key::Right if input.is_empty() && page + 1 < page_count => {
+                page += 1;
+                input.clear();
+                line = prompt_line(prompt, page, page_count);
+                previous_width = 0;
+                render_page(
+                    &mut output,
+                    &PageView {
+                        labels,
+                        prompt,
+                        page,
+                        page_count,
+                        multi,
+                    },
+                    &input,
+                    &mut previous_width,
+                )?;
+            }
+            Key::Left if input.is_empty() && page > 0 => {
+                page -= 1;
+                input.clear();
+                line = prompt_line(prompt, page, page_count);
+                previous_width = 0;
+                render_page(
+                    &mut output,
+                    &PageView {
+                        labels,
+                        prompt,
+                        page,
+                        page_count,
+                        multi,
+                    },
+                    &input,
+                    &mut previous_width,
+                )?;
+            }
             Key::Character('n' | 'N') if input.is_empty() && page + 1 < page_count => {
                 page += 1;
                 input.clear();
-                line = prompt_line(prompt, page, page_count, multi);
+                line = prompt_line(prompt, page, page_count);
                 previous_width = 0;
                 render_page(
                     &mut output,
@@ -190,19 +226,17 @@ pub fn read_paged_selection(
     }
 }
 
-fn prompt_line(prompt: &str, page: usize, page_count: usize, multi: bool) -> String {
-    let selection_help = if multi {
-        "numbers separated by spaces"
+fn prompt_line(prompt: &str, page: usize, page_count: usize) -> String {
+    if page_count > 1 {
+        format!(
+            "{} [page {}/{}; ←/→ page; Backspace back; Esc cancel]: ",
+            prompt.trim_end(),
+            page + 1,
+            page_count
+        )
     } else {
-        "one number"
-    };
-    format!(
-        "{} [page {}/{}; {}; n/p page; Backspace back; q/Esc cancel]: ",
-        prompt.trim_end(),
-        page + 1,
-        page_count,
-        selection_help
-    )
+        format!("{}: ", prompt.trim_end())
+    }
 }
 
 struct PageView<'a> {
@@ -291,6 +325,8 @@ enum Key {
     Enter,
     Backspace,
     Escape,
+    Left,
+    Right,
     Cancel,
     Other,
 }
@@ -421,7 +457,43 @@ fn read_key_platform() -> io::Result<Key> {
             "terminal input closed",
         ));
     }
-    Ok(key_from_character(byte as char))
+    if byte != 0x1b {
+        return Ok(key_from_character(byte as char));
+    }
+
+    let mut descriptor = libc::pollfd {
+        fd: libc::STDIN_FILENO,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    if unsafe { libc::poll(&mut descriptor, 1, 40) } <= 0 {
+        return Ok(Key::Escape);
+    }
+
+    let mut next = 0u8;
+    if unsafe { libc::read(libc::STDIN_FILENO, (&mut next as *mut u8).cast(), 1) } != 1 {
+        return Ok(Key::Escape);
+    }
+    if next != b'[' {
+        return Ok(Key::Escape);
+    }
+
+    loop {
+        if unsafe { libc::poll(&mut descriptor, 1, 40) } <= 0 {
+            return Ok(Key::Other);
+        }
+        let mut code = 0u8;
+        if unsafe { libc::read(libc::STDIN_FILENO, (&mut code as *mut u8).cast(), 1) } != 1 {
+            return Ok(Key::Other);
+        }
+        if (0x40..=0x7e).contains(&code) {
+            return Ok(match code {
+                b'C' => Key::Right,
+                b'D' => Key::Left,
+                _ => Key::Other,
+            });
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -437,6 +509,29 @@ fn read_key_platform() -> io::Result<Key> {
             io::ErrorKind::UnexpectedEof,
             "terminal input closed",
         ));
+    }
+    if value == 0 || value == 0xe0 {
+        let mut scan_code = 0u16;
+        let mut scan_chars_read = 0u32;
+        if unsafe {
+            ReadConsoleW(
+                handle,
+                &mut scan_code,
+                1,
+                &mut scan_chars_read,
+                std::ptr::null_mut(),
+            )
+        } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if scan_chars_read == 0 {
+            return Ok(Key::Other);
+        }
+        return Ok(match scan_code {
+            75 => Key::Left,
+            77 => Key::Right,
+            _ => Key::Other,
+        });
     }
     let character = char::from_u32(value as u32).unwrap_or('\0');
     Ok(key_from_character(character))
@@ -519,6 +614,22 @@ mod tests {
         assert_eq!(page_bounds(31, 0), 0..15);
         assert_eq!(page_bounds(31, 1), 15..30);
         assert_eq!(page_bounds(31, 2), 30..31);
+    }
+
+
+    #[test]
+    fn page_prompt_only_shows_navigation_hints_for_multiple_pages() {
+        assert_eq!(prompt_line("Select anime: ", 0, 1), "Select anime: ");
+        assert_eq!(
+            prompt_line("Select anime: ", 1, 2),
+            "Select anime [page 2/2; ←/→ page; Backspace back; Esc cancel]: "
+        );
+    }
+
+    #[test]
+    fn maps_arrow_key_sequences() {
+        assert_eq!(key_from_character('q'), Key::Character('q'));
+        assert_eq!(key_from_character('\u{1b}'), Key::Escape);
     }
 
     #[test]
