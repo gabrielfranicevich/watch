@@ -1119,6 +1119,73 @@ mod tests {
   }
 
   #[test]
+  fn search_fetches_supported_routes_and_merges_results_from_each() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+      let mut requested_paths = Vec::new();
+      for _ in 0..2 {
+        let (mut connection, _) = listener.accept().unwrap();
+        connection
+          .set_read_timeout(Some(Duration::from_secs(2)))
+          .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 2048];
+        while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+          let count = connection.read(&mut buffer).unwrap();
+          if count == 0 {
+            break;
+          }
+          request.extend_from_slice(&buffer[..count]);
+        }
+        let request = String::from_utf8_lossy(&request).into_owned();
+        let path = request
+          .lines()
+          .next()
+          .and_then(|line| line.split_whitespace().nth(1))
+          .unwrap_or("/")
+          .to_owned();
+        let body = if path.starts_with("/search.html?keyword=Frieren") {
+          r#"<a href="/series/frieren-one" title="Frieren One">Frieren One</a>"#
+        } else if path.starts_with("/?s=Frieren") {
+          r#"<a href="/series/frieren-two" title="Frieren Two">Frieren Two</a>"#
+        } else {
+          panic!("unexpected search route: {path}");
+        };
+        write!(
+          connection,
+          "HTTP/1.1 200 OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{}",
+          body.len(),
+          body
+        )
+        .unwrap();
+        requested_paths.push(path);
+      }
+      requested_paths
+    });
+
+    let provider = SiteProvider {
+      id: ProviderId::GoGoAnime,
+      client: Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .unwrap(),
+      base_url: format!("http://{address}"),
+    };
+    let results = provider.search("Frieren").unwrap();
+    let requested_paths = server.join().unwrap();
+
+    assert_eq!(requested_paths.len(), 2);
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().any(|anime| anime.title == "Frieren One"));
+    assert!(results.iter().any(|anime| anime.title == "Frieren Two"));
+  }
+
+  #[test]
   fn episode_parser_sorts_numeric_episodes_and_skips_navigation() {
     let html = r#"<a href="/watch/frieren/ep-10">Episode 10</a>
             <a href="/watch/frieren/ep-2">Episode 2</a>
