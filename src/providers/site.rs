@@ -136,7 +136,7 @@ impl ProviderId {
                 || (path.starts_with("/watch/") && !path.contains("/ep-")),
             Self::MonosChinos => path.starts_with("/anime/"),
             Self::TioAnime => path.starts_with("/anime/") || path.starts_with("/animes/"),
-            Self::AnimeBlix => path.starts_with("/animes/") || path.starts_with("/anime/"),
+            Self::AnimeBlix => (path.starts_with("/animes/") || path.starts_with("/anime/")) && !path.contains("/ver-"),
             Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
             Self::JkAnime => {
                 path.trim_matches('/').split('/').filter(|segment| !segment.is_empty()).count() == 1
@@ -300,7 +300,7 @@ fn matches_query(title: &str, query: &str) -> bool {
     let key = title_key(title);
     let query_key = title_key(query);
     (!query_key.is_empty() && key.contains(&query_key))
-        || query.split_whitespace().any(|term| {
+        || query.split_whitespace().all(|term| {
             let term = title_key(term);
             !term.is_empty() && key.contains(&term)
         })
@@ -336,8 +336,14 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
         if url.host_str() != base.host_str() || url.as_str() == anime_url { continue; }
         let label = normalize_whitespace(&anchor.text().collect::<String>());
         let path = url.path().to_ascii_lowercase();
-        let episode_like_path = is_episode_page(&url) || path.contains("/episode/") || path.contains("/episodes/")
-            || path.contains("/watch/") || path.contains("/ver/");
+        let episode_like_path = is_episode_page(&url)
+            || path.contains("/episode/")
+            || path.contains("/episodes/")
+            || path.contains("/watch/")
+            || path.contains("/ver/")
+            || path.contains("/ep/")
+            || path.contains("/capitulo/")
+            || path.contains("/episodio/");
         let Some(number) = episode_number_from(&label, url.as_str()) else { continue };
         let label_is_number = !label.trim().is_empty() && label.trim().chars().all(|character| character.is_ascii_digit());
         if !(episode_like_path || has_episode_marker(&label) || label_is_number) { continue; }
@@ -389,8 +395,17 @@ fn episode_number_from(label: &str, url: &str) -> Option<String> {
     }
     let parsed = Url::parse(url).ok()?;
     let path = parsed.path().trim_end_matches('/');
-    if !is_episode_page(&parsed) && !path.contains("/episode/") && !path.contains("/episodes/")
-        && !path.contains("/watch/") && !path.contains("/ver/") { return None; }
+    if !is_episode_page(&parsed)
+        && !path.contains("/episode/")
+        && !path.contains("/episodes/")
+        && !path.contains("/watch/")
+        && !path.contains("/ver/")
+        && !path.contains("/ep/")
+        && !path.contains("/capitulo/")
+        && !path.contains("/episodio/")
+    {
+        return None;
+    }
     path.rsplit('/').next()?.split(|character: char| !character.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty()).rev()
         .find(|part| part.chars().all(|character| character.is_ascii_digit())).map(str::to_owned)
