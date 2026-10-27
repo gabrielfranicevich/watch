@@ -12,12 +12,12 @@ class AniCli < Formula
 
   def install
     system "cargo", "build", "--release"
-    bin.install "target/release/ani-cli"
-    man1.install "ani-cli.1"
+    bin.install "target/release/watch"
+    man1.install "watch.1"
   end
 
   test do
-    assert_match "ani-cli", shell_output("#{bin}/ani-cli --version")
-    assert_match "Usage:", shell_output("#{bin}/ani-cli --help")
+    assert_match "ani-cli", shell_output("#{bin}/watch --version")
+    assert_match "Usage:", shell_output("#{bin}/watch --help")
   end
 end

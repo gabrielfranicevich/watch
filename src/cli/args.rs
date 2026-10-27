@@ -1,10 +1,10 @@
 use std::fmt;
 
-pub const HELP: &str = "ani-cli — browse and watch anime
+pub const HELP: &str = "watch — browse and watch anime
 
 Usage:
-  ani-cli [options] [query]
-  ani-cli [query] [options]
+  watch [options] [query]
+  watch [query] [options]
 
 Options:
   -c, --continue           Continue watching from history
@@ -27,7 +27,7 @@ Options:
       --inline, --here      Play in the terminal using graphics protocols when available
       --exit-after-play    Return the player exit code
   -N, --nextep-countdown   Show countdown to next episode
-  -U, --update             Update ani-cli
+  -U, --update             Update watch
 
 Rust supports HiAnime search, episode selection, MPV/VLC/Syncplay playback, optional inline terminal video, quality selection, external menu backends, downloads, subtitles, watch history, the Cargo-based updater, and next-episode countdown.
 ";

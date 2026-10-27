@@ -52,8 +52,8 @@ jobs:
 
       - name: Smoke-test CLI entry points
         run: |
-          cargo run --quiet -- --help
-          cargo run --quiet -- --version
+          cargo run --quiet --bin watch -- --help
+          cargo run --quiet --bin watch -- --version
 
       - name: Check formatting
         run: cargo fmt --all -- --check

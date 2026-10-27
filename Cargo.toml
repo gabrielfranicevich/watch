@@ -18,5 +18,8 @@ name = "ani_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ani-cli"
+name = "watch"
 path = "src/main.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
