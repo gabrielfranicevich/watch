@@ -11,15 +11,15 @@ pub mod providers;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn version() -> &'static str {
-    VERSION
+  VERSION
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn version_matches_cargo_package_version() {
-        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
-    }
+  #[test]
+  fn version_matches_cargo_package_version() {
+    assert_eq!(version(), env!("CARGO_PKG_VERSION"));
+  }
 }
