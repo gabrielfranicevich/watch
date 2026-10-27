@@ -1,4 +1,4 @@
-use std::thread;
+use std::{sync::mpsc, thread};
 
 use super::hianime::HiAnimeProvider;
 use super::site::{Language, ProviderId, ProviderStreamResolver, SiteProvider};
@@ -25,41 +25,71 @@ impl ProviderCatalog {
   }
 
   pub fn search(&self, query: &str) -> Result<Vec<AnimeOption>, Box<dyn std::error::Error>> {
-    let handles: Vec<_> = ProviderId::ALL
+    let english: Vec<_> = ProviderId::ALL
       .into_iter()
-      .map(|provider| {
-        let query = query.to_owned();
-        thread::spawn(move || {
-          let result = if provider == ProviderId::HiAnime {
-            HiAnimeProvider::new()
-              .search(&query)
-              .map_err(|error| error.to_string())
-          } else {
-            SiteProvider::new(provider)
-              .search(&query)
-              .map_err(|error| error.to_string())
-          };
-          (provider, result)
-        })
-      })
+      .filter(|provider| provider.language() == Language::English)
+      .map(ProviderId::name)
       .collect();
+    let spanish: Vec<_> = ProviderId::ALL
+      .into_iter()
+      .filter(|provider| provider.language() == Language::Spanish)
+      .map(ProviderId::name)
+      .collect();
+    eprintln!("Searching anime providers in parallel:");
+    eprintln!("  English (en): {}", english.join(", "));
+    eprintln!("  Spanish (es): {}", spanish.join(", "));
+
+    let (sender, receiver) = mpsc::channel();
+    for provider in ProviderId::ALL {
+      let query = query.to_owned();
+      let sender = sender.clone();
+      thread::spawn(move || {
+        let result = if provider == ProviderId::HiAnime {
+          HiAnimeProvider::new()
+            .search(&query)
+            .map_err(|error| error.to_string())
+        } else {
+          SiteProvider::new(provider)
+            .search(&query)
+            .map_err(|error| error.to_string())
+        };
+        let _ = sender.send((provider, result));
+      });
+    }
+    drop(sender);
 
     let mut sources = Vec::new();
     let mut succeeded = 0usize;
     let mut failures = Vec::new();
 
-    for handle in handles {
-      match handle.join() {
+    for _ in 0..ProviderId::ALL.len() {
+      match receiver.recv() {
         Ok((provider, Ok(results))) => {
           succeeded += 1;
+          eprintln!(
+            "  {} [{}]: {} result(s)",
+            provider.name(),
+            provider.language().short_code(),
+            results.len()
+          );
           sources.extend(
             results
               .into_iter()
               .map(|anime| ProviderAnime { provider, anime }),
           );
         }
-        Ok((provider, Err(error))) => failures.push(format!("{}: {error}", provider.name())),
-        Err(_) => failures.push("provider search worker panicked".to_owned()),
+        Ok((provider, Err(error))) => {
+          eprintln!(
+            "  {} [{}]: failed ({error})",
+            provider.name(),
+            provider.language().short_code()
+          );
+          failures.push(format!("{}: {error}", provider.name()));
+        }
+        Err(_) => {
+          failures.push("provider search worker terminated without returning a result".to_owned());
+          break;
+        }
       }
     }
 
