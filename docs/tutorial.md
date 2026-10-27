@@ -30,7 +30,24 @@ Install a supported player separately. MPV is the usual default; VLC, Syncplay, 
 
 FFmpeg is needed for downloads and for muxing separate video and audio tracks. yt-dlp is optional and preferred when a resolved stream is suitable. fzf, rofi, and dmenu are optional selection menus.
 
-On Windows, install tools in the same environment from which you launch watch. WSL may need extra setup to invoke a Windows player. On Android/Termux, launching a player depends on the installed app and Android intent integration.
+On Windows, install tools in the same environment from which you launch watch. WSL may need extra setup to invoke a Windows player.
+
+### Android / Termux
+
+The Rust CLI can be built directly in Termux on supported ARM64 devices. Install the build tools and clone the Android-support branch:
+
+~~~sh
+pkg update
+pkg install rust git clang
+git clone --branch android-support https://github.com/gabrielfranicevich/watch.git
+cd watch
+cargo build --release
+./target/release/watch --version
+~~~
+
+On Android, external playback uses an Android `VIEW` intent by default, allowing Android to offer a compatible installed app. If `ANI_CLI_PLAYER` names MPV or VLC, watch uses that app's explicit activity integration instead. Install a media player that can open the provider's stream format. The player app may not support referer-dependent HLS streams, external audio, or subtitles.
+
+The `--inline` option attempts MPV terminal output when a compatible interactive terminal and output driver are available. If inline setup or launching the inline player fails, watch switches to external playback. Terminal graphics protocols are not guaranteed to work in Termux, so external playback is the expected fallback. Android device playback has not yet been validated by this documentation change; report device model, Android version, Termux version, player app, command, and error output when troubleshooting.
 
 ## 3. Search and play
 
