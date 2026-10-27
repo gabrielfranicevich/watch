@@ -22,7 +22,6 @@ use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::catalog::{AnimeOption, ProviderAnime, ProviderCatalog};
-use ani_cli::providers::hianime::HiAnimeProvider;
 use ani_cli::providers::site::{ProviderId, ProviderStreamResolver};
 
 fn main() -> ExitCode {
@@ -89,7 +88,6 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         search_query = Some(query);
     }
 
-    let provider = HiAnimeProvider::new();
     let catalog = ProviderCatalog::new();
     let mut active_source = if source == "history" {
         "history".to_owned()
@@ -106,7 +104,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             let store = history
                 .as_ref()
                 .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
-            history_anime_choices(&provider, store)?
+            history_anime_choices(&catalog, store)?
         } else {
             let query = match pending_query.take() {
                 Some(query) => query,
@@ -274,6 +272,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         cli.inline_playback || cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
     let mut playback = PlaybackConfig {
         resolver: &resolver,
+        provider: active_provider,
         player,
         player_flags,
         dubbed,
@@ -325,6 +324,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
 
 struct PlaybackConfig<'a> {
     resolver: &'a ProviderStreamResolver,
+    provider: ProviderId,
     player: Player,
     player_flags: Vec<String>,
     dubbed: bool,
@@ -448,7 +448,7 @@ impl PlaybackConfig<'_> {
 
     fn record(&self, anime: &Anime, episode: &Episode) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(store) = self.history {
-            record_history(store, anime, episode)?;
+            record_history_for_provider(store, anime, episode, self.provider)?;
         }
         Ok(())
     }
@@ -667,16 +667,35 @@ fn show_logs() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn record_history(store: &HistoryStore, anime: &Anime, episode: &Episode) -> io::Result<()> {
+    record_history_for_provider(store, anime, episode, ProviderId::HiAnime)
+}
+
+fn record_history_for_provider(
+    store: &HistoryStore,
+    anime: &Anime,
+    episode: &Episode,
+    provider: ProviderId,
+) -> io::Result<()> {
     let mut entries = store.read()?;
-    if let Some(existing) = entries.iter_mut().find(|entry| entry.anime_id == anime.id) {
+    let provider_key = provider.key();
+    if let Some(existing) = entries.iter_mut().find(|entry| {
+        entry.anime_id == anime.id
+            && entry.provider.as_deref().unwrap_or("hianime") == provider_key
+    }) {
         existing.episode_number = episode.number.clone();
         existing.anime_title = anime.title.clone();
     } else {
-        entries.push(HistoryEntry::new(
-            episode.number.clone(),
-            anime.id.clone(),
-            anime.title.clone(),
-        ));
+        let entry = if provider == ProviderId::HiAnime {
+            HistoryEntry::new(episode.number.clone(), anime.id.clone(), anime.title.clone())
+        } else {
+            HistoryEntry::with_provider(
+                episode.number.clone(),
+                anime.id.clone(),
+                anime.title.clone(),
+                provider_key,
+            )
+        };
+        entries.push(entry);
     }
     store.write(&entries)
 }
@@ -763,7 +782,7 @@ fn search_anime_choices(
 }
 
 fn history_anime_choices(
-    provider: &HiAnimeProvider,
+    catalog: &ProviderCatalog,
     store: &HistoryStore,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
     store.backup_legacy_entries()?;
@@ -774,19 +793,33 @@ fn history_anime_choices(
 
     let mut recent = Vec::<HistoryEntry>::new();
     for entry in entries.into_iter().rev() {
-        if !recent.iter().any(|item| item.anime_id == entry.anime_id) {
+        if !recent.iter().any(|item| {
+            item.anime_id == entry.anime_id && item.provider == entry.provider
+        }) {
             recent.push(entry);
         }
     }
 
     let mut choices = Vec::new();
     for entry in recent {
+        let history_provider = entry
+            .provider
+            .as_deref()
+            .and_then(ProviderId::from_key)
+            .unwrap_or(ProviderId::HiAnime);
         let anime = Anime::new(
             entry.anime_id.clone(),
             entry.anime_title.clone(),
-            format!("https://hianime.at/{}", entry.anime_id),
+            format!(
+                "{}/{}",
+                history_provider.base_url(),
+                entry.anime_id.trim_start_matches('/')
+            ),
         );
-        let episodes = match provider.episodes(&anime) {
+        let episodes = match catalog.episodes(&ProviderAnime {
+            provider: history_provider,
+            anime: anime.clone(),
+        }) {
             Ok(episodes) => episodes,
             Err(error) => {
                 eprintln!(
@@ -819,7 +852,7 @@ fn history_anime_choices(
                 entry.anime_title, next_episode.number
             ),
             anime,
-            provider: ProviderId::HiAnime,
+            provider: history_provider,
             sources: Vec::new(),
             resume_episode: Some(entry.episode_number),
             prefetched_episodes: Some(episodes),
