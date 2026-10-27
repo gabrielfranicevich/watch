@@ -1,4 +1,4 @@
-//! Core library for the ani-cli Rust implementation.
+//! Core library for watch.
 
 pub mod application;
 pub mod cli;

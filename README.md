@@ -2,7 +2,7 @@
 
 Search anime, select episodes, and stream or download them from your terminal.
 
-[![Rust CI](https://github.com/gabrielfranicevich/anime/actions/workflows/rust.yml/badge.svg?branch=develop)](https://github.com/gabrielfranicevich/anime/actions/workflows/rust.yml)
+[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=develop)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
@@ -32,13 +32,13 @@ watch searches HiAnime, resolves available HLS streams, and hands playback or do
 Install stable Rust 1.85 or newer and Git, then install the CLI and search for a title:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/anime --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
 watch "Frieren"
 ~~~
 
 Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
 
-On Linux, `watch` may already refer to the system process-monitoring utility. If the wrong command runs, put Cargo’s binary directory (`~/.cargo/bin`) before system directories in `PATH`, or invoke `~/.cargo/bin/watch` explicitly. The Cargo package metadata and legacy `ANI_CLI_*` environment variable names remain unchanged.
+On Linux, `watch` may already refer to the system process-monitoring utility. If the wrong command runs, put Cargo’s binary directory (`~/.cargo/bin`) before system directories in `PATH`, or invoke `~/.cargo/bin/watch` explicitly. The Rust package and executable are both named `watch`; legacy `ANI_CLI_*` environment variable names remain unchanged.
 
 ## Examples
 
@@ -70,7 +70,7 @@ Run `watch --help` for the complete option list.
 ## Interactive selection
 
 - A single anime result is selected automatically with a message saying it is the only result. The same rule applies when an anime has only one available episode.
-- The built-in numbered menu displays up to 15 results per page. Press `n` for the next page and `p` for the previous page; item numbers remain global across pages.
+- The built-in numbered menu displays up to 15 results per page. Press Left or Right to move between pages; item numbers remain global across pages. Page-navigation hints appear only when more than one page is available.
 - Press `Backspace` with no number entered to go back. From episode selection it returns to the anime results; from the anime results it starts a fresh search. If the only anime result was auto-selected, Backspace from its episode list returns to the search prompt instead of reopening that same result.
 - Press `q` or `Esc` to cancel the current selection.
 - When `fzf` is available, it can filter and scroll the complete list. Backspace is reserved for navigating to the previous step rather than deleting text from the `fzf` filter.
@@ -155,7 +155,7 @@ Install players and command-line tools with your operating system's package mana
 - [Rust migration notes](docs/rust-migration.md)
 - [Roadmap](docs/roadmap.md)
 - [Upstream Matrix community (original maintainers)](docs/matrix.md)
-- [Open an issue](https://github.com/gabrielfranicevich/anime/issues)
+- [Open an issue](https://github.com/gabrielfranicevich/watch/issues)
 
 ## License
 
