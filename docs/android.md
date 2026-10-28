@@ -1,107 +1,107 @@
-# Guía de instalación y configuración de Watch en Android
+# Install and Configure Watch on Android
 
-Estos pasos permiten instalar `watch` desde cero en Android usando Termux, configurar MPV-Android y reproducir anime con los parámetros necesarios para los streams.
+Use these steps to install `watch` on Android with Termux, configure MPV-Android, and play anime streams with the required options.
 
-## 1. Instalar las aplicaciones
+## 1. Install the apps
 
-Instalá estas dos aplicaciones:
+Install these two apps:
 
-- **Termux:** terminal donde se instala y ejecuta `watch`. Preferentemente, descargalo desde [F-Droid](https://f-droid.org/packages/com.termux/).
-- **MPV-Android:** reproductor de video. Está disponible en [GitHub — MPV-Android](https://github.com/mpv-android/mpv-android/releases).
+- **Termux:** the terminal where you install and run `watch`. The F-Droid version is recommended: [Termux on F-Droid](https://f-droid.org/packages/com.termux/).
+- **MPV-Android:** the video player, available from [MPV-Android on GitHub](https://github.com/mpv-android/mpv-android/releases).
 
-Abrí Termux y actualizá los paquetes:
+Open Termux and update its packages:
 
 ```sh
 pkg update && pkg upgrade
 ```
 
-Instalá las dependencias:
+Install the dependencies:
 
 ```sh
 pkg install rust git
 ```
 
-Verificá que Cargo esté disponible:
+Confirm Cargo is available:
 
 ```sh
 cargo --version
 ```
 
-## 2. Instalar Watch
+## 2. Install Watch
 
-La primera vez, instalá el ejecutable desde crates.io con Cargo:
+Install the executable from crates.io with Cargo:
 
 ```sh
 cargo install watch
 ```
 
-Si el paquete todavía no está publicado o Cargo no encuentra la versión de este proyecto, instalalo directamente desde la rama Rust del repositorio:
+If the package is not published yet or Cargo cannot find this project’s version, install it directly from the repository’s `main` branch:
 
 ```sh
 cargo install --git https://github.com/gabrielfranicevich/watch --branch main
 ```
 
-Para futuras actualizaciones, una vez instalado:
+For future updates, run:
 
 ```sh
 watch -U
 ```
 
-Verificá que el comando esté disponible:
+Confirm the command is available:
 
 ```sh
 watch --help
 ```
 
-## 3. Configurar MPV-Android
+## 3. Configure MPV-Android
 
-MPV-Android debe cargar el archivo de configuración que `watch` genera para cada reproducción. Ese archivo contiene opciones del stream, como `Referer` y subtítulos externos.
+MPV-Android needs to load the configuration file that `watch` generates for each playback. The file contains stream options such as `Referer` and external subtitles.
 
-Desde Termux, creá el directorio compartido:
+Create the shared directory from Termux:
 
 ```sh
 mkdir -p /storage/emulated/0/mpv
 ```
 
-El archivo que `watch` actualiza para los parámetros de cada reproducción es:
+`watch` updates per-playback options in this file:
 
 ```text
 /storage/emulated/0/mpv/mpv.config.mp4
 ```
 
-`watch` lo genera o actualiza cuando corresponde. No hace falta completar manualmente las URLs de cada anime.
+`watch` creates or updates the file when needed. You do not need to enter anime URLs manually.
 
-Para que MPV-Android lo cargue:
+To make MPV-Android load it:
 
-1. Abrí MPV-Android.
-2. Entrá en **Settings → Advanced → Edit mpv.conf** (el nombre puede variar según la versión).
-3. Agregá esta línea, conservando las demás opciones existentes:
+1. Open MPV-Android.
+2. Go to **Settings → Advanced → Edit mpv.conf** (the wording may vary by version).
+3. Add this line, keeping any other existing options:
 
    ```text
    include=/storage/emulated/0/mpv/mpv.config.mp4
    ```
 
-4. Guardá los cambios y reiniciá MPV-Android si la aplicación lo requiere.
+4. Save the changes and restart MPV-Android if needed.
 
-## 4. Dar los permisos necesarios
+## 4. Grant the required permissions
 
-Revisá los permisos de MPV-Android en **Ajustes de Android → Aplicaciones → MPV-Android → Permisos**. Concedé los permisos de archivos multimedia que estén disponibles.
+Check MPV-Android’s permissions under **Android Settings → Apps → MPV-Android → Permissions**. Grant the media-file permissions that are available.
 
-Los nombres y opciones varían entre versiones de Android y del reproductor. No todos los dispositivos muestran una opción llamada “Allow access to manage all files”.
+Permission names and options vary by Android and player version. Some devices do not show an option called “Allow access to manage all files.”
 
-Si Termux no puede crear o actualizar los archivos del directorio compartido, ejecutá `termux-setup-storage`, aceptá el permiso de Android y volvé a probar.
+If Termux cannot create or update files in the shared directory, run `termux-setup-storage`, grant Android’s permission, and try again.
 
-## 5. Probar la reproducción
+## 5. Test playback
 
-Desde Termux, buscá un anime:
+Search for an anime from Termux:
 
 ```sh
 watch beerus
 ```
 
-Seleccioná el resultado y el episodio. Si Android muestra un selector de aplicaciones, elegí MPV.
+Select a result and episode. If Android shows an app chooser, select MPV.
 
-Para comprobar MPV y la apertura mediante `termux-open` de forma independiente, probá este stream público de demostración:
+To test MPV and `termux-open` independently, try this public demo stream:
 
 ```sh
 termux-open --chooser \
@@ -109,20 +109,20 @@ termux-open --chooser \
   'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
 ```
 
-Si MPV reproduce ese video, la apertura mediante `termux-open` funciona. La disponibilidad de streams de anime depende además del proveedor.
+If MPV plays the video, opening media with `termux-open` works. Anime stream availability also depends on the provider.
 
-## 6. Actualizar Watch
+## 6. Update Watch
 
-No hace falta repetir toda la instalación. Ejecutá:
+You do not need to repeat the installation. Run:
 
 ```sh
 watch -U
 ```
 
-Después podés seguir usando:
+Then continue using Watch as usual:
 
 ```sh
-watch nombre-del-anime
+watch anime-title
 ```
 
-Mantené la línea `include` en el `mpv.conf` de MPV-Android. Si reinstalás el reproductor, restablecés su configuración o borrás sus datos, verificá que siga presente.
+Keep the `include` line in MPV-Android’s `mpv.conf`. If you reinstall the player, reset its configuration, or clear its data, make sure the line is still there.
