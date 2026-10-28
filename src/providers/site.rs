@@ -86,12 +86,12 @@ impl ProviderId {
       Self::GoGoAnime => "https://gogoanime.by",
       Self::AniWatch => "https://aniwatchtv.ro",
       Self::NineAnime => "https://9anime.si",
-      Self::AnimeKai => "https://animekai.be",
+      Self::AnimeKai => "https://anikai.to",
       Self::MonosChinos => "https://monoschinos.st",
       Self::TioAnime => "https://tioanime.com",
       Self::AnimeBlix => "https://animeblix.net",
       Self::AnimeFenix => "https://ww1.animefenix.vip",
-      Self::JkAnime => "https://jkanime.net",
+      Self::JkAnime => "https://jkanime.surf",
     }
   }
 
@@ -167,6 +167,11 @@ impl ProviderId {
       ],
       Self::TioAnime => &[
         SearchRoute {
+          path: "/directorio",
+          key: Some("q"),
+          slug: false,
+        },
+        SearchRoute {
           path: "/buscar",
           key: Some("q"),
           slug: false,
@@ -184,6 +189,16 @@ impl ProviderId {
       ],
       Self::AnimeBlix => &[
         SearchRoute {
+          path: "/",
+          key: Some("q"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/",
+          key: Some("search"),
+          slug: false,
+        },
+        SearchRoute {
           path: "/buscar",
           key: Some("q"),
           slug: false,
@@ -200,6 +215,16 @@ impl ProviderId {
         },
       ],
       Self::AnimeFenix => &[
+        SearchRoute {
+          path: "/",
+          key: Some("q"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/",
+          key: Some("search"),
+          slug: false,
+        },
         SearchRoute {
           path: "/",
           key: Some("s"),
@@ -269,23 +294,24 @@ impl ProviderId {
       }
       Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
       Self::JkAnime => {
-        path
-          .trim_matches('/')
-          .split('/')
-          .filter(|segment| !segment.is_empty())
-          .count()
-          == 1
-          && ![
-            "buscar",
-            "anime",
-            "animes",
-            "login",
-            "registro",
-            "calendario",
-            "emision",
-          ]
-          .iter()
-          .any(|route| path.trim_matches('/') == *route)
+        path.starts_with("/anime/")
+          || (path
+            .trim_matches('/')
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .count()
+            == 1
+            && ![
+              "buscar",
+              "anime",
+              "animes",
+              "login",
+              "registro",
+              "calendario",
+              "emision",
+            ]
+            .iter()
+            .any(|route| path.trim_matches('/') == *route))
       }
     }
   }
@@ -599,7 +625,7 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
     if label_is_number && !episode_like_path {
       continue;
     }
-    let key = format!("{number}:{}", url.as_str());
+    let key = number.clone();
     if !seen.insert(key) {
       continue;
     }
@@ -1090,6 +1116,7 @@ mod tests {
   fn episode_parser_sorts_numeric_episodes_and_skips_navigation() {
     let html = r#"<a href="/watch/frieren/ep-10">Episode 10</a>
             <a href="/watch/frieren/ep-2">Episode 2</a>
+            <a href="/watch/frieren/ep-2?server=mirror">Episode 2</a>
             <a href="/watch/frieren/ep-1">Episode 1</a><a href="/about">About</a>"#;
     let episodes = parse_episode_links(
       html,
@@ -1100,6 +1127,13 @@ mod tests {
     assert_eq!(episodes[0].number, "1");
     assert_eq!(episodes[1].number, "2");
     assert_eq!(episodes[2].number, "10");
+    assert!(episodes[1].url.ends_with("/watch/frieren/ep-2"));
+  }
+
+  #[test]
+  fn jkanime_accepts_current_anime_detail_path() {
+    let url = Url::parse("https://jkanime.surf/anime/dragon-ball-super-beerus/").unwrap();
+    assert!(ProviderId::JkAnime.is_detail_path(&url));
   }
 
   #[test]
