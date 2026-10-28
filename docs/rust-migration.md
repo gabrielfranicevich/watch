@@ -1,6 +1,6 @@
 # Rust migration notes
 
-The Rust implementation is developed on `develop`. The historical shell implementation remains on `main` as a reference; the two branches are not interchangeable releases.
+The Rust implementation is developed on `main`. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); the upstream repository maintains the original shell implementation.
 
 ## Build and run
 
@@ -14,9 +14,9 @@ watch --version
 Otherwise, install the Rust branch from GitHub or build from a checkout:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch main
 
-git clone --branch develop https://github.com/gabrielfranicevich/watch.git
+git clone --branch main https://github.com/gabrielfranicevich/watch.git
 cd watch
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings

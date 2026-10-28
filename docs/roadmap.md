@@ -2,7 +2,7 @@
 
 ## Current status
 
-The active Rust implementation is developed on `develop`. The historical shell implementation remains on `main`; this document describes the Rust branch.
+The active Rust implementation is developed on `main`. This repository is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli), whose original shell project remains available upstream.
 
 The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. It also cross-checks the Android ARM64 target. Provider regression tests use local fixtures rather than relying on the live service. These checks validate repository code, not the continued availability of external websites or media players.
 

@@ -2,13 +2,15 @@
 
 Search anime, select episodes, and stream or download them from your terminal.
 
-[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=develop)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
+[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
 watch searches English and Spanish anime providers, groups duplicate titles by language, and hands playable media or downloads to tools installed on your machine. It does not host video files.
 
-> **Project status:** the Rust implementation is developed on `develop`. Prebuilt binaries and updated third-party packages are not published yet; some package managers may still provide the historical shell version from `main`.
+> **Project status:** `main` is the active Rust implementation. Prebuilt binaries and updated third-party packages are not published yet.
+
+Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). This project builds on that original work; credit for the original project belongs to its author and contributors.
 
 <details>
 <summary>Contents</summary>
@@ -36,10 +38,10 @@ cargo install watch
 watch "Frieren"
 ~~~
 
-If the package is not available from crates.io, install the Rust branch directly:
+If the package is not available from crates.io, install the main branch directly:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch main
 ~~~
 
 Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.

@@ -85,7 +85,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
       .query
       .clone()
       .or_else(|| std::env::var("ANI_CLI_BRANCH").ok())
-      .unwrap_or_else(|| "develop".to_owned());
+      .unwrap_or_else(|| "main".to_owned());
     update_rust_installation(&branch)?;
     return Ok(ExitCode::SUCCESS);
   }

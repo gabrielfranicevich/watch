@@ -1,6 +1,6 @@
 # Contributing
 
-The Rust CLI is developed on `develop`. Keep changes focused and preserve user-visible behavior documented in the README and tutorial.
+The Rust CLI is developed on `main`. Keep changes focused and preserve user-visible behavior documented in the README and tutorial.
 
 ## Before opening a pull request
 

@@ -1,6 +1,6 @@
 # watch tutorial
 
-This tutorial covers installation, searching, playback, downloads, and watch history for the Rust implementation on `develop`.
+This tutorial covers installation, searching, playback, downloads, and watch history for the Rust implementation on `main`.
 
 ## 1. Install watch
 
@@ -11,10 +11,10 @@ cargo install watch
 watch --version
 ~~~
 
-If the package is not available from crates.io, install the Rust branch from GitHub:
+If the package is not available from crates.io, install the main branch from GitHub:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch main
 ~~~
 
 If `watch` is not found, make sure Cargo's binary directory (`~/.cargo/bin`, or the equivalent on your platform) is on your `PATH`. On Linux, `watch` may conflict with the system process-monitoring utility; place `~/.cargo/bin` before system directories or run `~/.cargo/bin/watch` explicitly.
@@ -22,7 +22,7 @@ If `watch` is not found, make sure Cargo's binary directory (`~/.cargo/bin`, or 
 To build from a checkout instead:
 
 ~~~sh
-git clone --branch develop https://github.com/gabrielfranicevich/watch.git
+git clone --branch main https://github.com/gabrielfranicevich/watch.git
 cd watch
 cargo build --release
 ./target/release/watch --version

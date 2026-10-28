@@ -272,7 +272,7 @@ fn rejects_invalid_default_source_environment_value() {
 
 #[test]
 fn updater_arguments_pin_repository_branch_and_install_root() {
-  let args = updater_arguments(Path::new("/home/user/.cargo"), "develop");
+  let args = updater_arguments(Path::new("/home/user/.cargo"), "main");
   let args: Vec<_> = args
     .iter()
     .map(|arg| arg.to_string_lossy().into_owned())
@@ -280,7 +280,7 @@ fn updater_arguments_pin_repository_branch_and_install_root() {
   assert!(
     args
       .windows(2)
-      .any(|pair| pair[0] == "--branch" && pair[1] == "develop")
+      .any(|pair| pair[0] == "--branch" && pair[1] == "main")
   );
   assert!(
     args

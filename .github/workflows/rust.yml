@@ -4,12 +4,10 @@ on:
   push:
     branches:
       - main
-      - develop
       - android-support
   pull_request:
     branches:
       - main
-      - develop
       - android-support
   workflow_dispatch:
 

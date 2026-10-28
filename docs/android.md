@@ -38,7 +38,7 @@ cargo install watch
 Si el paquete todavía no está publicado o Cargo no encuentra la versión de este proyecto, instalalo directamente desde la rama Rust del repositorio:
 
 ```sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
+cargo install --git https://github.com/gabrielfranicevich/watch --branch main
 ```
 
 Para futuras actualizaciones, una vez instalado:

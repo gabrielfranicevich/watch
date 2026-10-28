@@ -1,6 +1,6 @@
 # Development guide
 
-This guide describes the Rust implementation on `develop`. The historical shell version remains on `main`; old shell-specific reverse-engineering notes do not describe the active source tree.
+This guide describes the active Rust implementation on `main`. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); see the README for project credit.
 
 ## Build and test
 
