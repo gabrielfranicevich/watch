@@ -179,11 +179,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         Ok(episodes) if !episodes.is_empty() => {
           provider_episodes.push(ProviderEpisodes { source, episodes });
         }
-        Ok(_) => eprintln!(
-          "watch: warning: {} returned no episodes for '{}'",
-          source.provider.name(),
-          source.anime.title
-        ),
+        Ok(_) => {}
         Err(error) => eprintln!(
           "watch: warning: could not load episodes from {}: {error}",
           source.provider.name()
@@ -191,7 +187,17 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
       }
     }
     if provider_episodes.is_empty() {
-      return Err(format!("no providers exposed episodes for '{}'", choice.anime.title).into());
+      println!(
+        "No released episodes for '{}' are available from the current providers.",
+        choice.anime.title
+      );
+      if choices.len() > 1 {
+        println!("Choose another title, or press Esc to cancel.\n");
+        cached_choices = Some(choices);
+        continue;
+      }
+      println!("Try searching again later when an episode is available.");
+      return Ok(ExitCode::SUCCESS);
     }
     let episodes = merge_provider_episodes(&provider_episodes);
     if episodes.is_empty() {

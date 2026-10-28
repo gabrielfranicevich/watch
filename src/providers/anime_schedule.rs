@@ -74,15 +74,20 @@ impl AnimeScheduleProvider {
   }
 
   pub fn show_countdown(&self, query: &str) -> Result<(), Box<dyn Error>> {
-    let entries = self.search(query)?;
+    let mut entries = self.search(query)?;
+    entries.retain(|entry| entry_matches_query(entry, query));
     if entries.is_empty() {
-      return Err(format!("AnimeSchedule returned no results for '{query}'").into());
+      println!("No episode schedule matched '{query}'. Continuing with anime search.\n");
+      return Ok(());
     }
 
+    println!("Episode schedules matching '{query}':\n");
     for entry in entries {
-      println!("Eng: {}", entry.english_title);
-      println!("Jpn: {}", entry.japanese_title);
-      println!("Status: {}", entry.status);
+      println!("Title: {}", entry.english_title);
+      if entry.japanese_title != entry.english_title {
+        println!("Japanese title: {}", entry.japanese_title);
+      }
+      println!("Airing status: {}", entry.status);
 
       if !entry.status.eq_ignore_ascii_case("Finished") {
         let response = self
@@ -109,6 +114,31 @@ impl AnimeScheduleProvider {
     }
     Ok(())
   }
+}
+
+fn entry_matches_query(entry: &AnimeScheduleEntry, query: &str) -> bool {
+  let title = format!("{} {}", entry.english_title, entry.japanese_title);
+  let normalized_title: String = title
+    .chars()
+    .filter(|character| character.is_alphanumeric())
+    .flat_map(char::to_lowercase)
+    .collect();
+  let query_terms: Vec<String> = query
+    .split_whitespace()
+    .map(|term| {
+      term
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+    })
+    .filter(|term: &String| !term.is_empty())
+    .collect();
+
+  !query_terms.is_empty()
+    && query_terms
+      .iter()
+      .all(|term| normalized_title.contains(term))
 }
 
 fn parse_entry(value: &Value) -> Option<AnimeScheduleEntry> {
