@@ -595,7 +595,8 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
   let anime_slug = Url::parse(anime_url)
     .ok()
     .and_then(|url| {
-      url.path()
+      url
+        .path()
         .trim_matches('/')
         .rsplit('/')
         .next()
@@ -626,10 +627,7 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
     // Provider detail pages often include recommendations and latest-episode
     // widgets. Require the candidate URL to retain the selected anime's slug
     // so those widgets cannot inject episode numbers from unrelated series.
-    if anime_slug
-      .as_ref()
-      .is_some_and(|slug| !path.contains(slug))
-    {
+    if anime_slug.as_ref().is_some_and(|slug| !path.contains(slug)) {
       continue;
     }
 
@@ -1156,7 +1154,10 @@ mod tests {
       "https://gogoanime.by/series/frieren/",
     );
     assert_eq!(
-      episodes.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+      episodes
+        .iter()
+        .map(|episode| episode.number.as_str())
+        .collect::<Vec<_>>(),
       vec!["1", "2"]
     );
   }
