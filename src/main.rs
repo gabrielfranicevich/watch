@@ -22,7 +22,8 @@ use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::catalog::{AnimeOption, ProviderAnime, ProviderCatalog};
-use ani_cli::providers::site::{ProviderId, ProviderStreamResolver};
+use ani_cli::providers::hianime_stream::ResolvedMedia;
+use ani_cli::providers::site::ProviderId;
 
 fn main() -> ExitCode {
   match run() {
@@ -97,11 +98,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
   let mut pending_query = search_query;
   let mut cached_choices: Option<Vec<AnimeChoice>> = None;
 
-  let (anime, episodes, selected, active_provider): (
+  let (anime, episodes, selected, provider_episodes): (
     Anime,
     Vec<Episode>,
     Vec<Episode>,
-    ProviderId,
+    Vec<ProviderEpisodes>,
   ) = loop {
     let choices = if let Some(cached) = cached_choices.take() {
       cached
@@ -134,33 +135,49 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
       Err(error) => return Err(error),
     };
 
-    let mut choice = choices[selected_index].clone();
-    if choice.sources.len() > 1 {
-      let provider_labels: Vec<String> = choice
-        .sources
-        .iter()
-        .map(|source| format!("{} — {}", source.provider.name(), source.anime.url))
-        .collect();
-      let provider_index = match select_item(&provider_labels, "Select provider: ", None, &cli) {
-        Ok(index) => index,
-        Err(error) if is_back_requested(error.as_ref()) => {
-          cached_choices = Some(choices);
-          continue;
-        }
-        Err(error) => return Err(error),
-      };
-      let selected_source = choice.sources[provider_index].clone();
-      choice.provider = selected_source.provider;
-      choice.anime = selected_source.anime;
-    }
+    let choice = choices[selected_index].clone();
     println!("{}\n{}", choice.anime.title, choice.anime.url);
-    let episodes = match choice.prefetched_episodes.clone() {
-      Some(episodes) => episodes,
-      None => catalog.episodes(&ProviderAnime {
+
+    let source_options = if choice.sources.is_empty() {
+      vec![ProviderAnime {
         provider: choice.provider,
         anime: choice.anime.clone(),
-      })?,
+      }]
+    } else {
+      choice.sources.clone()
     };
+    let mut provider_episodes = Vec::new();
+    for source in source_options {
+      let loaded = if source.provider == choice.provider
+        && source.anime.id == choice.anime.id
+      {
+        choice
+          .prefetched_episodes
+          .clone()
+          .map(Ok)
+          .unwrap_or_else(|| catalog.episodes(&source))
+      } else {
+        catalog.episodes(&source)
+      };
+      match loaded {
+        Ok(episodes) if !episodes.is_empty() => {
+          provider_episodes.push(ProviderEpisodes { source, episodes });
+        }
+        Ok(_) => eprintln!(
+          "watch: warning: {} returned no episodes for '{}'",
+          source.provider.name(),
+          source.anime.title
+        ),
+        Err(error) => eprintln!(
+          "watch: warning: could not load episodes from {}: {error}",
+          source.provider.name()
+        ),
+      }
+    }
+    if provider_episodes.is_empty() {
+      return Err(format!("no providers exposed episodes for '{}'", choice.anime.title).into());
+    }
+    let episodes = merge_provider_episodes(&provider_episodes);
     if episodes.is_empty() {
       return Err(format!("no episodes found for '{}'", choice.anime.title).into());
     }
@@ -191,8 +208,6 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         Ok(indices) => indices,
         Err(error) if is_back_requested(error.as_ref()) => {
           if choices.len() > 1 {
-            let mut choices = choices;
-            choices[selected_index].prefetched_episodes = Some(episodes);
             cached_choices = Some(choices);
           } else {
             // With one result, returning to its list would immediately
@@ -212,10 +227,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .collect()
     };
 
-    break (choice.anime, episodes, selected_episodes, choice.provider);
+    break (choice.anime, episodes, selected_episodes, provider_episodes);
   };
-
-  let resolver = catalog.resolver(active_provider);
   let mode = std::env::var("ANI_CLI_MODE").unwrap_or_else(|_| "sub".to_owned());
   let dubbed = cli.dubbed || mode.eq_ignore_ascii_case("dub");
   let quality = cli
@@ -275,8 +288,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
   let attached =
     cli.inline_playback || cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
   let mut playback = PlaybackConfig {
-    resolver: &resolver,
-    provider: active_provider,
+    catalog: &catalog,
+    provider_episodes: &provider_episodes,
     player,
     player_flags,
     dubbed,
@@ -326,9 +339,15 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
   )
 }
 
+#[derive(Debug, Clone)]
+struct ProviderEpisodes {
+  source: ProviderAnime,
+  episodes: Vec<Episode>,
+}
+
 struct PlaybackConfig<'a> {
-  resolver: &'a ProviderStreamResolver,
-  provider: ProviderId,
+  catalog: &'a ProviderCatalog,
+  provider_episodes: &'a [ProviderEpisodes],
   player: Player,
   player_flags: Vec<String>,
   dubbed: bool,
@@ -359,7 +378,7 @@ impl PlaybackConfig<'_> {
       if self.dubbed { "dub" } else { "sub" },
       self.quality
     );
-    let media = self.resolver.resolve(episode, self.dubbed, &self.quality)?;
+    let (source, media) = self.resolve_episode(episode)?;
     self.available_qualities = media
       .qualities
       .iter()
@@ -400,7 +419,7 @@ impl PlaybackConfig<'_> {
       let status =
         MediaDownloader::download_with_extra(&media.stream, &destination, &self.player_flags)?;
       ensure_success(status, "ffmpeg")?;
-      self.record(anime, episode)?;
+      self.record(&source, episode)?;
       return Ok(PlaybackResult::Downloaded);
     }
 
@@ -432,7 +451,7 @@ impl PlaybackConfig<'_> {
         &self.player_flags,
         &media_flags,
       )?;
-      self.record(anime, episode)?;
+      self.record(&source, episode)?;
       Ok(PlaybackResult::Attached(status))
     } else {
       let child = self.player.launch_detached_with_options(
@@ -442,14 +461,61 @@ impl PlaybackConfig<'_> {
         &self.player_flags,
         &media_flags,
       )?;
-      self.record(anime, episode)?;
+      self.record(&source, episode)?;
       Ok(PlaybackResult::Detached(child))
     }
   }
 
-  fn record(&self, anime: &Anime, episode: &Episode) -> Result<(), Box<dyn std::error::Error>> {
+  fn resolve_episode(
+    &self,
+    episode: &Episode,
+  ) -> Result<(ProviderAnime, ResolvedMedia), Box<dyn std::error::Error>> {
+    let mut candidates = Vec::new();
+    let mut failures = Vec::new();
+
+    for (provider_order, entry) in self.provider_episodes.iter().enumerate() {
+      let Some(source_episode) = entry
+        .episodes
+        .iter()
+        .find(|candidate| same_episode_number(&candidate.number, &episode.number))
+      else {
+        continue;
+      };
+      match self
+        .catalog
+        .resolver(entry.source.provider)
+        .resolve(source_episode, self.dubbed, &self.quality)
+      {
+        Ok(media) => candidates.push((provider_order, entry.source.clone(), media)),
+        Err(error) => failures.push(format!("{}: {error}", entry.source.provider.name())),
+      }
+    }
+
+    candidates.sort_by(|left, right| {
+      media_quality_rank(&right.2)
+        .cmp(&media_quality_rank(&left.2))
+        .then_with(|| left.0.cmp(&right.0))
+    });
+
+    if let Some((_, source, media)) = candidates.into_iter().next() {
+      return Ok((source, media));
+    }
+
+    let detail = if failures.is_empty() {
+      "no provider has that episode".to_owned()
+    } else {
+      failures.join("; ")
+    };
+    Err(format!("could not resolve episode {}: {detail}", episode.number).into())
+  }
+
+  fn record(
+    &self,
+    source: &ProviderAnime,
+    episode: &Episode,
+  ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(store) = self.history {
-      record_history_for_provider(store, anime, episode, self.provider)?;
+      record_history_for_provider(store, &source.anime, episode, source.provider)?;
     }
     Ok(())
   }
@@ -565,6 +631,46 @@ fn run_playback_menu(
       }
     }
   }
+}
+
+fn same_episode_number(left: &str, right: &str) -> bool {
+  match (left.parse::<f64>(), right.parse::<f64>()) {
+    (Ok(left), Ok(right)) => left == right,
+    _ => left == right,
+  }
+}
+
+fn episode_number_sort_key(number: &str) -> f64 {
+  number.parse::<f64>().unwrap_or(f64::MAX)
+}
+
+fn merge_provider_episodes(sources: &[ProviderEpisodes]) -> Vec<Episode> {
+  let mut episodes: Vec<Episode> = Vec::new();
+  for source in sources {
+    for episode in &source.episodes {
+      if !episodes
+        .iter()
+        .any(|existing| same_episode_number(&existing.number, &episode.number))
+      {
+        episodes.push(episode.clone());
+      }
+    }
+  }
+  episodes.sort_by(|left, right| {
+    episode_number_sort_key(&left.number)
+      .total_cmp(&episode_number_sort_key(&right.number))
+      .then_with(|| left.number.cmp(&right.number))
+  });
+  episodes
+}
+
+fn media_quality_rank(media: &ResolvedMedia) -> u32 {
+  media
+    .qualities
+    .iter()
+    .filter_map(|quality| quality.value.trim_end_matches('p').parse::<u32>().ok())
+    .max()
+    .unwrap_or_default()
 }
 
 fn wait_for_player(active_player: &mut Option<Child>) -> io::Result<()> {
