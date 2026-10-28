@@ -97,7 +97,8 @@ impl Player {
       Self::Iina if cfg!(target_os = "macos") => "/Applications/IINA.app/Contents/MacOS/iina-cli",
       Self::Iina => "iina-cli",
       Self::FlatpakMpv => "flatpak",
-      Self::AndroidMpv | Self::AndroidVlc => "am",
+      Self::AndroidMpv => "termux-open",
+      Self::AndroidVlc => "am",
       Self::Configured(_) if self.kind() == PlayerKind::FlatpakMpv => "flatpak",
       Self::Configured(command) => command,
     }
@@ -283,29 +284,17 @@ impl Player {
         args.extend(media_flags.iter().map(OsString::from));
       }
       PlayerKind::AndroidMpv => {
-        // Follow mpv-android's documented external intent interface: let
-        // Android resolve the exported VIEW activity by package rather than
-        // hard-coding an Activity class that can change between app builds.
+        // Route the VIEW intent through Termux's supported external-app
+        // receiver. Direct `am start` is rejected by some Android firmware
+        // builds (including Unisoc devices) before MPV can receive the URL.
+        // MPV-specific stream options are written to its shared config by
+        // prepare_playback(), since termux-open cannot pass arbitrary MPV flags.
         args.extend(
-          [
-            "start",
-            "--user",
-            "0",
-            "-a",
-            "android.intent.action.VIEW",
-            "-t",
-            "video/any",
-            "-p",
-            "is.xyz.mpv",
-            "-d",
-          ]
-          .into_iter()
-          .map(OsString::from),
+          ["--chooser", "--content-type", "video/*"]
+            .into_iter()
+            .map(OsString::from),
         );
         args.push(OsString::from(&stream.url));
-        args.extend(["-e", "title"].into_iter().map(OsString::from));
-        args.push(OsString::from(title));
-        args.extend(command_flags.iter().map(OsString::from));
       }
       PlayerKind::AndroidVlc => {
         args.extend(
@@ -653,38 +642,22 @@ mod tests {
   }
 
   #[test]
-  fn android_mpv_uses_the_mpv_activity_and_title_extra() {
-    let args = Player::AndroidMpv.arguments_with_extra(
-      &stream(),
-      None,
-      "Frieren Episode 4",
-      &["--debug".to_owned()],
-    );
+  fn android_mpv_uses_termux_open_with_video_mime_and_chooser() {
+    let args = Player::AndroidMpv.arguments(&stream(), None, "Frieren Episode 4");
     let args: Vec<_> = args
       .iter()
       .map(|arg| arg.to_string_lossy().into_owned())
       .collect();
-    assert_eq!(args[0], "start");
-    assert_eq!(args[1], "--user");
-    assert!(
-      args
-        .windows(2)
-        .any(|pair| pair[0] == "-t" && pair[1] == "video/any")
+    assert_eq!(
+      args,
+      vec![
+        "--chooser",
+        "--content-type",
+        "video/*",
+        "https://cdn.example/video.m3u8"
+      ]
     );
-    assert!(
-      args
-        .windows(2)
-        .any(|pair| pair[0] == "-p" && pair[1] == "is.xyz.mpv")
-    );
-    assert!(!args.iter().any(|arg| arg == "-n"));
-    assert!(
-      args
-        .windows(2)
-        .any(|pair| pair[0] == "-e" && pair[1] == "title")
-    );
-    assert!(args.contains(&"Frieren Episode 4".to_owned()));
-    assert!(args.contains(&"--debug".to_owned()));
-    assert_eq!(Player::AndroidMpv.command_name(), "am");
+    assert_eq!(Player::AndroidMpv.command_name(), "termux-open");
   }
 
   #[test]
