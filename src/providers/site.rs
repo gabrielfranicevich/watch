@@ -592,6 +592,16 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
   };
   let mut episodes = Vec::new();
   let mut seen = HashSet::new();
+  let anime_slug = Url::parse(anime_url)
+    .ok()
+    .and_then(|url| {
+      url.path()
+        .trim_matches('/')
+        .rsplit('/')
+        .next()
+        .map(str::to_ascii_lowercase)
+    })
+    .filter(|slug| !slug.is_empty());
 
   for anchor in document.select(&anchors) {
     let Some(href) = anchor.value().attr("href") else {
@@ -601,7 +611,6 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
     if url.host_str() != base.host_str() || url.as_str() == anime_url {
       continue;
     }
-    let label = normalize_whitespace(&anchor.text().collect::<String>());
     let path = url.path().to_ascii_lowercase();
     let episode_like_path = is_episode_page(&url)
       || path.contains("/episode/")
@@ -611,20 +620,23 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
       || path.contains("/ep/")
       || path.contains("/capitulo/")
       || path.contains("/episodio/");
+    if !episode_like_path {
+      continue;
+    }
+    // Provider detail pages often include recommendations and latest-episode
+    // widgets. Require the candidate URL to retain the selected anime's slug
+    // so those widgets cannot inject episode numbers from unrelated series.
+    if anime_slug
+      .as_ref()
+      .is_some_and(|slug| !path.contains(slug))
+    {
+      continue;
+    }
+
+    let label = normalize_whitespace(&anchor.text().collect::<String>());
     let Some(number) = episode_number_from(&label, url.as_str()) else {
       continue;
     };
-    let label_is_number = !label.trim().is_empty()
-      && label
-        .trim()
-        .chars()
-        .all(|character| character.is_ascii_digit());
-    if !(episode_like_path || has_episode_marker(&label) || label_is_number) {
-      continue;
-    }
-    if label_is_number && !episode_like_path {
-      continue;
-    }
     let key = number.clone();
     if !seen.insert(key) {
       continue;
@@ -1128,6 +1140,25 @@ mod tests {
     assert_eq!(episodes[1].number, "2");
     assert_eq!(episodes[2].number, "10");
     assert!(episodes[1].url.ends_with("/watch/frieren/ep-2"));
+  }
+
+  #[test]
+  fn episode_parser_rejects_episode_links_for_other_anime_and_navigation() {
+    let html = r#"
+      <a href="/series/frieren-episode-1">Episode 1</a>
+      <a href="/series/other-anime-episode-17">Episode 17</a>
+      <a href="/series/frieren/recommended">Episode 12</a>
+      <a href="/series/frieren-episode-2">Episode 2</a>
+    "#;
+    let episodes = parse_episode_links(
+      html,
+      "https://gogoanime.by",
+      "https://gogoanime.by/series/frieren/",
+    );
+    assert_eq!(
+      episodes.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+      vec!["1", "2"]
+    );
   }
 
   #[test]
