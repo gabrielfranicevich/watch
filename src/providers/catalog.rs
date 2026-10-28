@@ -25,12 +25,12 @@ impl ProviderCatalog {
   }
 
   pub fn search(&self, query: &str) -> Result<Vec<AnimeOption>, Box<dyn std::error::Error>> {
-    let english: Vec<_> = ProviderId::ALL
+    let english: Vec<_> = ProviderId::ACTIVE
       .into_iter()
       .filter(|provider| provider.language() == Language::English)
       .map(ProviderId::name)
       .collect();
-    let spanish: Vec<_> = ProviderId::ALL
+    let spanish: Vec<_> = ProviderId::ACTIVE
       .into_iter()
       .filter(|provider| provider.language() == Language::Spanish)
       .map(ProviderId::name)
@@ -40,7 +40,7 @@ impl ProviderCatalog {
     eprintln!("  Spanish (es): {}", spanish.join(", "));
 
     let (sender, receiver) = mpsc::channel();
-    for provider in ProviderId::ALL {
+    for provider in ProviderId::ACTIVE {
       let query = query.to_owned();
       let sender = sender.clone();
       thread::spawn(move || {
@@ -62,7 +62,7 @@ impl ProviderCatalog {
     let mut succeeded = 0usize;
     let mut failures = Vec::new();
 
-    for _ in 0..ProviderId::ALL.len() {
+    for _ in 0..ProviderId::ACTIVE.len() {
       match receiver.recv() {
         Ok((provider, Ok(results))) => {
           succeeded += 1;
@@ -100,6 +100,7 @@ impl ProviderCatalog {
       eprintln!("watch: warning: provider search failed: {failure}");
     }
 
+    sort_sources_by_provider_order(&mut sources);
     let options = group_results(sources);
     if options.is_empty() {
       return Err(format!("no results found for '{query}' across available providers").into());
@@ -186,6 +187,15 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
   choices
 }
 
+fn sort_sources_by_provider_order(sources: &mut [ProviderAnime]) {
+  sources.sort_by_key(|source| {
+    ProviderId::ACTIVE
+      .iter()
+      .position(|provider| *provider == source.provider)
+      .unwrap_or(usize::MAX)
+  });
+}
+
 fn language_label(title: &str, language: Language, labelled: bool) -> String {
   if labelled {
     format!("{title} ({})", language.short_code())
@@ -196,6 +206,12 @@ fn language_label(title: &str, language: Language, labelled: bool) -> String {
 
 fn clean_display_title(title: &str) -> String {
   let mut title = title.trim().to_owned();
+  for prefix in ["Serie En emision ", "Serie En emisión "] {
+    if title.to_lowercase().starts_with(&prefix.to_lowercase()) {
+      title = title[prefix.len()..].trim().to_owned();
+      break;
+    }
+  }
   for suffix in [
     " (English Subbed)",
     " (English Dubbed)",
@@ -219,6 +235,8 @@ fn clean_display_title(title: &str) -> String {
     " Español Latino",
     " Espanol Latino",
     " Spanish Subbed",
+    " Acción",
+    " Accion",
   ] {
     if title.to_lowercase().ends_with(&suffix.to_lowercase()) {
       title.truncate(title.len() - suffix.len());
@@ -306,6 +324,31 @@ mod tests {
   }
 
   #[test]
+  fn strips_search_genre_and_status_prefixes_before_adding_language_labels() {
+    let choices = group_results(vec![
+      source(
+        ProviderId::HiAnime,
+        "Dragon Ball Super: Beerus",
+        "beerus-en",
+      ),
+      source(
+        ProviderId::TioAnime,
+        "Dragon Ball Super: Beerus Acción",
+        "beerus-es",
+      ),
+      source(
+        ProviderId::JkAnime,
+        "Serie En emision Dragon Ball Super: Beerus",
+        "beerus-jk",
+      ),
+    ]);
+    assert_eq!(choices.len(), 2);
+    assert_eq!(choices[0].label, "Dragon Ball Super: Beerus (en)");
+    assert_eq!(choices[1].label, "Dragon Ball Super: Beerus (es)");
+    assert_eq!(choices[1].sources.len(), 2);
+  }
+
+  #[test]
   fn grouping_discards_duplicate_cards_from_the_same_provider() {
     let choices = group_results(vec![
       source(ProviderId::NineAnime, "Frieren", "frieren"),
@@ -315,6 +358,29 @@ mod tests {
     assert_eq!(choices.len(), 1);
     assert_eq!(choices[0].label, "Frieren (en)");
     assert_eq!(choices[0].sources.len(), 2);
+  }
+
+  #[test]
+  fn search_choice_order_does_not_depend_on_provider_completion_order() {
+    let mut sources = vec![
+      source(ProviderId::JkAnime, "Beerus", "jkanime"),
+      source(ProviderId::HiAnime, "Beerus", "hianime"),
+      source(ProviderId::MonosChinos, "Beerus", "monoschinos"),
+      source(ProviderId::TioAnime, "Beerus", "tioanime"),
+    ];
+    sort_sources_by_provider_order(&mut sources);
+    assert_eq!(
+      sources
+        .iter()
+        .map(|source| source.provider)
+        .collect::<Vec<_>>(),
+      vec![
+        ProviderId::HiAnime,
+        ProviderId::TioAnime,
+        ProviderId::JkAnime,
+        ProviderId::MonosChinos,
+      ]
+    );
   }
 
   #[test]

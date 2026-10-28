@@ -54,6 +54,16 @@ impl ProviderId {
     Self::JkAnime,
   ];
 
+  /// Providers currently enabled for search. Legacy providers remain in `ALL`
+  /// so history entries can still be read without querying unavailable sites.
+  pub const ACTIVE: [Self; 5] = [
+    Self::HiAnime,
+    Self::GoGoAnime,
+    Self::AniWatch,
+    Self::TioAnime,
+    Self::JkAnime,
+  ];
+
   pub fn name(self) -> &'static str {
     match self {
       Self::HiAnime => "HiAnime",
@@ -269,6 +279,7 @@ impl ProviderId {
       "/episode-",
       "-episode-",
       "/episodio-",
+      "-episodio-",
       "/ep-",
     ]
     .iter()
@@ -468,6 +479,9 @@ impl SiteProvider {
     }
 
     let mut episodes = parse_episode_links(&body, &anime.url, &anime.url);
+    if self.id == ProviderId::TioAnime && episodes.is_empty() {
+      episodes = parse_tioanime_episodes(&body, &anime.url);
+    }
     if episodes.is_empty() {
       if let Ok(url) = Url::parse(&anime.url) {
         if is_episode_page(&url) {
@@ -615,6 +629,7 @@ fn is_episode_page(url: &Url) -> bool {
     "/episode-",
     "-episode-",
     "/episodio-",
+    "-episodio-",
     "/ep-",
   ]
   .iter()
@@ -707,6 +722,60 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
       .then_with(|| left.url.cmp(&right.url))
   });
   episodes
+}
+
+fn parse_tioanime_episodes(body: &str, anime_url: &str) -> Vec<Episode> {
+  let Ok(anime) = Url::parse(anime_url) else {
+    return Vec::new();
+  };
+  let Some(slug) = anime.path().trim_matches('/').rsplit('/').next() else {
+    return Vec::new();
+  };
+  if slug.is_empty() {
+    return Vec::new();
+  }
+
+  let Some(values) = js_numeric_array(body, "episodes") else {
+    return Vec::new();
+  };
+  let mut numbers: Vec<_> = values
+    .into_iter()
+    .filter(|number| number.parse::<f64>().is_ok())
+    .collect();
+  numbers.sort_by(|left, right| {
+    left
+      .parse::<f64>()
+      .unwrap_or(f64::MAX)
+      .total_cmp(&right.parse::<f64>().unwrap_or(f64::MAX))
+  });
+  numbers.dedup();
+
+  numbers
+    .into_iter()
+    .filter_map(|number| {
+      let url = anime.join(&format!("/ver/{slug}-{number}")).ok()?;
+      Some(Episode::new(number, None, url.to_string()))
+    })
+    .collect()
+}
+
+fn js_numeric_array(body: &str, variable: &str) -> Option<Vec<String>> {
+  for (index, _) in body.match_indices(variable) {
+    let assignment = body.get(index + variable.len()..)?.trim_start();
+    let Some(array) = assignment.strip_prefix('=') else {
+      continue;
+    };
+    let array = array.trim_start().strip_prefix('[')?;
+    let values = array.split_once(']')?.0;
+    return Some(
+      values
+        .split(',')
+        .map(|value| value.trim().trim_matches(['\'', '"']).to_owned())
+        .filter(|value| !value.is_empty())
+        .collect(),
+    );
+  }
+  None
 }
 
 fn next_episode_date(body: &str) -> Option<String> {
@@ -923,9 +992,13 @@ impl SiteStreamResolver {
     let status = response.status();
     let body = response.text()?;
     if is_verification_page(&body) {
+      let host = Url::parse(page_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .unwrap_or_else(|| "embed host".into());
       return Err(StreamResolveError::InvalidData(format!(
-        "{} returned an anti-bot verification page",
-        self.provider.name()
+        "{} embed host {host} returned an anti-bot verification page",
+        self.provider.name(),
       )));
     }
     if !status.is_success() {
@@ -938,39 +1011,40 @@ impl SiteStreamResolver {
     let document = Html::parse_document(&body);
     let subtitle = find_subtitle(&document, page_url);
     let media_candidates = extract_media_urls(&body, page_url);
+    let mut last_error = None;
     for candidate in media_candidates
       .iter()
       .filter(|url| url.to_ascii_lowercase().contains(".m3u8"))
     {
-      if let Ok(mut media) = self.resolve_media_url(candidate, page_url, quality) {
-        if media.subtitle.is_none() {
-          media.subtitle = subtitle.clone();
+      match self.resolve_media_url(candidate, page_url, quality) {
+        Ok(mut media) => {
+          if media.subtitle.is_none() {
+            media.subtitle = subtitle.clone();
+          }
+          return Ok(media);
         }
-        return Ok(media);
+        Err(error) => last_error = Some(error.to_string()),
       }
     }
     for candidate in media_candidates
       .iter()
       .filter(|url| url.to_ascii_lowercase().contains(".mp4"))
     {
-      if let Ok(mut media) = self.resolve_media_url(candidate, page_url, quality) {
-        if media.subtitle.is_none() {
-          media.subtitle = subtitle.clone();
+      match self.resolve_media_url(candidate, page_url, quality) {
+        Ok(mut media) => {
+          if media.subtitle.is_none() {
+            media.subtitle = subtitle.clone();
+          }
+          return Ok(media);
         }
-        return Ok(media);
+        Err(error) => last_error = Some(error.to_string()),
       }
     }
 
-    let selector = Selector::parse("iframe[src], video[src], video source[src], source[src]")
-      .map_err(|_| StreamResolveError::InvalidData("invalid media selector".into()))?;
     let page = Url::parse(page_url)
       .map_err(|error| StreamResolveError::InvalidData(format!("invalid episode URL: {error}")))?;
-    let mut last_error = None;
-    for element in document.select(&selector) {
-      let Some(src) = element.value().attr("src") else {
-        continue;
-      };
-      let Ok(next) = page.join(src) else { continue };
+    for src in provider_player_links(&document, &body, self.provider) {
+      let Ok(next) = page.join(&src) else { continue };
       if !matches!(next.scheme(), "http" | "https") || !is_public_web_url(&next) {
         continue;
       }
@@ -995,7 +1069,34 @@ impl SiteStreamResolver {
     referer: &str,
     quality: &str,
   ) -> Result<ResolvedMedia, StreamResolveError> {
-    if media_url.to_ascii_lowercase().contains(".mp4") {
+    if is_direct_mp4_url(media_url) {
+      let direct_url = Url::parse(media_url)
+        .map_err(|error| StreamResolveError::InvalidData(format!("invalid MP4 URL: {error}")))?;
+      let response = self
+        .client
+        .get(media_url)
+        .header(reqwest::header::REFERER, referer)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()?;
+      if !response.status().is_success() {
+        return Err(StreamResolveError::InvalidData(format!(
+          "MP4 host {} returned HTTP status {}",
+          direct_url.host_str().unwrap_or("unknown"),
+          response.status()
+        )));
+      }
+      let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+      if content_type.contains("text/html") || content_type.contains("application/xhtml+xml") {
+        return Err(StreamResolveError::InvalidData(format!(
+          "MP4 host {} returned HTML instead of a video",
+          direct_url.host_str().unwrap_or("unknown")
+        )));
+      }
       return Ok(ResolvedMedia {
         stream: Stream::new(media_url, None, Some(referer.into())),
         subtitle: None,
@@ -1010,7 +1111,22 @@ impl SiteStreamResolver {
       .header(reqwest::header::REFERER, referer)
       .send()?;
     let status = response.status();
+    let content_type = response
+      .headers()
+      .get(reqwest::header::CONTENT_TYPE)
+      .and_then(|value| value.to_str().ok())
+      .unwrap_or_default()
+      .to_ascii_lowercase();
     let playlist = response.text()?;
+    if content_type.contains("text/html") || content_type.contains("application/xhtml+xml") {
+      let host = Url::parse(media_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .unwrap_or_else(|| "media host".into());
+      return Err(StreamResolveError::InvalidData(format!(
+        "media host {host} returned HTML instead of a media playlist"
+      )));
+    }
     if is_verification_page(&playlist) || !status.is_success() {
       return Err(StreamResolveError::InvalidData(format!(
         "media URL returned HTTP status {status}"
@@ -1033,6 +1149,37 @@ impl SiteStreamResolver {
       .ok_or_else(|| {
         StreamResolveError::InvalidData("HLS playlist has no selectable quality".into())
       })?;
+    let selected_url = Url::parse(&selected.url).map_err(|error| {
+      StreamResolveError::InvalidData(format!("invalid HLS variant URL: {error}"))
+    })?;
+    let selected_path = selected_url.path().to_ascii_lowercase();
+    if !selected_path.ends_with(".m3u8") && !selected_path.ends_with(".mp4") {
+      let response = self
+        .client
+        .get(selected_url.as_str())
+        .header(reqwest::header::REFERER, media_url)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()?;
+      if !response.status().is_success() {
+        return Err(StreamResolveError::InvalidData(format!(
+          "HLS variant host {} returned HTTP status {}",
+          selected_url.host_str().unwrap_or("unknown"),
+          response.status()
+        )));
+      }
+      let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+      if content_type.contains("text/html") || content_type.contains("application/xhtml+xml") {
+        return Err(StreamResolveError::InvalidData(format!(
+          "HLS variant host {} returned HTML instead of media",
+          selected_url.host_str().unwrap_or("unknown")
+        )));
+      }
+    }
     let mut stream = into_stream(selected, Some(referer.to_owned()));
     stream.audio_url = parse_default_audio_url(&playlist, media_url).ok().flatten();
     let mut qualities: Vec<QualityOption> = variants
@@ -1117,6 +1264,78 @@ fn find_subtitle(document: &Html, page_url: &str) -> Option<Subtitle> {
   })
 }
 
+fn embedded_player_links(document: &Html, provider: ProviderId) -> Vec<String> {
+  let selector = if provider == ProviderId::MonosChinos {
+    "iframe[src], video[src], video source[src], source[src], a.direct-link[href]"
+  } else {
+    "iframe[src], video[src], video source[src], source[src]"
+  };
+  let Ok(selector) = Selector::parse(selector) else {
+    return Vec::new();
+  };
+  document
+    .select(&selector)
+    .filter_map(|element| {
+      let value = element.value();
+      value
+        .attr("src")
+        .or_else(|| {
+          (provider == ProviderId::MonosChinos)
+            .then(|| value.attr("href"))
+            .flatten()
+        })
+        .map(str::to_owned)
+    })
+    .collect()
+}
+
+fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> Vec<String> {
+  let mut links = embedded_player_links(document, provider);
+  if provider == ProviderId::TioAnime {
+    links.extend(js_array_urls(body, "videos"));
+  }
+  let mut seen = HashSet::new();
+  links.retain(|link| seen.insert(link.clone()));
+  links
+}
+
+fn js_array_urls(body: &str, variable: &str) -> Vec<String> {
+  let Some(expression) = js_array_expression(body, variable) else {
+    return Vec::new();
+  };
+  let normalized = expression.replace("\\/", "/").replace("&amp;", "&");
+  normalized
+    .split(['\'', '"'])
+    .filter(|value| value.starts_with("http://") || value.starts_with("https://"))
+    .filter_map(|value| {
+      let url = Url::parse(value).ok()?;
+      (is_public_web_url(&url) && matches!(url.scheme(), "http" | "https")).then(|| url.to_string())
+    })
+    .collect()
+}
+
+fn js_array_expression<'a>(body: &'a str, variable: &str) -> Option<&'a str> {
+  for (index, _) in body.match_indices(variable) {
+    let assignment = body.get(index + variable.len()..)?.trim_start();
+    let Some(expression) = assignment.strip_prefix('=') else {
+      continue;
+    };
+    let expression = expression.trim_start();
+    if expression.starts_with('[') {
+      return Some(
+        expression
+          .split_once(';')
+          .map_or(expression, |(value, _)| value),
+      );
+    }
+  }
+  None
+}
+
+fn is_direct_mp4_url(media_url: &str) -> bool {
+  Url::parse(media_url).is_ok_and(|url| url.path().to_ascii_lowercase().ends_with(".mp4"))
+}
+
 fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
   let normalized = body
     .replace("\\/", "/")
@@ -1143,6 +1362,10 @@ fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
     let Ok(url) = page.join(candidate) else {
       continue;
     };
+    let path = url.path().to_ascii_lowercase();
+    if !lower.contains(".m3u8") && !path.ends_with(".mp4") {
+      continue;
+    }
     if matches!(url.scheme(), "http" | "https")
       && is_public_web_url(&url)
       && !urls.contains(&url.to_string())
@@ -1175,6 +1398,17 @@ mod tests {
     assert_eq!(ProviderId::AnimeFenix.language(), Language::Spanish);
     assert_eq!(ProviderId::JkAnime.language(), Language::Spanish);
     assert_eq!(ProviderId::ALL.len(), 10);
+    assert_eq!(ProviderId::ACTIVE.len(), 5);
+    assert_eq!(
+      ProviderId::ACTIVE,
+      [
+        ProviderId::HiAnime,
+        ProviderId::GoGoAnime,
+        ProviderId::AniWatch,
+        ProviderId::TioAnime,
+        ProviderId::JkAnime,
+      ]
+    );
   }
 
   #[test]
@@ -1316,12 +1550,206 @@ mod tests {
   }
 
   #[test]
+  fn jkanime_episode_links_recognize_the_episodio_path_suffix() {
+    let html =
+      r#"<a href="/dragon-ball-super-beerus-episodio-3/">Episodio 3 Dragon Ball Super: Beerus</a>"#;
+    let anime_url = "https://jkanime.surf/anime/dragon-ball-super-beerus/";
+    let episodes = parse_episode_links(html, anime_url, anime_url);
+    assert_eq!(episodes.len(), 1);
+    assert_eq!(episodes[0].number, "3");
+    assert_eq!(
+      episodes[0].url,
+      "https://jkanime.surf/dragon-ball-super-beerus-episodio-3/"
+    );
+  }
+
+  #[test]
+  fn monos_chinos_resolver_follows_only_its_explicit_direct_player_link() {
+    let html = Html::parse_document(
+      r#"<a class="direct-link" href="https://savefiles.com/embed-example.html">Servidor</a>
+         <a href="https://unrelated.example/">Recomendación</a>"#,
+    );
+    assert_eq!(
+      embedded_player_links(&html, ProviderId::MonosChinos),
+      vec!["https://savefiles.com/embed-example.html"]
+    );
+    assert!(embedded_player_links(&html, ProviderId::TioAnime).is_empty());
+  }
+
+  #[test]
+  fn tioanime_player_links_are_read_from_its_videos_array() {
+    let body = r#"var videos = [["Mega","https:\/\/mega.nz\/embed\/example"],["Voe","https:\/\/voe.sx\/e\/example",0,0]];"#;
+    let document = Html::parse_document("<html></html>");
+    assert_eq!(
+      provider_player_links(&document, body, ProviderId::TioAnime),
+      vec!["https://mega.nz/embed/example", "https://voe.sx/e/example",]
+    );
+  }
+
+  #[test]
+  fn rejects_hls_variant_endpoints_that_return_html() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+      for (path, body, content_type) in [
+        (
+          "/master",
+          "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,RESOLUTION=640x360\n/player\n",
+          "application/vnd.apple.mpegurl",
+        ),
+        ("/player", "<html>embed page</html>", "text/html"),
+      ] {
+        let (mut connection, _) = listener.accept().unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+          let count = connection.read(&mut buffer).unwrap();
+          if count == 0 {
+            break;
+          }
+          request.extend_from_slice(&buffer[..count]);
+        }
+        let body = if String::from_utf8_lossy(&request).contains(path) {
+          body
+        } else {
+          "unexpected request"
+        };
+        write!(
+          connection,
+          "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+          body.len()
+        )
+        .unwrap();
+      }
+    });
+
+    let resolver = SiteStreamResolver::new(ProviderId::JkAnime);
+    let master = format!("http://{address}/master");
+    let error = resolver
+      .resolve_media_url(&master, &master, "best")
+      .unwrap_err()
+      .to_string();
+    server.join().unwrap();
+
+    assert!(error.contains("HTML instead of media"), "{error}");
+  }
+
+  #[test]
+  fn rejects_extensionless_media_candidates_that_return_html() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+      let (mut connection, _) = listener.accept().unwrap();
+      let mut request = Vec::new();
+      let mut buffer = [0_u8; 1024];
+      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = connection.read(&mut buffer).unwrap();
+        if count == 0 {
+          break;
+        }
+        request.extend_from_slice(&buffer[..count]);
+      }
+      let body = "<html>embed player</html>";
+      write!(
+        connection,
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+      )
+      .unwrap();
+    });
+
+    let resolver = SiteStreamResolver::new(ProviderId::JkAnime);
+    let url = format!("http://{address}/extensionless-player");
+    let error = resolver
+      .resolve_media_url(&url, "http://jkanime.surf/", "best")
+      .unwrap_err()
+      .to_string();
+    server.join().unwrap();
+
+    assert!(error.contains("returned HTML instead of a media playlist"));
+  }
+
+  #[test]
+  fn rejects_direct_mp4_candidates_that_return_404() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+      let (mut connection, _) = listener.accept().unwrap();
+      let mut request = Vec::new();
+      let mut buffer = [0_u8; 1024];
+      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = connection.read(&mut buffer).unwrap();
+        if count == 0 {
+          break;
+        }
+        request.extend_from_slice(&buffer[..count]);
+      }
+      let body = "missing";
+      write!(
+        connection,
+        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+      )
+      .unwrap();
+    });
+
+    let resolver = SiteStreamResolver::new(ProviderId::TioAnime);
+    let url = format!("http://{address}/missing.mp4");
+    let error = resolver
+      .resolve_media_url(&url, "http://tioanime.com/", "best")
+      .unwrap_err()
+      .to_string();
+    server.join().unwrap();
+
+    assert!(error.contains("HTTP status 404"), "{error}");
+  }
+
+  #[test]
+  fn mp4upload_host_is_not_mistaken_for_an_mp4_file() {
+    assert!(is_direct_mp4_url("https://cdn.example/video.mp4?token=abc"));
+    assert!(!is_direct_mp4_url("https://www.mp4upload.com/znd9u99pnybq"));
+  }
+
+  #[test]
   fn extracts_tioanime_next_episode_date_from_empty_schedule() {
     assert_eq!(
       next_episode_date("<p>Proximo episodio: 2026-11-01</p>"),
       Some("2026-11-01".to_owned())
     );
     assert_eq!(next_episode_date("<p>Listado de episodios</p>"), None);
+  }
+
+  #[test]
+  fn parses_tioanime_episode_numbers_from_the_page_script_data() {
+    let body = r#"
+      <script>
+        var anime_info = ["4549","dragon-ball-super-beerus","Dragon Ball Super: Beerus","2026-11-01"];
+        var episodes = [3,2,1];
+        var episodes_details = ["Hace 3 dias","Hace 10 dias","Hace 17 dias"];
+      </script>
+    "#;
+    let episodes =
+      parse_tioanime_episodes(body, "https://tioanime.com/anime/dragon-ball-super-beerus");
+    assert_eq!(
+      episodes
+        .iter()
+        .map(|episode| (episode.number.as_str(), episode.url.as_str()))
+        .collect::<Vec<_>>(),
+      vec![
+        ("1", "https://tioanime.com/ver/dragon-ball-super-beerus-1"),
+        ("2", "https://tioanime.com/ver/dragon-ball-super-beerus-2"),
+        ("3", "https://tioanime.com/ver/dragon-ball-super-beerus-3"),
+      ]
+    );
   }
 
   #[test]
@@ -1376,6 +1804,17 @@ mod tests {
     assert_eq!(
       found,
       vec!["https://cdn.example/video/master.m3u8?token=abc&x=1"]
+    );
+  }
+
+  #[test]
+  fn does_not_treat_mp4upload_host_as_a_direct_video_url() {
+    assert!(
+      extract_media_urls(
+        "https://www.mp4upload.com/znd9u99pnybq",
+        "https://jkanime.surf/episode/"
+      )
+      .is_empty()
     );
   }
 
