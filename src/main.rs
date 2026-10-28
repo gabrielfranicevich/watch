@@ -1298,6 +1298,52 @@ fn safe_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use ani_cli::providers::hianime_stream::QualityOption;
+
+  #[test]
+  fn merges_provider_episode_lists_and_keeps_first_source_for_duplicate_numbers() {
+    let first = ProviderEpisodes {
+      source: ProviderAnime {
+        provider: ProviderId::HiAnime,
+        anime: Anime::new("frieren", "Frieren", "https://hianime.at/watch/frieren"),
+      },
+      episodes: vec![
+        Episode::new("2", None, "hianime-2"),
+        Episode::new("1", None, "hianime-1"),
+      ],
+    };
+    let second = ProviderEpisodes {
+      source: ProviderAnime {
+        provider: ProviderId::GoGoAnime,
+        anime: Anime::new("frieren", "Frieren", "https://gogoanime.by/series/frieren"),
+      },
+      episodes: vec![
+        Episode::new("1.0", None, "gogo-1"),
+        Episode::new("3", None, "gogo-3"),
+      ],
+    };
+
+    let merged = merge_provider_episodes(&[first, second]);
+    assert_eq!(
+      merged.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+      vec!["1", "2", "3"]
+    );
+    assert_eq!(merged[0].url, "hianime-1");
+  }
+
+  #[test]
+  fn source_quality_rank_uses_highest_available_resolution() {
+    let media = ResolvedMedia {
+      stream: ani_cli::domain::stream::Stream::new("https://cdn.example/video.m3u8", None, None),
+      subtitle: None,
+      mal_id: None,
+      qualities: vec![
+        QualityOption { label: "1080p".to_owned(), value: "1080p".to_owned() },
+        QualityOption { label: "720p".to_owned(), value: "720p".to_owned() },
+      ],
+    };
+    assert_eq!(media_quality_rank(&media), 1080);
+  }
 
   #[test]
   fn updating_history_keeps_existing_anime_position_and_appends_new_anime() {
