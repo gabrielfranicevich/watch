@@ -1323,7 +1323,10 @@ mod tests {
 
     let merged = merge_provider_episodes(&[first, second]);
     assert_eq!(
-      merged.iter().map(|episode| episode.number.as_str()).collect::<Vec<_>>(),
+      merged
+        .iter()
+        .map(|episode| episode.number.as_str())
+        .collect::<Vec<_>>(),
       vec!["1", "2", "3"]
     );
     assert_eq!(merged[0].url, "hianime-1");
@@ -1336,8 +1339,14 @@ mod tests {
       subtitle: None,
       mal_id: None,
       qualities: vec![
-        QualityOption { label: "1080p".to_owned(), value: "1080p".to_owned() },
-        QualityOption { label: "720p".to_owned(), value: "720p".to_owned() },
+        QualityOption {
+          label: "1080p".to_owned(),
+          value: "1080p".to_owned(),
+        },
+        QualityOption {
+          label: "720p".to_owned(),
+          value: "720p".to_owned(),
+        },
       ],
     };
     assert_eq!(media_quality_rank(&media), 1080);
