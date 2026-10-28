@@ -148,9 +148,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     };
     let mut provider_episodes = Vec::new();
     for source in source_options {
-      let loaded = if source.provider == choice.provider
-        && source.anime.id == choice.anime.id
-      {
+      let loaded = if source.provider == choice.provider && source.anime.id == choice.anime.id {
         choice
           .prefetched_episodes
           .clone()
@@ -481,11 +479,11 @@ impl PlaybackConfig<'_> {
       else {
         continue;
       };
-      match self
-        .catalog
-        .resolver(entry.source.provider)
-        .resolve(source_episode, self.dubbed, &self.quality)
-      {
+      match self.catalog.resolver(entry.source.provider).resolve(
+        source_episode,
+        self.dubbed,
+        &self.quality,
+      ) {
         Ok(media) => candidates.push((provider_order, entry.source.clone(), media)),
         Err(error) => failures.push(format!("{}: {error}", entry.source.provider.name())),
       }
