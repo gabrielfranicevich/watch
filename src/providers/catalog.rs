@@ -25,8 +25,20 @@ impl ProviderCatalog {
   }
 
   pub fn search(&self, query: &str) -> Result<Vec<AnimeOption>, Box<dyn std::error::Error>> {
+    self.search_in_language(query, None)
+  }
+
+  pub fn search_in_language(
+    &self,
+    query: &str,
+    language: Option<Language>,
+  ) -> Result<Vec<AnimeOption>, Box<dyn std::error::Error>> {
+    let providers: Vec<_> = ProviderId::ACTIVE
+      .into_iter()
+      .filter(|provider| language.is_none_or(|language| provider.language() == language))
+      .collect();
     let (sender, receiver) = mpsc::channel();
-    for provider in ProviderId::ACTIVE {
+    for provider in providers.iter().copied() {
       let query = query.to_owned();
       let sender = sender.clone();
       thread::spawn(move || {
@@ -48,7 +60,7 @@ impl ProviderCatalog {
     let mut succeeded = 0usize;
     let mut failures = Vec::new();
 
-    for _ in 0..ProviderId::ACTIVE.len() {
+    for _ in 0..providers.len() {
       match receiver.recv() {
         Ok((provider, Ok(results))) => {
           succeeded += 1;

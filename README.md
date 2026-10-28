@@ -52,6 +52,9 @@ On Linux, `watch` may already refer to the system process-monitoring utility. If
 # Search and play interactively
 watch "Frieren"
 
+# Limit results to Spanish-language providers
+watch --language español "Dragon Ball"
+
 # Prefer 720p when the source offers it
 watch --quality 720p "Frieren"
 
@@ -89,6 +92,8 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 
 - Parallel title search across the currently enabled providers: HiAnime, Gogoanime, AniWatch, TioAnime, and JKAnime. Provider availability and site support can change.
 - Duplicate titles are grouped by normalized title and language; when a title appears in both languages it is listed as separate `(en)` and `(es)` choices, and you can choose the provider after selecting a title.
+- `--language` filters catalog language; it does not select dubbed audio. `--dub` controls the audio version separately.
+- Episode lists combine sources for a title. For each episode, playback tries providers that expose that episode and chooses the stream that best matches `--quality` (the highest available quality by default).
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
 - Downloads using yt-dlp when suitable, FFmpeg fallback, and FFmpeg muxing for separate audio/video streams.
@@ -104,6 +109,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 | `-d, --download` | Download instead of playing. |
 | `-e, --episode RANGE`, `-r, --range RANGE` | Choose ranges like `1-3` or individual episodes like `1 3 5`. Use `0` for the first and `-1` for the last episode. |
 | `-q, --quality QUALITY` | Request `best`, `worst`, or a resolution such as `720p`. |
+| `--language LANGUAGE` | Filter by English (`english`, `en`, `ingles`, `inglés`) or Spanish (`spanish`, `es`, `espanol`, `español`), case-insensitively. |
 | `-S, --select-nth N` | Select an entry by its one-based index. |
 | `--dub` | Select dubbed audio when available. |
 | `-v, --vlc` / `-s, --syncplay` | Select VLC or Syncplay. |

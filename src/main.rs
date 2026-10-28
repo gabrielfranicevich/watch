@@ -21,7 +21,7 @@ use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::catalog::{AnimeOption, ProviderAnime, ProviderCatalog};
 use ani_cli::providers::hianime_stream::ResolvedMedia;
-use ani_cli::providers::site::ProviderId;
+use ani_cli::providers::site::{Language as ProviderLanguage, ProviderId};
 
 fn main() -> ExitCode {
   match run() {
@@ -128,13 +128,13 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
       let store = history
         .as_ref()
         .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
-      history_anime_choices(&catalog, store)?
+      history_anime_choices(&catalog, store, cli.language)?
     } else {
       let query = match pending_query.take() {
         Some(query) => query,
         None => read_search_query(&cli)?,
       };
-      search_anime_choices(&catalog, &query)?
+      search_anime_choices(&catalog, &query, cli.language)?
     };
 
     if choices.is_empty() {
@@ -154,7 +154,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     };
 
     let choice = choices[selected_index].clone();
-    println!("{}\n{}", choice.anime.title, choice.anime.url);
+    println!("{}", choice.anime.title);
 
     let source_options = if choice.sources.is_empty() {
       vec![ProviderAnime {
@@ -508,9 +508,7 @@ impl PlaybackConfig<'_> {
     }
 
     candidates.sort_by(|left, right| {
-      media_quality_rank(&right.2)
-        .cmp(&media_quality_rank(&left.2))
-        .then_with(|| left.0.cmp(&right.0))
+      compare_quality_fit(&left.2, &right.2, &self.quality).then_with(|| left.0.cmp(&right.0))
     });
 
     if let Some((_, source, media)) = candidates.into_iter().next() {
@@ -689,6 +687,56 @@ fn media_quality_rank(media: &ResolvedMedia) -> u32 {
     .unwrap_or_default()
 }
 
+fn resolved_media_quality(media: &ResolvedMedia) -> Option<u32> {
+  media
+    .stream
+    .quality
+    .as_deref()
+    .map(quality_height)
+    .filter(|height| *height > 0)
+    .or_else(|| {
+      let available = media_quality_rank(media);
+      (available > 0).then_some(available)
+    })
+}
+
+fn compare_quality_fit(
+  left: &ResolvedMedia,
+  right: &ResolvedMedia,
+  requested: &str,
+) -> std::cmp::Ordering {
+  let left_quality = resolved_media_quality(left);
+  let right_quality = resolved_media_quality(right);
+  if requested == "worst" {
+    return match (left_quality, right_quality) {
+      (Some(left), Some(right)) => left.cmp(&right),
+      (Some(_), None) => std::cmp::Ordering::Less,
+      (None, Some(_)) => std::cmp::Ordering::Greater,
+      (None, None) => std::cmp::Ordering::Equal,
+    };
+  }
+
+  let target = quality_height(requested);
+  if target > 0 {
+    return match (left_quality, right_quality) {
+      (Some(left), Some(right)) => left
+        .abs_diff(target)
+        .cmp(&right.abs_diff(target))
+        .then_with(|| right.cmp(&left)),
+      (Some(_), None) => std::cmp::Ordering::Less,
+      (None, Some(_)) => std::cmp::Ordering::Greater,
+      (None, None) => std::cmp::Ordering::Equal,
+    };
+  }
+
+  match (left_quality, right_quality) {
+    (Some(left), Some(right)) => right.cmp(&left),
+    (Some(_), None) => std::cmp::Ordering::Less,
+    (None, Some(_)) => std::cmp::Ordering::Greater,
+    (None, None) => std::cmp::Ordering::Equal,
+  }
+}
+
 fn wait_for_player(active_player: &mut Option<Child>) -> io::Result<()> {
   if let Some(mut child) = active_player.take() {
     let _ = child.wait()?;
@@ -846,6 +894,10 @@ fn quality_choices(available: &[String]) -> Vec<(String, String)> {
 }
 
 fn quality_height(value: &str) -> u32 {
+  let value = value
+    .split_once('x')
+    .map(|(_, height)| height)
+    .unwrap_or(value);
   value
     .trim_end_matches('p')
     .parse::<u32>()
@@ -871,8 +923,9 @@ struct AnimeChoice {
 fn search_anime_choices(
   catalog: &ProviderCatalog,
   query: &str,
+  language: Option<ani_cli::cli::args::Language>,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
-  let mut results = catalog.search(query)?;
+  let mut results = catalog.search_in_language(query, language.map(provider_language))?;
   let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
   if exact {
     let normalized_query = normalize_title(query);
@@ -914,6 +967,7 @@ fn search_anime_choices(
 fn history_anime_choices(
   catalog: &ProviderCatalog,
   store: &HistoryStore,
+  language: Option<ani_cli::cli::args::Language>,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
   store.backup_legacy_entries()?;
   let entries = store.read()?;
@@ -938,6 +992,9 @@ fn history_anime_choices(
       .as_deref()
       .and_then(ProviderId::from_key)
       .unwrap_or(ProviderId::HiAnime);
+    if language.is_some_and(|language| history_provider.language() != provider_language(language)) {
+      continue;
+    }
     let anime = Anime::new(
       entry.anime_id.clone(),
       entry.anime_title.clone(),
@@ -994,6 +1051,13 @@ fn history_anime_choices(
     return Err("no unwatched series in history".into());
   }
   Ok(choices)
+}
+
+fn provider_language(language: ani_cli::cli::args::Language) -> ProviderLanguage {
+  match language {
+    ani_cli::cli::args::Language::English => ProviderLanguage::English,
+    ani_cli::cli::args::Language::Spanish => ProviderLanguage::Spanish,
+  }
 }
 
 fn is_back_requested(error: &(dyn std::error::Error + 'static)) -> bool {

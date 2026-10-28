@@ -14,6 +14,7 @@ Options:
   -s, --syncplay            Use Syncplay
   -S, --select-nth N       Select the nth entry
   -q, --quality QUALITY    Specify video quality
+      --language LANGUAGE  Filter titles by language: english/en or spanish/español/es
   -v, --vlc                Use VLC
   -V, --version            Show version
   -h, --help               Show this help
@@ -29,8 +30,24 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update watch
 
-watch searches English and Spanish anime providers, merges duplicate titles by language, lets you choose a source, and supports episode selection, playback, downloads, subtitles, watch history, external menu backends, inline terminal video, the Cargo-based updater, and next-episode countdown.
+watch searches English and Spanish anime providers, filters results with --language, merges duplicate titles by language, and supports episode selection, playback, downloads, subtitles, watch history, external menu backends, inline terminal video, the Cargo-based updater, and next-episode countdown.
 ";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Language {
+  English,
+  Spanish,
+}
+
+impl Language {
+  fn parse(value: &str) -> Option<Self> {
+    match value.trim().to_lowercase().as_str() {
+      "english" | "en" | "ingles" | "inglés" => Some(Self::English),
+      "spanish" | "es" | "espanol" | "español" => Some(Self::Spanish),
+      _ => None,
+    }
+  }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceOverride {
@@ -50,6 +67,7 @@ pub struct Cli {
   pub select_nth: bool,
   pub select_index: Option<usize>,
   pub quality: Option<String>,
+  pub language: Option<Language>,
   pub vlc: bool,
   pub version: bool,
   pub help: bool,
@@ -120,6 +138,15 @@ impl Cli {
         "-q" | "--quality" => {
           index += 1;
           cli.quality = Some(required_value(&args, index, arg)?.clone());
+        }
+        "--language" => {
+          index += 1;
+          let value = required_value(&args, index, arg)?;
+          cli.language = Some(Language::parse(value).ok_or_else(|| {
+            ParseError(format!(
+              "{arg} must be English (english/en/ingles/inglés) or Spanish (spanish/español/espanol/es)"
+            ))
+          })?);
         }
         "-N" | "--nextep-countdown" => {
           cli.next_episode_countdown = true;

@@ -50,6 +50,10 @@ Downloads use yt-dlp when available for a compatible single media stream and FFm
 - `ANI_CLI_HIST_DIR`: directory for the compatible `ani-hsts` history file.
 - `ANI_CLI_LOG=0`: disable system logger records.
 
+## Catalog language
+
+Use `--language english` (also `en`, `ingles`, `inglés`) or `--language spanish` (also `es`, `espanol`, `español`) to filter catalog and history choices. Matching ignores case. This is separate from `--dub`, which selects dubbed audio.
+
 ## Known limitations
 
 - HiAnime markup, streaming hosts, and anti-bot responses can change independently of this client. CI tests use local fixtures and do not establish live-provider availability.

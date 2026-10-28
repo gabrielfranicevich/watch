@@ -50,6 +50,15 @@ Run a title query:
 watch "Frieren"
 ~~~
 
+Filter the catalog by language with `--language`. Values are case-insensitive; English accepts `english`, `en`, `ingles`, or `inglés`, and Spanish accepts `spanish`, `es`, `espanol`, or `español`:
+
+~~~sh
+watch --language english "Dragon Ball"
+watch --language ESPAÑOL "Dragon Ball"
+~~~
+
+This filters catalog language, not audio. Use `--dub` to request dubbed audio.
+
 Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
 
 ### Choosing entries and going back
@@ -67,7 +76,7 @@ watch --quality 720p "Frieren"
 watch --quality best "Frieren"
 ~~~
 
-Quality options depend on the selected source and episode.
+Quality options depend on the selected source and episode. Episode lists combine sources for a title. For each selected episode, Watch tries the providers that list it and chooses the resolved stream that best matches `--quality`. The default `best` selects the highest available quality.
 
 ## 4. Download episodes
 
