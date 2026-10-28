@@ -715,7 +715,7 @@ mod tests {
 
     let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
     assert!(main_config.starts_with("hwdec=auto\n"));
-    let include_line = format!("include={}/mpv.config.mp4", config_dir.display());
+    let include_line = format!("include={}", config_dir.join("mpv.config.mp4").display());
     assert_eq!(
       main_config
         .lines()
