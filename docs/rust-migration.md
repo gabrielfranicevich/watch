@@ -4,9 +4,20 @@ The Rust implementation is developed on `develop`. The historical shell implemen
 
 ## Build and run
 
-Install stable Rust 1.85 or newer. The executable is named `watch`; the Cargo package metadata and `ANI_CLI_*` compatibility settings retain their historical names. From a checkout:
+The installed executable and Cargo package are named `watch`. Existing `ANI_CLI_*` environment variables retain their historical names. Install with Cargo when the package is available:
 
 ~~~sh
+cargo install watch
+watch --version
+~~~
+
+Otherwise, install the Rust branch from GitHub or build from a checkout:
+
+~~~sh
+cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
+
+git clone --branch develop https://github.com/gabrielfranicevich/watch.git
+cd watch
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
@@ -43,12 +54,14 @@ Downloads use yt-dlp when available for a compatible single media stream and FFm
 
 - HiAnime markup, streaming hosts, and anti-bot responses can change independently of this client. CI tests use local fixtures and do not establish live-provider availability.
 - Playback and downloads depend on external programs and platform-specific behavior. Install those tools separately and ensure they are accessible to the process.
+- Inline rendering depends on the selected MPV video output and support for its graphics protocol in the terminal emulator. An available MPV driver does not prove terminal support; if frames do not appear, use regular external playback.
 - The updater invokes Cargo to install from a selected Git branch. It requires Cargo and network access, validates the branch name, and passes arguments directly instead of invoking a shell. Windows may reject replacement of a currently running executable; close the application and retry or reinstall manually.
 - The updater intentionally does not pass `--locked` yet. Before adding that flag to updater or installation instructions, verify locked dependency resolution from a clean checkout with `cargo check --all-targets --locked` and `cargo test --all-targets --locked`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update.
 
 ## Related documentation
 
 - [User tutorial](tutorial.md)
+- [Android / Termux guide](android.md)
 - [Development guide](development.md)
 - [Project roadmap](roadmap.md)
 - [Root README](../README.md)

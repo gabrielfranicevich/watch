@@ -26,6 +26,7 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 | `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
 | `src/main.rs` | CLI orchestration and end-to-end application flow. |
+| `tests/unit/` | Unit-test bodies, mirrored by source module. Source files include them with `#[path]` so tests retain access to private implementation details. |
 
 ## Provider changes
 
@@ -40,7 +41,7 @@ Do not make the test suite depend on the live provider. Keep provider changes na
 
 ## Media and platform changes
 
-Playback and downloading delegate work to external programs. Test command-line argument construction without launching the program, including URLs, referers, separate audio, subtitles, and custom flags. Guard platform-specific behavior explicitly and document runtime prerequisites in the tutorial.
+Playback and downloading delegate work to external programs. Test command-line argument construction without launching the program, including URLs, referers, separate audio, subtitles, and custom flags. Keep test bodies in `tests/unit/`; do not put `#[test]` functions in `src/`. Guard platform-specific behavior explicitly and document runtime prerequisites in the tutorial and Android guide.
 
 ## Pull request checklist
 

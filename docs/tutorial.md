@@ -4,11 +4,17 @@ This tutorial covers installation, searching, playback, downloads, and watch his
 
 ## 1. Install watch
 
-Install stable Rust 1.85 or newer and Git, then run:
+Install the published package with Cargo:
+
+~~~sh
+cargo install watch
+watch --version
+~~~
+
+If the package is not available from crates.io, install the Rust branch from GitHub:
 
 ~~~sh
 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
-watch --version
 ~~~
 
 If `watch` is not found, make sure Cargo's binary directory (`~/.cargo/bin`, or the equivalent on your platform) is on your `PATH`. On Linux, `watch` may conflict with the system process-monitoring utility; place `~/.cargo/bin` before system directories or run `~/.cargo/bin/watch` explicitly.
@@ -34,7 +40,7 @@ On Windows, install tools in the same environment from which you launch watch. W
 
 ### Android / Termux
 
-See the dedicated [Android / Termux installation guide](android.md) for installation, player setup, playback limitations, and troubleshooting. The CLI currently uses explicit Android MPV/VLC activity integration; automatic fallback to Android's generic media handler is not implemented yet.
+See the dedicated [Android / Termux installation guide](android.md) for installing Watch, setting up MPV-Android's shared configuration, and testing playback.
 
 ## 3. Search and play
 
@@ -50,9 +56,9 @@ Select a matching title, then choose an episode. The client resolves the stream 
 
 If there is only one anime result or one episode, `watch` tells you it is the only available choice and selects it automatically.
 
-The built-in numbered menu shows up to 15 results at a time. Press `n` or `p` when no selection digits have been entered to change pages. Numbers refer to the full result list, not just the visible page. If `fzf` is installed, it can filter and scroll all results.
+The built-in numbered menu shows up to 15 results at a time. In a directly attached interactive terminal, use Left/Right to change pages; the menu redraws those rows in place. If a launcher does not expose console input, the line-based fallback accepts `n` and `p` and asks for a number on the current page. Numbers refer to the full result list. If `fzf` is installed, it can filter and scroll all results.
 
-Press `Backspace` with an empty selection to go back: from episode selection to anime results, or from the anime results to a fresh search prompt. When a single anime result was selected automatically, going back from its episode list returns to search rather than choosing the same title again. Use `q` or `Esc` to cancel the current selection. With `fzf`, Backspace is reserved for going back rather than deleting characters from the filter.
+Press `Backspace` with an empty selection to go back: from episode selection to anime results, or from the anime results to a fresh search prompt. When a single anime result was selected automatically, going back from its episode list returns to search rather than choosing the same title again. Use `q` or `Esc` to cancel; cancellation exits successfully without an error. With `fzf`, Backspace is reserved for going back rather than deleting characters from the filter.
 
 Request a resolution with `--quality`:
 
@@ -114,9 +120,9 @@ watch --inline "Frieren"
 watch "Frieren" --here
 ~~~
 
-This mode requires MPV with a terminal video output driver and an interactive terminal on both stdin and stdout. Before playback, watch runs `mpv --vo=help` using the selected MPV executable, chooses a compiled-in terminal driver, and disables the normal video window. On Windows, watch launches MPV through `mpv.com`, the console launcher, so terminal video output has a console handle; keep `mpv.com` and `mpv.exe` together on `PATH`. Kitty-protocol terminals prefer Kitty graphics; Windows defaults to Sixel because MPV's `tct` driver only works on Windows in ANSI-compatible terminals such as mintty.
+Inline playback is experimental and depends on both MPV and the terminal. MPV must include a terminal output driver, and the terminal must implement that driver's protocol. A driver listed by `mpv --vo=help` does not prove that the terminal supports its protocol. Kitty and Sixel are different graphics protocols; `tct` uses ANSI color cells and is not equivalent to either one. Windows Terminal support can vary by protocol and setup.
 
-Terminal detection is heuristic and cannot guarantee that a particular terminal actually renders a protocol. On non-Windows systems, watch can fall back to `tct` when a graphics driver is missing. On Windows, it deliberately does not fall back to `tct` automatically: if the installed MPV lacks Sixel output, it reports an error rather than starting audio-only playback. You can explicitly request `tct` only when using an ANSI-compatible terminal:
+If you want to try it, run:
 
 ~~~sh
 # Choose a backend explicitly
@@ -125,7 +131,7 @@ ANI_CLI_TERMINAL_BACKEND=sixel watch --inline "Frieren"
 ANI_CLI_TERMINAL_BACKEND=tct watch --inline "Frieren"
 ~~~
 
-Use `auto` or unset the variable to restore detection. To see the output drivers in your MPV build, run `mpv --vo=help`. Inline mode is incompatible with `--download`, `--vlc`, and `--syncplay`; use a regular player for those workflows.
+The setting selects a driver; it cannot add protocol support to the terminal. If MPV plays audio but no frames appear, use ordinary windowed playback and verify the protocol with a controlled local video before trying another backend. Inline mode is incompatible with `--download`, `--vlc`, and `--syncplay`.
 
 ## 8. Useful commands
 
@@ -142,14 +148,14 @@ Use `auto` or unset the variable to restore detection. To see the output drivers
 
 **Search fails or returns a verification page.** The upstream provider may be applying anti-bot checks or may have changed its page structure. Retry later; this is not necessarily an watch configuration problem.
 
-**Playback fails with `program not found`.** watch resolves the stream but delegates playback to an external player. Install MPV or VLC and make sure `mpv.com`/`mpv.exe` or `vlc.exe` is available through `PATH` in the environment where watch runs. On Windows inline playback uses the console launcher `mpv.com`, which is normally distributed beside `mpv.exe`. To use a custom location, set `ANI_CLI_PLAYER` to the executable path. You can also try `watch --vlc "Frieren"` when VLC is installed.
+**Playback fails with `program not found`.** watch resolves the stream but delegates playback to an external player. Install MPV or VLC and make sure the player executable is available through `PATH` in the environment where watch runs. Inline mode on Windows also needs MPV's console launcher, commonly distributed beside `mpv.exe`; this does not guarantee that the terminal supports its graphics protocol. To use a custom location, set `ANI_CLI_PLAYER` to the executable path. You can also try `watch --vlc "Frieren"` when VLC is installed.
 
 **Playback does not start for another reason.** Confirm that the selected player supports the stream and is accessible from your terminal, then inspect the error output.
 
-**Inline terminal playback is blank or garbled.** Run `mpv --vo=help` and check that MPV lists `kitty`, `sixel`, or `tct`. watch checks this list before playback and reports an error if no terminal output driver is available. You can override `ANI_CLI_TERMINAL_BACKEND` with `kitty`, `sixel`, or `tct`. Kitty and Sixel require graphics-protocol support from the terminal emulator; `tct` draws frames using colored terminal cells.
+**Inline terminal playback is blank or garbled.** MPV listing a driver does not establish that the terminal supports its protocol. Try regular windowed playback while checking the terminal emulator's protocol support. Kitty and Sixel are separate graphics protocols; `tct` draws colored terminal cells. Do not expect changing the selected driver alone to make an unsupported terminal render frames.
 
 **Download fails.** Install FFmpeg and, if available, yt-dlp. Some stream sources may be unavailable or unsuitable for download even when playback works.
 
 **The command is not found after Cargo installation.** Add Cargo's binary directory to your `PATH`, then open a new terminal.
 
-For platform caveats, see the [Rust migration notes](rust-migration.md). To report a reproducible problem, include the watch version, operating system, command, expected behavior, and error output in a [GitHub issue](https://github.com/gabrielfranicevich/watch/issues).
+For platform and migration notes, see [Rust migration notes](rust-migration.md). To report a reproducible problem, include the Watch version, operating system, terminal emulator when relevant, command, expected behavior, and error output in a [GitHub issue](https://github.com/gabrielfranicevich/watch/issues).

@@ -4,18 +4,17 @@
 
 The active Rust implementation is developed on `develop`. The historical shell implementation remains on `main`; this document describes the Rust branch.
 
-The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. The `android-support` branch adds an ARM64 Android cross-check and initial Termux playback fallback. Provider regression tests use local fixtures rather than relying on the live service. These checks validate repository code, not the continued availability of external websites or media players.
+The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. It also cross-checks the Android ARM64 target. Provider regression tests use local fixtures rather than relying on the live service. These checks validate repository code, not the continued availability of external websites or media players.
 
 ## Android support status
 
 - [x] Add a pure playback-target policy with unit tests.
-- [ ] Implement and test automatic fallback from inline playback to external playback on Android.
-- [ ] Add a generic Android VIEW intent as a fallback when explicit MPV/VLC integration is unavailable.
+- [x] Add MPV-Android playback integration and generate shared MPV configuration for per-stream options.
+- [x] Add VLC Android playback selection.
 - [x] Add an ARM64 Android cross-compilation check to CI.
-- [x] Run the Android ARM64 cross-compilation job successfully.
-- [ ] Validate playback, subtitles, referer-dependent streams, and history on a physical Termux device.
+- [ ] Validate playback, subtitles, referer-dependent streams, and history across Android versions and physical Termux devices.
 - [ ] Extract the Rust application workflow from `src/main.rs` before building a native Android UI.
-- [ ] Build a separate Kotlin/Jetpack Compose app that reuses the Rust domain/provider layer.
+- [ ] Decide whether a separate native Android app is needed after CLI workflows are stable.
 
 ## Remaining work
 

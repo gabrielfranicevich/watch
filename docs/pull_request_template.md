@@ -13,7 +13,8 @@
 - [ ] `cargo test --all-targets`
 - [ ] Added regression coverage for the bug or feature.
 - [ ] Tests use local fixtures instead of the live provider.
-- [ ] Updated the README/tutorial/migration notes when behavior changes.
+- [ ] Updated the README, user guide, Android guide, or man page when behavior changes.
+- [ ] Put regression test bodies in `tests/unit/`.
 - [ ] Checked platform-specific player/downloader arguments where relevant.
 
 ## User-visible checks (when relevant)

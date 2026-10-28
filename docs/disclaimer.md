@@ -1,6 +1,6 @@
 # Disclaimer
 
-ani-cli is an open-source client that searches a third-party website and resolves media streams for playback or download by local tools. It does not host, upload, or control the availability of the media it locates.
+Watch is an open-source command-line client that searches third-party sites and resolves media streams for playback or download by local tools. It does not host, upload, or control the availability of the media it locates.
 
 Users are responsible for complying with the laws applicable to them and with the terms and rights governing any content and service they access. The existence of a feature does not grant permission to access, reproduce, or redistribute copyrighted material.
 

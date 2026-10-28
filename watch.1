@@ -11,7 +11,7 @@ watch \- terminal client to search, stream and download anime
 .RI [ options ]
 .SH DESCRIPTION
 .B watch
-searches HiAnime, presents matching titles and episodes, resolves available streams, and opens the selected media with a supported external player. It can also download episodes and maintain a compatible watch-history file.
+searches the enabled anime providers, presents matching titles and episodes, resolves available streams, and opens the selected media with a supported player. It can also download episodes and maintain a compatible watch-history file.
 .PP
 The Rust implementation is currently developed on the
 .B develop
@@ -84,7 +84,7 @@ Use dmenu for selection.
 Skip the intro when the selected player supports ani-skip.
 .TP
 .B --inline, --here
-Render video inside the terminal using a supported MPV graphics protocol.
+Ask MPV to render video inside the terminal. The MPV output driver and terminal must support the same graphics protocol. An available MPV driver does not prove that the terminal supports it; use regular external playback if no frames appear.
 .TP
 .B --no-detach
 Keep playback attached to the terminal.
@@ -100,7 +100,7 @@ Update the Rust installation from the selected Git branch using Cargo.
 .SH INTERACTIVE CONTROLS
 A single anime result or single available episode is selected automatically and reported to the user.
 .PP
-The built-in numbered menu shows 15 entries per page. Press
+The built-in numbered menu shows 15 entries per page. In a directly attached terminal, use the left and right arrow keys to change pages; the menu redraws in place. If the console is unavailable, the line-based menu accepts
 .B n
 for the next page or
 .B p
@@ -112,7 +112,7 @@ with an empty selection to return to the previous step. Backspace from anime res
 .B q
 or
 .B Esc
-to cancel. When
+to cancel and exit successfully. When
 .B fzf
 is used, Backspace is reserved for navigating back instead of editing its filter.
 .SH ENVIRONMENT
@@ -159,7 +159,7 @@ Directory containing the compatible ani-hsts history file.
 .B ANI_CLI_LOG
 Set to 0 to disable system logger records.
 .SH DEPENDENCIES
-Rust is required to build the development branch. Playback needs an installed external media player such as mpv or VLC. On Windows, the player's executable must be available through PATH, or selected explicitly with ANI_CLI_PLAYER. Downloads use yt-dlp when available and FFmpeg as the fallback; FFmpeg is also required to mux separate audio and video renditions. Syncplay and ani-skip are optional.
+Rust 1.85 or newer is required to build from source. Playback needs an installed external media player such as MPV or VLC. Android playback uses MPV-Android by default; see the Watch Android / Termux guide. Downloads use yt-dlp when available and FFmpeg as the fallback; FFmpeg is also required to mux separate audio and video renditions. Syncplay and ani-skip are optional.
 .SH FILES
 The history file is resolved using the platform-specific data directory or
 .BR ANI_CLI_HIST_DIR .

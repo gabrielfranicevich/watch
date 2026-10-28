@@ -29,11 +29,17 @@ watch searches English and Spanish anime providers, groups duplicate titles by l
 
 ## Quick start
 
-Install stable Rust 1.85 or newer and Git, then install the CLI and search for a title:
+Install stable Rust 1.85 or newer and Cargo, then install the published CLI and search for a title:
+
+~~~sh
+cargo install watch
+watch "Frieren"
+~~~
+
+If the package is not available from crates.io, install the Rust branch directly:
 
 ~~~sh
 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop
-watch "Frieren"
 ~~~
 
 Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
@@ -72,7 +78,7 @@ Run `watch --help` for the complete option list.
 - A single anime result is selected automatically with a message saying it is the only result. The same rule applies when an anime has only one available episode.
 - The built-in numbered menu displays up to 15 results per page. Press Left or Right to move between pages; item numbers remain global across pages. Page-navigation hints appear only when more than one page is available.
 - Press `Backspace` with no number entered to go back. From episode selection it returns to the anime results; from the anime results it starts a fresh search. If the only anime result was auto-selected, Backspace from its episode list returns to the search prompt instead of reopening that same result.
-- Press `q` or `Esc` to cancel the current selection.
+- Press `q` or `Esc` to cancel the current selection and exit without an error. In line-based fallback menus, enter `n` or `p` to change pages.
 - When `fzf` is available, it can filter and scroll the complete list. Backspace is reserved for navigating to the previous step rather than deleting text from the `fzf` filter.
 
 ## Why watch?
@@ -81,7 +87,7 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 
 ## What it supports
 
-- Parallel title search across HiAnime, Gogoanime, AniWatch, 9anime, AnimeKai, MonosChinos, TioAnime, Animeblix, AnimeFenix, and JKAnime.
+- Parallel title search across the currently enabled providers: HiAnime, Gogoanime, AniWatch, TioAnime, and JKAnime. Provider availability and site support can change.
 - Duplicate titles are grouped by normalized title and language; when a title appears in both languages it is listed as separate `(en)` and `(es)` choices, and you can choose the provider after selecting a title.
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
@@ -104,7 +110,7 @@ These paths depend on the provider, platform, media player, and external tools. 
 | `--rofi` / `--dmenu` | Use an external selection menu. |
 | `--skip` | Enable intro skipping where supported. |
 | `--no-detach` | Keep the player attached to the terminal. |
-| `--inline`, `--here` | Render video in the terminal using an available graphics protocol. On Windows, automatic mode requires MPV's Sixel output; `tct` is only used when explicitly selected. |
+| `--inline`, `--here` | Ask MPV to render video in the terminal. Requires a matching MPV output driver and terminal protocol; rendering is terminal-specific and may not work in every terminal. |
 | `--exit-after-play` | Return the player's exit code after playback. |
 | `-N, --nextep-countdown` | Show the next-episode countdown. |
 | `-D, --delete` / `-l, --logview` | Delete watch history or view logs. |
@@ -114,13 +120,13 @@ These paths depend on the provider, platform, media player, and external tools. 
 
 | Tool | When it is needed |
 | --- | --- |
-| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to watch. `--inline` requires MPV with a terminal video output driver. |
+| MPV, VLC, IINA, Syncplay, or a supported platform player | Required for playback; install a player accessible to watch. Android playback uses MPV-Android by default; see the Android guide. |
 | FFmpeg | Downloads and muxing separate audio/video streams. |
 | yt-dlp | Optional; preferred for supported single-stream downloads. |
 | fzf, rofi, or dmenu | Optional selection backends. |
 | ani-skip | Optional intro skipping for supported MPV/Syncplay setups. |
 
-Install players and command-line tools with your operating system's package manager. On Windows, ensure `mpv.com` and `mpv.exe` (for inline playback) or `vlc.exe` are available through `PATH`, or set `ANI_CLI_PLAYER` to the executable path. WSL may need extra setup to launch a Windows player. For terminal video output and backend overrides, see the [tutorial](docs/tutorial.md#7-play-inside-the-terminal). Android/Termux installation and current playback limitations are documented in the [Android guide](docs/android.md). A native Android app is not included yet.
+Install players and command-line tools with your operating system's package manager. On Windows, ensure the MPV or VLC executable is available through `PATH`, or set `ANI_CLI_PLAYER` to its path. Inline mode also needs MPV's console launcher, commonly distributed as `mpv.com`. WSL may need extra setup to launch a Windows player. Terminal graphics depend on both MPV and the terminal emulator; an MPV driver being available does not prove that the terminal supports its protocol. See the [tutorial](docs/tutorial.md#7-play-inside-the-terminal) and [Android / Termux guide](docs/android.md).
 
 ## Configuration
 
@@ -134,7 +140,7 @@ Install players and command-line tools with your operating system's package mana
 | `ANI_CLI_MENU_FLAGS` | Extra arguments for the menu program. |
 | `ANI_CLI_PLAYER` | Player executable or supported player name. |
 | `ANI_CLI_PLAYER_FLAGS` | Extra player/downloader arguments. |
-| `ANI_CLI_TERMINAL_BACKEND` | Inline output backend: `auto`, `kitty`, `sixel`, or `tct`. |
+| `ANI_CLI_TERMINAL_BACKEND` | Requested inline output backend: `auto`, `kitty`, `sixel`, or `tct`. The terminal must support the selected protocol. |
 | `ANI_CLI_DOWNLOAD_DIR` | Download destination directory. |
 | `ANI_CLI_HIST_DIR` | Directory for the compatible history file. |
 | `ANI_CLI_NO_DETACH=1` | Keep playback attached to the terminal. |
@@ -145,7 +151,7 @@ Install players and command-line tools with your operating system's package mana
 ## Caveats
 
 - Provider markup, stream hosts, search routes, and anti-bot responses can change without notice. Non-HiAnime providers use shared HTML and direct HLS/MP4 extraction; sites with encrypted or custom embedded players may require provider-specific resolver updates. CI does not guarantee live-provider availability.
-- Prebuilt release binaries are not published for the Rust port yet. See the [migration notes](docs/rust-migration.md) for platform caveats.
+- Terminal playback may produce audio without visible frames when the terminal does not support MPV's selected graphics protocol. Use ordinary external playback in that case.
 - The client does not host or own the media it locates. You are responsible for complying with applicable laws and service terms; read the [disclaimer](docs/disclaimer.md).
 
 ## Documentation and support
