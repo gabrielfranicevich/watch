@@ -16,13 +16,5 @@ impl Anime {
 }
 
 #[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn stores_provider_identity_and_title() {
-    let anime = Anime::new("frieren", "Frieren", "https://example.test/anime/frieren");
-    assert_eq!(anime.id, "frieren");
-    assert_eq!(anime.title, "Frieren");
-  }
-}
+#[path = "../../tests/unit/domain/anime.rs"]
+mod tests;
