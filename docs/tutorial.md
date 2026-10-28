@@ -30,7 +30,11 @@ Install a supported player separately. MPV is the usual default; VLC, Syncplay, 
 
 FFmpeg is needed for downloads and for muxing separate video and audio tracks. yt-dlp is optional and preferred when a resolved stream is suitable. fzf, rofi, and dmenu are optional selection menus.
 
-On Windows, install tools in the same environment from which you launch watch. WSL may need extra setup to invoke a Windows player. On Android/Termux, launching a player depends on the installed app and Android intent integration.
+On Windows, install tools in the same environment from which you launch watch. WSL may need extra setup to invoke a Windows player.
+
+### Android / Termux
+
+See the dedicated [Android / Termux installation guide](android.md) for installation, player setup, playback limitations, and troubleshooting. The CLI currently uses explicit Android MPV/VLC activity integration; automatic fallback to Android's generic media handler is not implemented yet.
 
 ## 3. Search and play
 

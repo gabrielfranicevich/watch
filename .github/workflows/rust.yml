@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop
+      - android-support
   pull_request:
     branches:
       - main
       - develop
+      - android-support
   workflow_dispatch:
 
 permissions:
@@ -57,3 +59,34 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+  android-aarch64:
+    name: Android CLI cross-check (aarch64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Android SDK tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;27.2.12479018"
+
+      - name: Install Rust target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Configure Android NDK compiler
+        shell: bash
+        run: |
+          NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CC_aarch64_linux_android=$NDK/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$NDK/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+
+      - name: Check Android target
+        run: cargo check --all-targets --target aarch64-linux-android

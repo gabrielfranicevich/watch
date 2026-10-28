@@ -97,7 +97,8 @@ impl Player {
       Self::Iina if cfg!(target_os = "macos") => "/Applications/IINA.app/Contents/MacOS/iina-cli",
       Self::Iina => "iina-cli",
       Self::FlatpakMpv => "flatpak",
-      Self::AndroidMpv | Self::AndroidVlc => "am",
+      Self::AndroidMpv => "termux-open",
+      Self::AndroidVlc => "am",
       Self::Configured(_) if self.kind() == PlayerKind::FlatpakMpv => "flatpak",
       Self::Configured(command) => command,
     }
@@ -283,26 +284,17 @@ impl Player {
         args.extend(media_flags.iter().map(OsString::from));
       }
       PlayerKind::AndroidMpv => {
+        // Route the VIEW intent through Termux's supported external-app
+        // receiver. Direct `am start` is rejected by some Android firmware
+        // builds (including Unisoc devices) before MPV can receive the URL.
+        // MPV-specific stream options are written to its shared config by
+        // prepare_playback(), since termux-open cannot pass arbitrary MPV flags.
         args.extend(
-          [
-            "start",
-            "--user",
-            "0",
-            "-a",
-            "android.intent.action.VIEW",
-            "-d",
-          ]
-          .into_iter()
-          .map(OsString::from),
-        );
-        args.push(OsString::from(&stream.url));
-        args.extend(
-          ["-n", "is.xyz.mpv/.MPVActivity", "-e", "title"]
+          ["--chooser", "--content-type", "video/*"]
             .into_iter()
             .map(OsString::from),
         );
-        args.push(OsString::from(title));
-        args.extend(command_flags.iter().map(OsString::from));
+        args.push(OsString::from(&stream.url));
       }
       PlayerKind::AndroidVlc => {
         args.extend(
@@ -401,11 +393,18 @@ impl Player {
   ) -> io::Result<Child> {
     self.prepare_playback(stream, subtitle);
     let program = self.command_name();
-    Command::new(program)
+    let mut command = Command::new(program);
+    command
       .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
-      .stdin(Stdio::null())
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
+      .stdin(Stdio::null());
+    if matches!(self, Self::AndroidMpv | Self::AndroidVlc) {
+      // Keep Android Activity Manager errors visible; the detached child is
+      // only the short-lived `am` command, not the media player process.
+      command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    } else {
+      command.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    command
       .spawn()
       .map_err(|error| contextualize_program_error(error, program))
   }
@@ -414,16 +413,56 @@ impl Player {
       return;
     }
 
-    let config_path = std::path::Path::new("/storage/emulated/0/mpv");
-    if std::fs::create_dir_all(config_path).is_err() {
+    let config = android_mpv_config(stream, subtitle);
+    if config.is_empty() {
       return;
     }
-    let config = android_mpv_config(stream, subtitle);
-    if !config.is_empty() {
-      let path = config_path.join("mpv.config.mp4");
-      let _ = std::fs::write(path, config);
+
+    if stream.referer.is_some() {
+      eprintln!(
+        "watch: this stream requires MPV-Android to send a Referer header.          In Android Settings, grant MPV-Android (is.xyz.mpv)          \"Allow access to manage all files\"; otherwise the player may open and immediately stop."
+      );
+    }
+
+    let config_path = std::path::Path::new("/storage/emulated/0/mpv");
+    if let Err(error) = ensure_android_mpv_config(config_path, &config) {
+      eprintln!(
+        "watch: warning: could not configure MPV for this stream: {error}. \
+         Run `termux-setup-storage` and allow MPV-Android access to shared storage; \
+         streams requiring a Referer header may otherwise fail."
+      );
     }
   }
+}
+
+fn ensure_android_mpv_config(config_dir: &std::path::Path, config: &str) -> io::Result<()> {
+  std::fs::create_dir_all(config_dir)?;
+
+  let stream_config = config_dir.join("mpv.config.mp4");
+  std::fs::write(&stream_config, config)?;
+
+  // MPV-Android does not automatically load arbitrary files in shared storage.
+  // Ensure its standard shared-storage config includes the per-stream options.
+  let main_config = config_dir.join("mpv.conf");
+  let include_line = format!("include={}", stream_config.display());
+  let existing = std::fs::read_to_string(&main_config).unwrap_or_default();
+  if existing
+    .lines()
+    .any(|line| line.trim() == include_line.as_str())
+  {
+    return Ok(());
+  }
+
+  use std::io::Write as _;
+  let mut file = std::fs::OpenOptions::new()
+    .create(true)
+    .append(true)
+    .open(main_config)?;
+  if !existing.is_empty() && !existing.ends_with('\n') {
+    file.write_all(b"\n")?;
+  }
+  writeln!(file, "{include_line}")?;
+  Ok(())
 }
 
 fn contextualize_program_error(error: io::Error, program: &str) -> io::Error {
@@ -606,32 +645,22 @@ mod tests {
   }
 
   #[test]
-  fn android_mpv_uses_the_mpv_activity_and_title_extra() {
-    let args = Player::AndroidMpv.arguments_with_extra(
-      &stream(),
-      None,
-      "Frieren Episode 4",
-      &["--debug".to_owned()],
-    );
+  fn android_mpv_uses_termux_open_with_video_mime_and_chooser() {
+    let args = Player::AndroidMpv.arguments(&stream(), None, "Frieren Episode 4");
     let args: Vec<_> = args
       .iter()
       .map(|arg| arg.to_string_lossy().into_owned())
       .collect();
-    assert_eq!(args[0], "start");
-    assert_eq!(args[1], "--user");
-    assert!(
-      args
-        .windows(2)
-        .any(|pair| pair[0] == "-n" && pair[1] == "is.xyz.mpv/.MPVActivity")
+    assert_eq!(
+      args,
+      vec![
+        "--chooser",
+        "--content-type",
+        "video/*",
+        "https://cdn.example/video.m3u8"
+      ]
     );
-    assert!(
-      args
-        .windows(2)
-        .any(|pair| pair[0] == "-e" && pair[1] == "title")
-    );
-    assert!(args.contains(&"Frieren Episode 4".to_owned()));
-    assert!(args.contains(&"--debug".to_owned()));
-    assert_eq!(Player::AndroidMpv.command_name(), "am");
+    assert_eq!(Player::AndroidMpv.command_name(), "termux-open");
   }
 
   #[test]
@@ -666,6 +695,40 @@ mod tests {
         "audio-file=https://cdn.example/audio.m3u8\n"
       )
     );
+  }
+
+  #[test]
+  fn android_mpv_config_is_included_by_the_standard_config_and_preserves_user_settings() {
+    let config_dir = std::env::temp_dir().join(format!(
+      "watch-mpv-config-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+    ));
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(config_dir.join("mpv.conf"), "hwdec=auto").unwrap();
+
+    ensure_android_mpv_config(&config_dir, "referrer=https://embed.example/\n").unwrap();
+    ensure_android_mpv_config(&config_dir, "referrer=https://embed.example/\n").unwrap();
+
+    let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
+    assert!(main_config.starts_with("hwdec=auto\n"));
+    let include_line = format!("include={}", config_dir.join("mpv.config.mp4").display());
+    assert_eq!(
+      main_config
+        .lines()
+        .filter(|line| line.trim() == include_line.as_str())
+        .count(),
+      1
+    );
+    assert_eq!(
+      std::fs::read_to_string(config_dir.join("mpv.config.mp4")).unwrap(),
+      "referrer=https://embed.example/\n"
+    );
+
+    std::fs::remove_dir_all(config_dir).unwrap();
   }
 
   #[test]
