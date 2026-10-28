@@ -483,6 +483,14 @@ impl SiteProvider {
       }
     }
     if episodes.is_empty() {
+      if self.id == ProviderId::TioAnime {
+        if let Some(date) = next_episode_date(&body) {
+          return Err(SiteError(format!(
+            "TioAnime has no released episodes for '{}'; the next episode is scheduled for {date}",
+            anime.title
+          )));
+        }
+      }
       return Err(SiteError(format!(
         "{} returned no recognizable episode links for '{}'; its page structure may have changed",
         self.id.name(),
@@ -634,6 +642,16 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
         .map(str::to_ascii_lowercase)
     })
     .filter(|slug| !slug.is_empty());
+  let episode_series_slug = anime_slug.as_deref().map(|slug| {
+    if base
+      .host_str()
+      .is_some_and(|host| host.contains("monoschinos"))
+    {
+      slug.strip_suffix("-sub-espanol").unwrap_or(slug)
+    } else {
+      slug
+    }
+  });
 
   for anchor in document.select(&anchors) {
     let Some(href) = anchor.value().attr("href") else {
@@ -658,7 +676,7 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
     // Provider detail pages often include recommendations and latest-episode
     // widgets. Require the candidate URL to retain the selected anime's slug
     // so those widgets cannot inject episode numbers from unrelated series.
-    if anime_slug.as_ref().is_some_and(|slug| !path.contains(slug)) {
+    if episode_series_slug.is_some_and(|slug| !path.contains(slug)) {
       continue;
     }
 
@@ -689,6 +707,27 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
       .then_with(|| left.url.cmp(&right.url))
   });
   episodes
+}
+
+fn next_episode_date(body: &str) -> Option<String> {
+  let lower = body.to_ascii_lowercase();
+  let marker_end = ["proximo episodio", "próximo episodio"]
+    .iter()
+    .find_map(|marker| lower.find(marker).map(|index| index + marker.len()))?;
+  body
+    .get(marker_end..)?
+    .split(|character: char| !character.is_ascii_digit() && character != '-')
+    .find_map(|date| {
+      let bytes = date.as_bytes();
+      (bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+          .iter()
+          .enumerate()
+          .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit()))
+      .then(|| date.to_owned())
+    })
 }
 
 fn has_episode_marker(value: &str) -> bool {
@@ -1258,6 +1297,68 @@ mod tests {
         .collect::<Vec<_>>(),
       vec!["1", "2"]
     );
+  }
+
+  #[test]
+  fn monos_chinos_episode_links_match_series_slug_without_sub_espanol_suffix() {
+    let html = r#"<a href="/ver/doragon-boru-supa-birusu-episodio-3">EP 3</a>"#;
+    let episodes = parse_episode_links(
+      html,
+      "https://monoschinos.st/anime/doragon-boru-supa-birusu-sub-espanol",
+      "https://monoschinos.st/anime/doragon-boru-supa-birusu-sub-espanol",
+    );
+    assert_eq!(episodes.len(), 1);
+    assert_eq!(episodes[0].number, "3");
+    assert_eq!(
+      episodes[0].url,
+      "https://monoschinos.st/ver/doragon-boru-supa-birusu-episodio-3"
+    );
+  }
+
+  #[test]
+  fn extracts_tioanime_next_episode_date_from_empty_schedule() {
+    assert_eq!(
+      next_episode_date("<p>Proximo episodio: 2026-11-01</p>"),
+      Some("2026-11-01".to_owned())
+    );
+    assert_eq!(next_episode_date("<p>Listado de episodios</p>"), None);
+  }
+
+  #[test]
+  fn tioanime_empty_schedule_reports_the_next_episode_date() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+      let (mut connection, _) = listener.accept().unwrap();
+      let mut request = [0_u8; 1024];
+      let _ = connection.read(&mut request);
+      let body = "<h2>Listado de episodios</h2><p>Proximo episodio: 2026-11-01</p>";
+      write!(
+        connection,
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+      )
+      .unwrap();
+    });
+    let anime = Anime::new(
+      "dragon-ball-super-beerus",
+      "Dragon Ball Super: Beerus",
+      format!("http://{address}/anime/dragon-ball-super-beerus"),
+    );
+    let provider = SiteProvider {
+      id: ProviderId::TioAnime,
+      client: Client::new(),
+      base_url: format!("http://{address}"),
+    };
+
+    let error = provider.episodes(&anime).unwrap_err().to_string();
+    server.join().unwrap();
+    assert!(error.contains("has no released episodes"));
+    assert!(error.contains("2026-11-01"));
   }
 
   #[test]
