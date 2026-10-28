@@ -98,6 +98,7 @@ pub fn read_paged_selection(
     },
     &input,
     &mut previous_width,
+    false,
   )?;
 
   loop {
@@ -108,20 +109,10 @@ pub fn read_paged_selection(
           return Ok(SelectionOutcome::Selected(indices));
         }
         _ => {
-          writeln!(
-            output,
-            "\r\nInvalid selection. {} from 1 to {}.",
-            if multi {
-              "Choose one or more entries"
-            } else {
-              "Choose an entry"
-            },
-            labels.len()
-          )?;
           input.clear();
-          let updated_line = prompt_line(prompt, page, page_count);
+          line = format!("Invalid; enter 1-{}: ", labels.len());
           previous_width = 0;
-          write_prompt(&mut output, &updated_line, &input, &mut previous_width)?;
+          write_prompt(&mut output, &line, &input, &mut previous_width)?;
         }
       },
       Key::Backspace if input.is_empty() => {
@@ -155,6 +146,7 @@ pub fn read_paged_selection(
           },
           &input,
           &mut previous_width,
+          true,
         )?;
       }
       Key::Left if input.is_empty() && page > 0 => {
@@ -172,6 +164,7 @@ pub fn read_paged_selection(
           },
           &input,
           &mut previous_width,
+          true,
         )?;
       }
       Key::Left | Key::Right => {}
@@ -212,27 +205,36 @@ fn render_page<W: Write>(
   view: &PageView<'_>,
   input: &str,
   previous_width: &mut usize,
+  redraw: bool,
 ) -> io::Result<()> {
   let range = page_bounds(view.labels.len(), view.page);
   let index_width = view.labels.len().to_string().len();
-  writeln!(
-    output,
-    "\r\n{} (page {} of {}):",
-    view.prompt.trim_end(),
-    view.page + 1,
-    view.page_count
-  )?;
-  for (index, label) in view
-    .labels
-    .iter()
-    .enumerate()
-    .take(range.end)
-    .skip(range.start)
-  {
-    writeln!(output, "{:>index_width$}. {label}", index + 1)?;
+  let visible_rows = if view.page_count > 1 {
+    PAGE_SIZE
+  } else {
+    range.len()
+  };
+  if redraw {
+    write!(output, "\r\x1b[{visible_rows}A")?;
+  }
+  for offset in 0..visible_rows {
+    if redraw {
+      write!(output, "\r\x1b[2K")?;
+    }
+    if let Some(label) = view.labels.get(range.start + offset) {
+      write!(
+        output,
+        "{:>index_width$}. {label}",
+        range.start + offset + 1
+      )?;
+    }
+    write!(output, "\r\n")?;
   }
 
   let line = prompt_line(view.prompt, view.page, view.page_count);
+  if redraw {
+    write!(output, "\r\x1b[2K")?;
+  }
   *previous_width = 0;
   write_prompt(output, &line, input, previous_width)
 }
@@ -345,8 +347,12 @@ struct RawModeGuard {
 
 #[cfg(windows)]
 struct RawModeGuard {
-  handle: *mut std::ffi::c_void,
-  original_mode: u32,
+  input_handle: *mut std::ffi::c_void,
+  original_input_mode: u32,
+  owns_input_handle: bool,
+  output_handle: *mut std::ffi::c_void,
+  original_output_mode: u32,
+  owns_output_handle: bool,
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -362,7 +368,10 @@ impl RawModeGuard {
 fn enable_raw_mode() -> io::Result<RawModeGuard> {
   let mut original = std::mem::MaybeUninit::<libc::termios>::uninit();
   if unsafe { libc::tcgetattr(libc::STDIN_FILENO, original.as_mut_ptr()) } == -1 {
-    return Err(io::Error::last_os_error());
+    return Err(io::Error::new(
+      io::ErrorKind::Unsupported,
+      "interactive terminal input is unavailable",
+    ));
   }
   let original = unsafe { original.assume_init() };
   let mut raw = original;
@@ -377,25 +386,119 @@ fn enable_raw_mode() -> io::Result<RawModeGuard> {
 
 #[cfg(windows)]
 fn enable_raw_mode() -> io::Result<RawModeGuard> {
-  let handle = unsafe { GetStdHandle((-10i32) as u32) };
-  if handle.is_null() || handle as isize == -1 {
-    return Err(io::Error::last_os_error());
+  const STD_INPUT_HANDLE: u32 = (-10i32) as u32;
+  const STD_OUTPUT_HANDLE: u32 = (-11i32) as u32;
+  let (input_handle, owns_input_handle) = console_handle(STD_INPUT_HANDLE, "CONIN$")?;
+  let (output_handle, owns_output_handle) = match console_handle(STD_OUTPUT_HANDLE, "CONOUT$") {
+    Ok(handle) => handle,
+    Err(error) => {
+      if owns_input_handle {
+        let _ = unsafe { CloseHandle(input_handle) };
+      }
+      return Err(error);
+    }
+  };
+  let mut original_input_mode = 0u32;
+  if unsafe { GetConsoleMode(input_handle, &mut original_input_mode) } == 0 {
+    close_if_owned(input_handle, owns_input_handle);
+    close_if_owned(output_handle, owns_output_handle);
+    return Err(console_unavailable());
   }
-  let mut original_mode = 0u32;
-  if unsafe { GetConsoleMode(handle, &mut original_mode) } == 0 {
-    return Err(io::Error::last_os_error());
+  let mut original_output_mode = 0u32;
+  if unsafe { GetConsoleMode(output_handle, &mut original_output_mode) } == 0 {
+    close_if_owned(input_handle, owns_input_handle);
+    close_if_owned(output_handle, owns_output_handle);
+    return Err(console_unavailable());
   }
   const ENABLE_PROCESSED_INPUT: u32 = 0x0001;
   const ENABLE_LINE_INPUT: u32 = 0x0002;
   const ENABLE_ECHO_INPUT: u32 = 0x0004;
-  let raw_mode = original_mode & !(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-  if unsafe { SetConsoleMode(handle, raw_mode) } == 0 {
-    return Err(io::Error::last_os_error());
+  const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
+  let raw_mode =
+    original_input_mode & !(ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+  if unsafe { SetConsoleMode(input_handle, raw_mode) } == 0 {
+    close_if_owned(input_handle, owns_input_handle);
+    close_if_owned(output_handle, owns_output_handle);
+    return Err(console_unavailable());
+  }
+  if unsafe {
+    SetConsoleMode(
+      output_handle,
+      original_output_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+    )
+  } == 0
+  {
+    let error = console_unavailable();
+    let _ = unsafe { SetConsoleMode(input_handle, original_input_mode) };
+    close_if_owned(input_handle, owns_input_handle);
+    close_if_owned(output_handle, owns_output_handle);
+    return Err(error);
   }
   Ok(RawModeGuard {
-    handle,
-    original_mode,
+    input_handle,
+    original_input_mode,
+    owns_input_handle,
+    output_handle,
+    original_output_mode,
+    owns_output_handle,
   })
+}
+
+#[cfg(windows)]
+fn console_handle(
+  standard_handle_id: u32,
+  console_device: &str,
+) -> io::Result<(*mut std::ffi::c_void, bool)> {
+  let standard_handle = unsafe { GetStdHandle(standard_handle_id) };
+  let mut mode = 0u32;
+  if !standard_handle.is_null()
+    && standard_handle as isize != -1
+    && unsafe { GetConsoleMode(standard_handle, &mut mode) } != 0
+  {
+    return Ok((standard_handle, false));
+  }
+  open_console_device(console_device).map(|handle| (handle, true))
+}
+
+#[cfg(windows)]
+fn open_console_device(device: &str) -> io::Result<*mut std::ffi::c_void> {
+  const GENERIC_READ: u32 = 0x8000_0000;
+  const GENERIC_WRITE: u32 = 0x4000_0000;
+  const FILE_SHARE_READ: u32 = 0x0000_0001;
+  const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+  const OPEN_EXISTING: u32 = 3;
+  let name: Vec<u16> = device.encode_utf16().chain(Some(0)).collect();
+  let handle = unsafe {
+    CreateFileW(
+      name.as_ptr(),
+      GENERIC_READ | GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE,
+      std::ptr::null_mut(),
+      OPEN_EXISTING,
+      0,
+      std::ptr::null_mut(),
+    )
+  };
+  if handle.is_null() || handle as isize == -1 {
+    Err(console_unavailable())
+  } else {
+    Ok(handle)
+  }
+}
+
+#[cfg(windows)]
+fn close_if_owned(handle: *mut std::ffi::c_void, owned: bool) {
+  if owned {
+    let _ = unsafe { CloseHandle(handle) };
+  }
+}
+
+#[cfg(windows)]
+fn console_unavailable() -> io::Error {
+  io::Error::new(
+    io::ErrorKind::Unsupported,
+    "interactive console input or output is unavailable",
+  )
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -415,7 +518,10 @@ impl Drop for RawModeGuard {
 
     #[cfg(windows)]
     {
-      let _ = unsafe { SetConsoleMode(self.handle, self.original_mode) };
+      let _ = unsafe { SetConsoleMode(self.input_handle, self.original_input_mode) };
+      let _ = unsafe { SetConsoleMode(self.output_handle, self.original_output_mode) };
+      close_if_owned(self.input_handle, self.owns_input_handle);
+      close_if_owned(self.output_handle, self.owns_output_handle);
     }
   }
 }
@@ -452,6 +558,16 @@ struct WindowsInputRecord {
 #[link(name = "Kernel32")]
 unsafe extern "system" {
   fn GetStdHandle(n_std_handle: u32) -> *mut std::ffi::c_void;
+  fn CreateFileW(
+    file_name: *const u16,
+    desired_access: u32,
+    share_mode: u32,
+    security_attributes: *mut std::ffi::c_void,
+    creation_disposition: u32,
+    flags_and_attributes: u32,
+    template_file: *mut std::ffi::c_void,
+  ) -> *mut std::ffi::c_void;
+  fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
   fn GetConsoleMode(handle: *mut std::ffi::c_void, mode: *mut u32) -> i32;
   fn SetConsoleMode(handle: *mut std::ffi::c_void, mode: u32) -> i32;
   fn ReadConsoleInputW(
@@ -520,11 +636,10 @@ fn read_key_platform() -> io::Result<Key> {
 
 #[cfg(windows)]
 fn read_key_platform() -> io::Result<Key> {
-  const STD_INPUT_HANDLE: u32 = (-10i32) as u32;
   const KEY_EVENT: u16 = 0x0001;
 
-  let handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) };
-  loop {
+  let handle = open_console_device("CONIN$")?;
+  let result = loop {
     let mut record = WindowsInputRecord {
       event_type: 0,
       event: WindowsInputEvent { _padding: [0; 4] },
@@ -532,10 +647,10 @@ fn read_key_platform() -> io::Result<Key> {
     let mut records_read = 0u32;
     let success = unsafe { ReadConsoleInputW(handle, &mut record, 1, &mut records_read) };
     if success == 0 {
-      return Err(io::Error::last_os_error());
+      break Err(io::Error::last_os_error());
     }
     if records_read == 0 {
-      return Err(io::Error::new(
+      break Err(io::Error::new(
         io::ErrorKind::UnexpectedEof,
         "terminal input closed",
       ));
@@ -551,9 +666,11 @@ fn read_key_platform() -> io::Result<Key> {
       event.unicode_char,
       event.control_key_state,
     ) {
-      return Ok(key);
+      break Ok(key);
     }
-  }
+  };
+  let _ = unsafe { CloseHandle(handle) };
+  result
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -633,6 +750,31 @@ mod tests {
     assert_eq!(page_bounds(31, 0), 0..15);
     assert_eq!(page_bounds(31, 1), 15..30);
     assert_eq!(page_bounds(31, 2), 30..31);
+  }
+
+  #[test]
+  fn changing_pages_clears_the_previous_menu_in_place() {
+    let labels: Vec<_> = (1..=31).map(|number| format!("Anime {number}")).collect();
+    let mut output = Vec::new();
+    let mut previous_width = 0;
+    for page in 0..=1 {
+      render_page(
+        &mut output,
+        &PageView {
+          labels: &labels,
+          prompt: "Select anime: ",
+          page,
+          page_count: 3,
+        },
+        "",
+        &mut previous_width,
+        page != 0,
+      )
+      .unwrap();
+    }
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.contains("\r\x1b[15A\r\x1b[2K16. Anime 16\r\n"));
+    assert!(!output.contains("\x1b[J"));
   }
 
   #[test]

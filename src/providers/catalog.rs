@@ -25,20 +25,6 @@ impl ProviderCatalog {
   }
 
   pub fn search(&self, query: &str) -> Result<Vec<AnimeOption>, Box<dyn std::error::Error>> {
-    let english: Vec<_> = ProviderId::ACTIVE
-      .into_iter()
-      .filter(|provider| provider.language() == Language::English)
-      .map(ProviderId::name)
-      .collect();
-    let spanish: Vec<_> = ProviderId::ACTIVE
-      .into_iter()
-      .filter(|provider| provider.language() == Language::Spanish)
-      .map(ProviderId::name)
-      .collect();
-    eprintln!("Searching anime providers in parallel:");
-    eprintln!("  English (en): {}", english.join(", "));
-    eprintln!("  Spanish (es): {}", spanish.join(", "));
-
     let (sender, receiver) = mpsc::channel();
     for provider in ProviderId::ACTIVE {
       let query = query.to_owned();
@@ -66,24 +52,14 @@ impl ProviderCatalog {
       match receiver.recv() {
         Ok((provider, Ok(results))) => {
           succeeded += 1;
-          eprintln!(
-            "  {} [{}]: {} result(s)",
-            provider.name(),
-            provider.language().short_code(),
-            results.len()
-          );
           sources.extend(
             results
               .into_iter()
+              .filter(|anime| !is_episode_search_result(&anime.title, &anime.url))
               .map(|anime| ProviderAnime { provider, anime }),
           );
         }
         Ok((provider, Err(error))) => {
-          eprintln!(
-            "  {} [{}]: failed ({error})",
-            provider.name(),
-            provider.language().short_code()
-          );
           failures.push(format!("{}: {error}", provider.name()));
         }
         Err(_) => {
@@ -96,10 +72,6 @@ impl ProviderCatalog {
     if succeeded == 0 {
       return Err(format!("all anime providers failed: {}", failures.join("; ")).into());
     }
-    for failure in failures {
-      eprintln!("watch: warning: provider search failed: {failure}");
-    }
-
     sort_sources_by_provider_order(&mut sources);
     let options = group_results(sources);
     if options.is_empty() {
@@ -167,19 +139,15 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
 
   let mut choices = Vec::new();
   for bucket in buckets {
-    let bilingual = !bucket.english.is_empty() && !bucket.spanish.is_empty();
-    let english_labelled = bilingual || bucket.english.len() > 1;
-    let spanish_labelled = bilingual || bucket.spanish.len() > 1;
-
     if !bucket.english.is_empty() {
       choices.push(AnimeOption {
-        label: language_label(&bucket.display_title, Language::English, english_labelled),
+        label: language_label(&bucket.display_title, Language::English),
         sources: bucket.english,
       });
     }
     if !bucket.spanish.is_empty() {
       choices.push(AnimeOption {
-        label: language_label(&bucket.display_title, Language::Spanish, spanish_labelled),
+        label: language_label(&bucket.display_title, Language::Spanish),
         sources: bucket.spanish,
       });
     }
@@ -196,12 +164,39 @@ fn sort_sources_by_provider_order(sources: &mut [ProviderAnime]) {
   });
 }
 
-fn language_label(title: &str, language: Language, labelled: bool) -> String {
-  if labelled {
-    format!("{title} ({})", language.short_code())
-  } else {
-    title.to_owned()
-  }
+fn language_label(title: &str, language: Language) -> String {
+  format!("({}) {title}", language.short_code())
+}
+
+fn is_episode_search_result(title: &str, url: &str) -> bool {
+  let title_words: Vec<_> = title
+    .split_whitespace()
+    .map(|word| word.trim_matches(|character: char| !character.is_alphanumeric()))
+    .collect();
+  let title_is_episode = title_words.windows(2).any(|words| {
+    matches!(
+      words[0].to_ascii_lowercase().as_str(),
+      "episode" | "episodio" | "capitulo"
+    ) && words[1]
+      .chars()
+      .next()
+      .is_some_and(|character| character.is_ascii_digit())
+  });
+  let path_is_episode = url.split(['?', '#']).next().is_some_and(|url| {
+    let path = url.to_ascii_lowercase();
+    [
+      "/ver/",
+      "/ver-",
+      "/episode-",
+      "-episode-",
+      "/episodio-",
+      "-episodio-",
+      "/ep-",
+    ]
+    .iter()
+    .any(|marker| path.contains(marker))
+  });
+  title_is_episode || path_is_episode
 }
 
 fn clean_display_title(title: &str) -> String {
@@ -280,7 +275,7 @@ mod tests {
       source(ProviderId::NineAnime, "Dragon Ball Super Beerus", "beerus"),
     ]);
     assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].label, "Dragon Ball Super: Beerus (en)");
+    assert_eq!(choices[0].label, "(en) Dragon Ball Super: Beerus");
     assert_eq!(choices[0].sources.len(), 2);
   }
 
@@ -291,7 +286,7 @@ mod tests {
       source(ProviderId::JkAnime, "Dragon Ball Super Beerus", "beerus"),
     ]);
     assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].label, "Dragon Ball Super: Beerus (es)");
+    assert_eq!(choices[0].label, "(es) Dragon Ball Super: Beerus");
     assert_eq!(choices[0].sources.len(), 2);
   }
 
@@ -310,17 +305,37 @@ mod tests {
       ),
     ]);
     assert_eq!(choices.len(), 2);
-    assert_eq!(choices[0].label, "Frieren: Beyond Journey's End (en)");
-    assert_eq!(choices[1].label, "Frieren: Beyond Journey's End (es)");
+    assert_eq!(choices[0].label, "(en) Frieren: Beyond Journey's End");
+    assert_eq!(choices[1].label, "(es) Frieren: Beyond Journey's End");
     assert_eq!(choices[0].sources.len(), 1);
     assert_eq!(choices[1].sources.len(), 1);
   }
 
   #[test]
-  fn unambiguous_title_keeps_its_original_label() {
+  fn unambiguous_title_includes_its_language_label() {
     let choices = group_results(vec![source(ProviderId::NineAnime, "Frieren", "frieren")]);
     assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].label, "Frieren");
+    assert_eq!(choices[0].label, "(en) Frieren");
+  }
+
+  #[test]
+  fn episode_pages_and_episode_titled_results_are_not_listed_as_anime() {
+    assert!(is_episode_search_result(
+      "Episodio 1 Dragon Ball Super: Beerus 2026-10-11",
+      "https://tioanime.com/ver/dragon-ball-super-beerus-1"
+    ));
+    assert!(is_episode_search_result(
+      "Dragon Ball Super: Beerus",
+      "https://jkanime.surf/dragon-ball-super-beerus-episodio-3/"
+    ));
+    assert!(is_episode_search_result(
+      "Miss Kobayashi's Dragon Maid Episode 14: Valentine's Day",
+      "https://hianime.at/watch/miss-kobayashi-episode-14"
+    ));
+    assert!(!is_episode_search_result(
+      "Dragon Ball Z Special 1: Bardock, The Father of Goku",
+      "https://hianime.at/watch/dragon-ball-z-special-1"
+    ));
   }
 
   #[test]
@@ -343,8 +358,8 @@ mod tests {
       ),
     ]);
     assert_eq!(choices.len(), 2);
-    assert_eq!(choices[0].label, "Dragon Ball Super: Beerus (en)");
-    assert_eq!(choices[1].label, "Dragon Ball Super: Beerus (es)");
+    assert_eq!(choices[0].label, "(en) Dragon Ball Super: Beerus");
+    assert_eq!(choices[1].label, "(es) Dragon Ball Super: Beerus");
     assert_eq!(choices[1].sources.len(), 2);
   }
 
@@ -356,7 +371,7 @@ mod tests {
       source(ProviderId::GoGoAnime, "Frieren", "frieren-two"),
     ]);
     assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].label, "Frieren (en)");
+    assert_eq!(choices[0].label, "(en) Frieren");
     assert_eq!(choices[0].sources.len(), 2);
   }
 

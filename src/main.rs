@@ -9,9 +9,7 @@ use ani_cli::application::{
   effective_source, next_episode_after, normalize_title, select_fixed_episodes,
 };
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
-use ani_cli::cli::selection::{
-  BackRequested, SelectionOutcome, read_paged_selection, read_selection,
-};
+use ani_cli::cli::selection::{BackRequested, SelectionOutcome, read_paged_selection};
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
@@ -854,7 +852,6 @@ fn search_anime_choices(
   catalog: &ProviderCatalog,
   query: &str,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
-  eprintln!("Searching anime providers for: {query}");
   let mut results = catalog.search(query)?;
   let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
   if exact {
@@ -1050,28 +1047,79 @@ fn select_items(
     }
     MenuOutcome::Cancelled => Err("selection cancelled".into()),
     MenuOutcome::Back => Err(Box::new(BackRequested)),
-    MenuOutcome::Unavailable => {
-      if io::stdin().is_terminal() && io::stdout().is_terminal() {
-        match read_paged_selection(labels, prompt, multi)? {
-          SelectionOutcome::Selected(indices) => {
-            let indices = ordered_episode_indices(indices);
-            if indices.is_empty() {
-              Err("selection cancelled".into())
-            } else {
-              Ok(indices)
-            }
+    MenuOutcome::Unavailable => match read_paged_selection(labels, prompt, multi) {
+      Ok(outcome) => match outcome {
+        SelectionOutcome::Selected(indices) => {
+          let indices = ordered_episode_indices(indices);
+          if indices.is_empty() {
+            Err("selection cancelled".into())
+          } else {
+            Ok(indices)
           }
-          SelectionOutcome::Back => Err(Box::new(BackRequested)),
-          SelectionOutcome::Cancelled => Err("selection cancelled".into()),
         }
-      } else {
-        for (index, label) in labels.iter().enumerate() {
-          println!("{:>2}. {}", index + 1, label);
-        }
-        Ok(vec![read_index(labels.len())?])
+        SelectionOutcome::Back => Err(Box::new(BackRequested)),
+        SelectionOutcome::Cancelled => Err("selection cancelled".into()),
+      },
+      Err(error) if error.kind() == io::ErrorKind::Unsupported => {
+        select_from_numbered_pages(labels, prompt, multi)
       }
+      Err(error) => Err(error.into()),
+    },
+  }
+}
+
+fn select_from_numbered_pages(
+  labels: &[String],
+  prompt: &str,
+  multi: bool,
+) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
+  let page_count = labels.len().div_ceil(15);
+  let mut page = 0;
+  loop {
+    let start = page * 15;
+    let end = (start + 15).min(labels.len());
+    for (index, label) in labels.iter().enumerate().take(end).skip(start) {
+      println!("{:>2}. {label}", index + 1);
+    }
+    println!(
+      "{prompt}[page {}/{}; enter n/p to change page, q to cancel]",
+      page + 1,
+      page_count
+    );
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input)? == 0 {
+      return Err("selection cancelled".into());
+    }
+    match input.trim().to_ascii_lowercase().as_str() {
+      "n" if page + 1 < page_count => page += 1,
+      "p" if page > 0 => page -= 1,
+      "q" => return Err("selection cancelled".into()),
+      value => match parse_page_selection(value, start, end, multi) {
+        Some(indices) if !indices.is_empty() => return Ok(ordered_episode_indices(indices)),
+        _ => eprintln!("Enter a valid selection from 1 to {}.", labels.len()),
+      },
     }
   }
+}
+
+fn parse_page_selection(input: &str, start: usize, end: usize, multi: bool) -> Option<Vec<usize>> {
+  let tokens: Vec<_> = input.split_whitespace().collect();
+  if tokens.is_empty() || (!multi && tokens.len() != 1) {
+    return None;
+  }
+  let mut indices = Vec::new();
+  for token in tokens {
+    let number = token.parse::<usize>().ok()?;
+    if !(start + 1..=end).contains(&number) {
+      return None;
+    }
+    let index = number - 1;
+    if !indices.contains(&index) {
+      indices.push(index);
+    }
+  }
+  Some(indices)
 }
 
 fn menu_backend_for_cli(cli: &ani_cli::cli::args::Cli) -> Option<String> {
@@ -1258,14 +1306,6 @@ fn read_search_query(cli: &ani_cli::cli::args::Cli) -> Result<String, Box<dyn st
     return Err("search query was empty or cancelled".into());
   }
   Ok(query.to_owned())
-}
-
-fn read_index(count: usize) -> Result<usize, Box<dyn std::error::Error>> {
-  let stdin = io::stdin();
-  let mut input = stdin.lock();
-  let stdout = io::stdout();
-  let mut output = stdout.lock();
-  read_selection(&mut input, &mut output, count)?.ok_or_else(|| "selection cancelled".into())
 }
 
 fn episode_file_stem(anime_title: &str, episode_number: &str) -> String {
@@ -1698,6 +1738,17 @@ mod tests {
       vec![0, 1, 2, 3]
     );
     assert!(ordered_episode_indices(Vec::new()).is_empty());
+  }
+
+  #[test]
+  fn numbered_fallback_selection_is_limited_to_the_current_page() {
+    assert_eq!(parse_page_selection("16", 15, 30, false), Some(vec![15]));
+    assert_eq!(
+      parse_page_selection("16 18", 15, 30, true),
+      Some(vec![15, 17])
+    );
+    assert_eq!(parse_page_selection("15", 15, 30, false), None);
+    assert_eq!(parse_page_selection("31", 15, 30, false), None);
   }
 
   #[test]
