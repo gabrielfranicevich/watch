@@ -294,7 +294,7 @@ fn updater_arguments_pin_repository_branch_and_install_root() {
 
 #[test]
 fn rejects_unsafe_branch_names_for_the_updater() {
-  assert!(valid_branch_name("develop"));
+  assert!(valid_branch_name("main"));
   assert!(valid_branch_name("feature/rust-port"));
   assert!(!valid_branch_name("--help"));
   assert!(!valid_branch_name("../main"));

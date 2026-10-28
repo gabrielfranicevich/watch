@@ -4,7 +4,7 @@ title: "[Bug]: "
 body:
   - type: markdown
     attributes:
-      value: "Use the latest `develop` build if possible. Do not include personal data or private credentials."
+      value: "Use the latest `main` build if possible. Do not include personal data or private credentials."
   - type: input
     id: version
     attributes:
