@@ -117,7 +117,7 @@ impl WatchApplication {
     let Some(path) = self.history_path.as_ref() else {
       return Ok(Vec::new());
     };
-    HistoryStore::new(path).read().map_err(ApplicationError::from)
+    HistoryStore::new(path.clone()).read().map_err(ApplicationError::from)
   }
 
   pub fn record_history(
@@ -131,11 +131,11 @@ impl WatchApplication {
         "history is unavailable because no history path was configured".to_owned(),
       ));
     };
-    let store = HistoryStore::new(path);
+    let store = HistoryStore::new(path.clone());
     let mut entries = store.read()?;
     entries.retain(|entry| {
       !(entry.anime_id == anime.id
-        && entry.provider.as_deref() == Some(provider.key()))
+        && entry.provider.as_deref().unwrap_or("hianime") == provider.key())
     });
     entries.push(HistoryEntry::with_provider(
       episode.number.clone(),
