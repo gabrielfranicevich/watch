@@ -63,6 +63,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     println!("watch {}", ani_cli::version());
     return Ok(ExitCode::SUCCESS);
   }
+  if cli.inline_playback && cfg!(target_os = "android") {
+    return Err("--inline/--here is not supported in Termux because terminal graphics capability cannot be detected reliably; omit the option to use external playback".into());
+  }
   if cli.inline_playback && (!io::stdin().is_terminal() || !io::stdout().is_terminal()) {
     return Err("--inline requires an interactive terminal on stdin and stdout".into());
   }
