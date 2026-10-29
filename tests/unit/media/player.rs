@@ -379,7 +379,7 @@ fn android_mpv_config_can_be_cleared_without_leaving_stale_stream_options() {
   ));
   std::fs::create_dir_all(&config_dir).unwrap();
 
-  ensure_android_mpv_config(&config_dir, "referrer=https://old.example/\\nsub-file=https://old.example/sub.vtt\\n").unwrap();
+  ensure_android_mpv_config(&config_dir, "old-stream-options").unwrap();
   ensure_android_mpv_config(&config_dir, "").unwrap();
 
   assert_eq!(
