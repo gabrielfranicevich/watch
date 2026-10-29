@@ -414,9 +414,6 @@ impl Player {
     }
 
     let config = android_mpv_config(stream, subtitle);
-    if config.is_empty() {
-      return;
-    }
 
     if stream.referer.is_some() {
       eprintln!(
