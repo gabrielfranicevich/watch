@@ -1,6 +1,7 @@
 //! Core library for watch.
 
 pub mod application;
+pub mod application_services;
 pub mod cli;
 pub mod domain;
 pub mod infrastructure;
