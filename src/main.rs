@@ -5,6 +5,7 @@ use std::process::{Child, Command, ExitCode, ExitStatus};
 
 #[cfg(test)]
 use ani_cli::application::select_episode_range;
+use ani_cli::application_services::{PlaybackRequest, SearchRequest, WatchApplication};
 use ani_cli::application::{
   choose_playback_target, effective_source, next_episode_after, normalize_title,
   select_fixed_episodes, PlaybackCapabilities, PlaybackMode, PlaybackPlatform,
@@ -20,7 +21,7 @@ use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
-use ani_cli::providers::catalog::{AnimeOption, ProviderAnime, ProviderCatalog};
+use ani_cli::providers::catalog::{AnimeOption, ProviderAnime};
 use ani_cli::providers::hianime_stream::ResolvedMedia;
 use ani_cli::providers::site::{Language as ProviderLanguage, ProviderId};
 
@@ -120,7 +121,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     search_query = Some(query);
   }
 
-  let catalog = ProviderCatalog::new();
+  let application = WatchApplication::new(paths::history_file());
   let mut active_source = if source == "history" {
     "history".to_owned()
   } else {
@@ -141,13 +142,13 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
       let store = history
         .as_ref()
         .ok_or("cannot determine history path; set ANI_CLI_HIST_DIR or HOME")?;
-      history_anime_choices(&catalog, store, cli.language)?
+      history_anime_choices(&application, store, cli.language)?
     } else {
       let query = match pending_query.take() {
         Some(query) => query,
         None => read_search_query(&cli)?,
       };
-      search_anime_choices(&catalog, &query, cli.language)?
+      search_anime_choices(&application, &query, cli.language)?
     };
 
     if choices.is_empty() {
@@ -184,9 +185,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
           .prefetched_episodes
           .clone()
           .map(Ok)
-          .unwrap_or_else(|| catalog.episodes(&source))
+          .unwrap_or_else(|| application.episodes(&source))
       } else {
-        catalog.episodes(&source)
+        application.episodes(&source)
       };
       match loaded {
         Ok(episodes) if !episodes.is_empty() => {
@@ -323,7 +324,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
   let attached =
     cli.inline_playback || cli.no_detach || env_enabled("ANI_CLI_NO_DETACH") || exit_after_play;
   let mut playback = PlaybackConfig {
-    catalog: &catalog,
+    application: &application,
     provider_episodes: &provider_episodes,
     player,
     player_flags,
@@ -381,7 +382,7 @@ struct ProviderEpisodes {
 }
 
 struct PlaybackConfig<'a> {
-  catalog: &'a ProviderCatalog,
+  application: &'a WatchApplication,
   provider_episodes: &'a [ProviderEpisodes],
   player: Player,
   player_flags: Vec<String>,
@@ -516,11 +517,12 @@ impl PlaybackConfig<'_> {
       else {
         continue;
       };
-      match self.catalog.resolver(entry.source.provider).resolve(
-        source_episode,
-        self.dubbed,
-        &self.quality,
-      ) {
+      match self.application.resolve_stream(&PlaybackRequest {
+        episode: source_episode.clone(),
+        provider: entry.source.provider,
+        dubbed: self.dubbed,
+        quality: self.quality.clone(),
+      }) {
         Ok(media) => candidates.push((provider_order, entry.source.clone(), media)),
         Err(error) => failures.push(format!("{}: {error}", entry.source.provider.name())),
       }
@@ -940,11 +942,14 @@ struct AnimeChoice {
 }
 
 fn search_anime_choices(
-  catalog: &ProviderCatalog,
+  application: &WatchApplication,
   query: &str,
   language: Option<ani_cli::cli::args::Language>,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
-  let mut results = catalog.search_in_language(query, language.map(provider_language))?;
+  let mut results = application.search(&SearchRequest {
+    query: query.to_owned(),
+    language: language.map(provider_language),
+  })?;
   let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
   if exact {
     let normalized_query = normalize_title(query);
@@ -984,7 +989,7 @@ fn search_anime_choices(
 }
 
 fn history_anime_choices(
-  catalog: &ProviderCatalog,
+  application: &WatchApplication,
   store: &HistoryStore,
   language: Option<ani_cli::cli::args::Language>,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
@@ -1023,7 +1028,7 @@ fn history_anime_choices(
         entry.anime_id.trim_start_matches('/')
       ),
     );
-    let episodes = match catalog.episodes(&ProviderAnime {
+    let episodes = match application.episodes(&ProviderAnime {
       provider: history_provider,
       anime: anime.clone(),
     }) {
