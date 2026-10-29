@@ -128,3 +128,56 @@ pub fn next_episode_after<'a>(episodes: &'a [Episode], last_watched: &str) -> Op
     .position(|episode| episode.number == last_watched)?;
   episodes.get(index + 1)
 }
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaybackMode {
+  Automatic,
+  Inline,
+  External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaybackTarget {
+  Inline,
+  External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaybackPlatform {
+  Desktop,
+  Android,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlaybackCapabilities {
+  pub interactive_terminal: bool,
+  pub terminal_graphics_supported: bool,
+}
+
+pub fn choose_playback_target(
+  mode: PlaybackMode,
+  platform: PlaybackPlatform,
+  capabilities: PlaybackCapabilities,
+) -> Result<PlaybackTarget, String> {
+  let inline_supported = platform == PlaybackPlatform::Desktop
+    && capabilities.interactive_terminal
+    && capabilities.terminal_graphics_supported;
+
+  match mode {
+    PlaybackMode::External => Ok(PlaybackTarget::External),
+    PlaybackMode::Automatic if inline_supported => Ok(PlaybackTarget::Inline),
+    PlaybackMode::Automatic => Ok(PlaybackTarget::External),
+    PlaybackMode::Inline if inline_supported => Ok(PlaybackTarget::Inline),
+    PlaybackMode::Inline if platform == PlaybackPlatform::Android => Err(
+      "inline playback is not supported in Termux; omit --inline/--here to use external playback"
+        .to_owned(),
+    ),
+    PlaybackMode::Inline if !capabilities.interactive_terminal => Err(
+      "--inline requires an interactive terminal on stdin and stdout".to_owned(),
+    ),
+    PlaybackMode::Inline => Err(
+      "inline playback requires a terminal with a supported graphics protocol".to_owned(),
+    ),
+  }
+}
