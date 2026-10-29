@@ -35,16 +35,16 @@ Install the executable from crates.io with Cargo:
 cargo install watch
 ```
 
-If the package is not published yet or Cargo cannot find this project’s version, install it directly from the repository’s `main` branch:
+For the Android stabilization build, install directly from the `android-support` branch:
 
 ```sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch main
+cargo install --locked --git https://github.com/gabrielfranicevich/watch --branch android-support
 ```
 
 For future updates, run:
 
 ```sh
-watch -U
+watch -U android-support
 ```
 
 Confirm the command is available:
@@ -110,7 +110,7 @@ If MPV plays the video, opening media with `termux-open` works. Anime stream ava
 You do not need to repeat the installation. Run:
 
 ```sh
-watch -U
+watch -U android-support
 ```
 
 Then continue using Watch as usual:
