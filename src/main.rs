@@ -6,7 +6,8 @@ use std::process::{Child, Command, ExitCode, ExitStatus};
 #[cfg(test)]
 use ani_cli::application::select_episode_range;
 use ani_cli::application::{
-  effective_source, next_episode_after, normalize_title, select_fixed_episodes,
+  choose_playback_target, effective_source, next_episode_after, normalize_title,
+  select_fixed_episodes, PlaybackCapabilities, PlaybackMode, PlaybackPlatform,
 };
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
 use ani_cli::cli::selection::{BackRequested, SelectionOutcome, read_paged_selection};
@@ -64,7 +65,16 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     return Ok(ExitCode::SUCCESS);
   }
   if cli.inline_playback && cfg!(target_os = "android") {
-    return Err("--inline/--here is not supported in Termux because terminal graphics capability cannot be detected reliably; omit the option to use external playback".into());
+    let error = choose_playback_target(
+      PlaybackMode::Inline,
+      PlaybackPlatform::Android,
+      PlaybackCapabilities {
+        interactive_terminal: io::stdin().is_terminal() && io::stdout().is_terminal(),
+        terminal_graphics_supported: false,
+      },
+    )
+    .unwrap_err();
+    return Err(error.into());
   }
   if cli.inline_playback && (!io::stdin().is_terminal() || !io::stdout().is_terminal()) {
     return Err("--inline requires an interactive terminal on stdin and stdout".into());
