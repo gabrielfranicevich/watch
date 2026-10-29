@@ -445,7 +445,11 @@ fn ensure_android_mpv_config(config_dir: &std::path::Path, config: &str) -> io::
   // Ensure its standard shared-storage config includes the per-stream options.
   let main_config = config_dir.join("mpv.conf");
   let include_line = format!("include={}", stream_config.display());
-  let existing = std::fs::read_to_string(&main_config).unwrap_or_default();
+  let existing = match std::fs::read_to_string(&main_config) {
+    Ok(content) => content,
+    Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+    Err(error) => return Err(error),
+  };
   if existing
     .lines()
     .any(|line| line.trim() == include_line.as_str())
