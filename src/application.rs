@@ -181,3 +181,7 @@ pub fn choose_playback_target(
     ),
   }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/playback_policy.rs"]
+mod playback_policy_tests;
