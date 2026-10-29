@@ -1,7 +1,8 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ani_cli::application_services::{ApplicationError, SearchRequest, WatchApplication};
-use ani_cli::domain::{anime::Anime, episode::Episode};
+use ani_cli::domain::{anime::Anime, episode::Episode, history::HistoryEntry};
+use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::providers::site::{Language, ProviderId};
 
 fn temporary_history_path() -> std::path::PathBuf {
@@ -40,6 +41,33 @@ fn history_can_be_read_recorded_and_updated_through_application_api() {
   assert_eq!(entries.len(), 1);
   assert_eq!(entries[0].episode_number, "2");
   assert_eq!(entries[0].anime_id, anime.id);
+  assert_eq!(entries[0].provider.as_deref(), Some("hianime"));
+
+  std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn recording_hianime_history_replaces_legacy_entries_without_provider_metadata() {
+  let path = temporary_history_path();
+  let store = HistoryStore::new(path.clone());
+  store
+    .write(&[HistoryEntry::new(
+      "1",
+      "dragon-ball",
+      "Dragon Ball",
+    )])
+    .unwrap();
+
+  let app = WatchApplication::new(Some(path.clone()));
+  let anime = Anime::new("dragon-ball", "Dragon Ball", "https://example.test/anime");
+  let episode = Episode::new("2", None, "https://example.test/episode-2");
+  app
+    .record_history(&anime, &episode, ProviderId::HiAnime)
+    .unwrap();
+
+  let entries = app.history().unwrap();
+  assert_eq!(entries.len(), 1);
+  assert_eq!(entries[0].episode_number, "2");
   assert_eq!(entries[0].provider.as_deref(), Some("hianime"));
 
   std::fs::remove_file(path).unwrap();
