@@ -366,3 +366,54 @@ fn selects_mpv_by_default_and_vlc_when_requested() {
   assert_eq!(Player::from_vlc_flag(false), Player::Mpv);
   assert_eq!(Player::from_vlc_flag(true), Player::Vlc);
 }
+
+
+#[test]
+fn android_mpv_config_can_be_cleared_without_leaving_stale_stream_options() {
+  let config_dir = std::env::temp_dir().join(format!(
+    "watch-mpv-empty-config-{}-{}",
+    std::process::id(),
+    std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  std::fs::create_dir_all(&config_dir).unwrap();
+
+  ensure_android_mpv_config(&config_dir, "referrer=https://old.example/\\nsub-file=https://old.example/sub.vtt\\n").unwrap();
+  ensure_android_mpv_config(&config_dir, "").unwrap();
+
+  assert_eq!(
+    std::fs::read_to_string(config_dir.join("mpv.config.mp4")).unwrap(),
+    ""
+  );
+  let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
+  let include_line = format!("include={}", config_dir.join("mpv.config.mp4").display());
+  assert_eq!(
+    main_config.lines().filter(|line| *line == include_line).count(),
+    1
+  );
+
+  std::fs::remove_dir_all(config_dir).unwrap();
+}
+
+#[test]
+fn android_mpv_config_reports_filesystem_errors() {
+  let root = std::env::temp_dir().join(format!(
+    "watch-mpv-config-error-{}-{}",
+    std::process::id(),
+    std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  std::fs::write(&root, "not a directory").unwrap();
+
+  let error = ensure_android_mpv_config(&root, "referrer=https://embed.example/\\n").unwrap_err();
+  assert!(matches!(
+    error.kind(),
+    std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotADirectory
+  ));
+
+  std::fs::remove_file(root).unwrap();
+}
