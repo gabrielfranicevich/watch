@@ -26,7 +26,7 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 | `src/providers/` | Parallel searches across English and Spanish sites, title/language grouping, episode extraction, stream resolvers, and AnimeSchedule requests. |
 | `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
-| `src/main.rs` | CLI orchestration and end-to-end application flow; migration to the shared service API is in progress. |
+| `src/main.rs` | CLI orchestration and end-to-end application flow; search, episode retrieval, and stream resolution use the shared service API. |
 | `tests/unit/` | Unit-test bodies, mirrored by source module. Source files include them with `#[path]` so tests retain access to private implementation details. |
 
 ## Provider changes
