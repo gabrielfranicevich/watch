@@ -1,6 +1,6 @@
 # watch tutorial
 
-This tutorial covers installation, searching, playback, downloads, and watch history for the Rust implementation on `main`.
+This tutorial covers installation, searching, playback, downloads, and watch history. `main` is the stable installation target; `android-support` contains ongoing Android work.
 
 ## 1. Install watch
 
@@ -122,7 +122,7 @@ Set `ANI_CLI_PLAYER` to a supported player name or executable path, and `ANI_CLI
 
 ## 7. Play inside the terminal
 
-Use `--inline` (or its alias, `--here`) to render the video in the terminal instead of opening a regular video window:
+On supported desktop terminals, use `--inline` (or its alias, `--here`) to render the video in the terminal instead of opening a regular video window. These flags are not supported on Android/Termux; omit them to use external playback:
 
 ~~~sh
 watch --inline "Frieren"
