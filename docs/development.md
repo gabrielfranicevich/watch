@@ -1,6 +1,6 @@
 # Development guide
 
-This guide describes the active Rust implementation on `main`. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); see the README for project credit.
+This guide describes the Rust implementation and Android stabilization workflow. `main` is the stable installation target; `android-support` is the Android stabilization branch. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); see the README for project credit.
 
 ## Build and test
 
@@ -20,12 +20,12 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 | Path | Responsibility |
 | --- | --- |
 | `src/cli/` | Argument parsing, interactive menus, and selection. |
-| `src/application.rs` | Source selection, episode-range rules, and cross-cutting use-case policies. |
+| `src/application.rs` | Source selection, episode-range rules, and cross-cutting use-case policies. |\n| `src/application_services.rs` | Reusable search, episode, stream-resolution, and history use cases intended for multiple frontends. |
 | `src/domain/` | Anime, episode, stream, subtitle, and history types. |
 | `src/providers/` | Parallel searches across English and Spanish sites, title/language grouping, episode extraction, stream resolvers, and AnimeSchedule requests. |
 | `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
-| `src/main.rs` | CLI orchestration and end-to-end application flow. |
+| `src/main.rs` | CLI orchestration and end-to-end application flow; migration to the shared service API is in progress. |
 | `tests/unit/` | Unit-test bodies, mirrored by source module. Source files include them with `#[path]` so tests retain access to private implementation details. |
 
 ## Provider changes
