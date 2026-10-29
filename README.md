@@ -2,13 +2,13 @@
 
 Search anime, select episodes, and stream or download them from your terminal.
 
-[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
+[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=android-support)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
 watch searches English and Spanish anime providers, groups duplicate titles by language, and hands playable media or downloads to tools installed on your machine. It does not host video files.
 
-> **Project status:** `main` is the active Rust implementation. Prebuilt binaries and updated third-party packages are not published yet.
+> **Project status:** `android-support` is the current Android stabilization branch; `main` remains the stable installation target. Prebuilt binaries and updated third-party packages are not published yet.
 
 Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). This project builds on that original work; credit for the original project belongs to its author and contributors.
 
