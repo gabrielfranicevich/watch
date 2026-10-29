@@ -367,7 +367,6 @@ fn selects_mpv_by_default_and_vlc_when_requested() {
   assert_eq!(Player::from_vlc_flag(true), Player::Vlc);
 }
 
-
 #[test]
 fn android_mpv_config_can_be_cleared_without_leaving_stale_stream_options() {
   let config_dir = std::env::temp_dir().join(format!(
