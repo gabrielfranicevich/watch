@@ -15,7 +15,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Add an ARM64 Android cross-compilation check to CI.
 - [ ] Validate playback, subtitles, referer-dependent streams, and history across Android versions and physical Termux devices.
 - [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history, with contract tests for input validation and history updates.
-- [ ] Migrate the CLI orchestration in `src/main.rs` to call the shared services instead of duplicating their workflows.
+- [x] Route CLI search, episode retrieval, and stream resolution through the shared application services; history persistence retains the CLI-compatible path.
 - [ ] Add a JNI/UniFFI proof of concept and validate locked Android-target dependency resolution.
 - [ ] Build a Kotlin/Jetpack Compose app shell that calls the shared Rust services.
 - [ ] Add native Android playback with stream headers, subtitles, and separate audio where supported.
