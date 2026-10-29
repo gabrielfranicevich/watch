@@ -11,9 +11,10 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Add a pure playback-target policy with unit tests.
 - [x] Add MPV-Android playback integration and generate shared MPV configuration for per-stream options.
 - [x] Add VLC Android playback selection.
+- [x] Define a platform-independent automatic/explicit playback policy with regression tests.
 - [x] Add an ARM64 Android cross-compilation check to CI.
 - [ ] Validate playback, subtitles, referer-dependent streams, and history across Android versions and physical Termux devices.
-- [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history.\n- [ ] Migrate the CLI orchestration in `src/main.rs` to call the shared services instead of duplicating their workflows.
+- [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history, with contract tests for input validation and history updates.\n- [ ] Migrate the CLI orchestration in `src/main.rs` to call the shared services instead of duplicating their workflows.
 - [ ] Add a JNI/UniFFI proof of concept and validate locked Android-target dependency resolution.\n- [ ] Build a Kotlin/Jetpack Compose app shell that calls the shared Rust services.\n- [ ] Add native Android playback with stream headers, subtitles, and separate audio where supported.\n- [ ] Add Android app and bridge CI, then validate installation and playback on a physical device.
 
 ## Remaining work
