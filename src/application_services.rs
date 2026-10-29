@@ -152,7 +152,7 @@ impl WatchApplication {
         "history is unavailable because no history path was configured".to_owned(),
       ));
     };
-    HistoryStore::new(path)
+    HistoryStore::new(path.clone())
       .write(entries)
       .map_err(ApplicationError::from)
   }
