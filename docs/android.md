@@ -69,19 +69,13 @@ mkdir -p /storage/emulated/0/mpv
 /storage/emulated/0/mpv/mpv.config.mp4
 ```
 
-`watch` creates or updates the file when needed. You do not need to enter anime URLs manually.
+`watch` creates or updates this file on each playback, including clearing stale stream-specific options when the next stream does not need them. It also adds the following include to `/storage/emulated/0/mpv/mpv.conf` if it is missing, while preserving other existing settings:
 
-To make MPV-Android load it:
+```text
+include=/storage/emulated/0/mpv/mpv.config.mp4
+```
 
-1. Open MPV-Android.
-2. Go to **Settings → Advanced → Edit mpv.conf** (the wording may vary by version).
-3. Add this line, keeping any other existing options:
-
-   ```text
-   include=/storage/emulated/0/mpv/mpv.config.mp4
-   ```
-
-4. Save the changes and restart MPV-Android if needed.
+If playback opens but immediately stops on a stream that needs a `Referer`, check that MPV-Android can read shared storage and that the include is present in its active configuration. The exact configuration UI varies by MPV-Android version.
 
 ## 4. Grant the required permissions
 
@@ -125,4 +119,6 @@ Then continue using Watch as usual:
 watch anime-title
 ```
 
-Keep the `include` line in MPV-Android’s `mpv.conf`. If you reinstall the player, reset its configuration, or clear its data, make sure the line is still there.
+Keep the `include` line in MPV-Android’s `mpv.conf`. `watch` will add it when it can access shared storage, but reinstalling or resetting MPV-Android may reset the player's active configuration.
+
+`--inline` and its alias `--here` are not supported in Termux: detecting MPV output drivers does not prove that the terminal can render their graphics protocols. Omit these options to use Android external playback. Inline playback remains a desktop feature and depends on the terminal and MPV build.
