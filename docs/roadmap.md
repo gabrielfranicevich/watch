@@ -2,7 +2,7 @@
 
 ## Current status
 
-The active Rust implementation is developed on `main`. This repository is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli), whose original shell project remains available upstream.
+The stable installation target is `main`; Android stabilization is being developed on `android-support`. This repository is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli), whose original shell project remains available upstream.
 
 The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. It also cross-checks the Android ARM64 target. Provider regression tests use local fixtures rather than relying on the live service. These checks validate repository code, not the continued availability of external websites or media players.
 
@@ -13,12 +13,12 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Add VLC Android playback selection.
 - [x] Add an ARM64 Android cross-compilation check to CI.
 - [ ] Validate playback, subtitles, referer-dependent streams, and history across Android versions and physical Termux devices.
-- [ ] Extract the Rust application workflow from `src/main.rs` before building a native Android UI.
-- [ ] Decide whether a separate native Android app is needed after CLI workflows are stable.
+- [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history.\n- [ ] Migrate the CLI orchestration in `src/main.rs` to call the shared services instead of duplicating their workflows.
+- [ ] Add a JNI/UniFFI proof of concept and validate locked Android-target dependency resolution.\n- [ ] Build a Kotlin/Jetpack Compose app shell that calls the shared Rust services.\n- [ ] Add native Android playback with stream headers, subtitles, and separate audio where supported.\n- [ ] Add Android app and bridge CI, then validate installation and playback on a physical device.
 
 ## Remaining work
 
-- Verify locked dependency resolution from a clean checkout with `cargo check --all-targets --locked` and `cargo test --all-targets --locked`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update, and keep `--locked` out of updater/install commands until validation passes.
+- Verify locked dependency resolution from a clean checkout with `cargo check --locked --all-targets`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked --all-targets`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update, and keep `--locked` out of updater/install commands until validation passes.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
 - Keep the README, tutorial, man page, and CLI help synchronized as options change.
