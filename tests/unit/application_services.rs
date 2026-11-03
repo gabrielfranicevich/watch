@@ -45,7 +45,7 @@ fn history_can_be_read_recorded_and_updated_through_application_api() {
   assert_eq!(entries.len(), 1);
   assert_eq!(entries[0].episode_number, "2");
   assert_eq!(entries[0].anime_id, anime.id);
-  assert_eq!(entries[0].provider.as_deref(), Some("hianime"));
+  assert_eq!(entries[0].provider, None);
 
   std::fs::remove_file(path).unwrap();
 }
