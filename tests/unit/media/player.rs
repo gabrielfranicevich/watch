@@ -389,7 +389,10 @@ fn android_mpv_config_can_be_cleared_without_leaving_stale_stream_options() {
   let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
   let include_line = format!("include={}", config_dir.join("mpv.config.mp4").display());
   assert_eq!(
-    main_config.lines().filter(|line| *line == include_line).count(),
+    main_config
+      .lines()
+      .filter(|line| *line == include_line)
+      .count(),
     1
   );
 
