@@ -1,4 +1,4 @@
-use ani_cli::application::{
+use crate::application::{
   choose_playback_target, PlaybackCapabilities, PlaybackMode, PlaybackPlatform, PlaybackTarget,
 };
 
