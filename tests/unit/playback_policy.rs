@@ -1,5 +1,5 @@
 use crate::application::{
-  choose_playback_target, PlaybackCapabilities, PlaybackMode, PlaybackPlatform, PlaybackTarget,
+  PlaybackCapabilities, PlaybackMode, PlaybackPlatform, PlaybackTarget, choose_playback_target,
 };
 
 fn desktop(terminal_graphics_supported: bool) -> PlaybackCapabilities {
