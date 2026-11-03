@@ -34,8 +34,12 @@ fn history_can_be_read_recorded_and_updated_through_application_api() {
   let second = Episode::new("2", None, "https://example.test/episode-2");
 
   assert!(app.history().unwrap().is_empty());
-  app.record_history(&anime, &first, ProviderId::HiAnime).unwrap();
-  app.record_history(&anime, &second, ProviderId::HiAnime).unwrap();
+  app
+    .record_history(&anime, &first, ProviderId::HiAnime)
+    .unwrap();
+  app
+    .record_history(&anime, &second, ProviderId::HiAnime)
+    .unwrap();
 
   let entries = app.history().unwrap();
   assert_eq!(entries.len(), 1);
@@ -51,11 +55,7 @@ fn recording_hianime_history_replaces_legacy_entries_without_provider_metadata()
   let path = temporary_history_path();
   let store = HistoryStore::new(path.clone());
   store
-    .write(&[HistoryEntry::new(
-      "1",
-      "dragon-ball",
-      "Dragon Ball",
-    )])
+    .write(&[HistoryEntry::new("1", "dragon-ball", "Dragon Ball")])
     .unwrap();
 
   let app = WatchApplication::new(Some(path.clone()));
