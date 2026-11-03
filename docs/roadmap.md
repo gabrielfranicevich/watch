@@ -23,7 +23,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 
 ## Remaining work
 
-- Verify locked dependency resolution from a clean checkout with `cargo check --locked --all-targets`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked --all-targets`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update, and keep `--locked` out of updater/install commands until validation passes.
+- Keep updater and documented Git installs on the committed `Cargo.lock` with `--locked`. Regenerate the lockfile deliberately when dependencies change, then rerun the complete CI quality matrix before merging.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
 - Keep the README, tutorial, man page, and CLI help synchronized as options change.

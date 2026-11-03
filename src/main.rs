@@ -820,6 +820,7 @@ fn updater_arguments(install_root: &Path, branch: &str) -> Vec<OsString> {
   vec![
     OsString::from("install"),
     OsString::from("--force"),
+    OsString::from("--locked"),
     OsString::from("--git"),
     OsString::from("https://github.com/gabrielfranicevich/watch"),
     OsString::from("--branch"),

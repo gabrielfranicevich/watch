@@ -8,9 +8,9 @@ Install Rust 1.85 or newer, then run:
 
 ~~~sh
 cargo fmt --all -- --check
-cargo check --all-targets
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
+cargo check --locked --all-targets
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
 ~~~
 
 The installed executable is `watch`. Run it from source with `cargo run --release --bin watch -- "Frieren"`. To inspect command-line behavior without searching the provider, use `cargo run --bin watch -- --help` or `cargo run --bin watch -- --version`. On Linux, `watch` may conflict with the system process-monitoring utility; make sure Cargo’s binary directory is earlier in `PATH`.
