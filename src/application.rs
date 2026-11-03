@@ -129,7 +129,6 @@ pub fn next_episode_after<'a>(episodes: &'a [Episode], last_watched: &str) -> Op
   episodes.get(index + 1)
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackMode {
   Automatic,
@@ -173,12 +172,12 @@ pub fn choose_playback_target(
       "inline playback is not supported in Termux; omit --inline/--here to use external playback"
         .to_owned(),
     ),
-    PlaybackMode::Inline if !capabilities.interactive_terminal => Err(
-      "--inline requires an interactive terminal on stdin and stdout".to_owned(),
-    ),
-    PlaybackMode::Inline => Err(
-      "inline playback requires a terminal with a supported graphics protocol".to_owned(),
-    ),
+    PlaybackMode::Inline if !capabilities.interactive_terminal => {
+      Err("--inline requires an interactive terminal on stdin and stdout".to_owned())
+    }
+    PlaybackMode::Inline => {
+      Err("inline playback requires a terminal with a supported graphics protocol".to_owned())
+    }
   }
 }
 
