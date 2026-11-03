@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ani_cli::application_services::{ApplicationError, SearchRequest, WatchApplication};
-use ani_cli::domain::{anime::Anime, episode::Episode, history::HistoryEntry};
-use ani_cli::infrastructure::history_store::HistoryStore;
-use ani_cli::providers::site::{Language, ProviderId};
+use crate::application_services::{ApplicationError, SearchRequest, WatchApplication};
+use crate::domain::{anime::Anime, episode::Episode, history::HistoryEntry};
+use crate::infrastructure::history_store::HistoryStore;
+use crate::providers::site::{Language, ProviderId};
 
 fn temporary_history_path() -> std::path::PathBuf {
   let nonce = SystemTime::now()
