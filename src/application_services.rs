@@ -133,8 +133,7 @@ impl WatchApplication {
     let mut entries = store.read()?;
     let provider_key = provider.key();
     if let Some(existing) = entries.iter_mut().find(|entry| {
-      entry.anime_id == anime.id
-        && entry.provider.as_deref().unwrap_or("hianime") == provider_key
+      entry.anime_id == anime.id && entry.provider.as_deref().unwrap_or("hianime") == provider_key
     }) {
       existing.episode_number = episode.number.clone();
       existing.anime_title = anime.title.clone();
