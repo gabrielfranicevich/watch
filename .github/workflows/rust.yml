@@ -33,7 +33,7 @@ jobs:
           - windows-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -65,10 +65,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Android SDK tools
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
 

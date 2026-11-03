@@ -3,10 +3,20 @@ on:
   push:
     branches:
       - main
-      - main
-  pull_request:
-    paths: 
+      - develop
+      - android-support
+    paths:
       - "**.md"
+  pull_request:
+    branches:
+      - main
+      - develop
+      - android-support
+    paths:
+      - "**.md"
+
+permissions:
+  contents: read
 
 jobs:
   dead-links:
@@ -23,14 +33,14 @@ jobs:
     name: Find Trailing Whitespace
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ocular-d/trailing-spaces@0.0.2
 
   markdown-layout:
     name: Markdown layout
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Keep Markdown documentation under docs
         shell: bash
         run: |
