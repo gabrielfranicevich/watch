@@ -9,6 +9,7 @@ use ani_cli::application::{
   PlaybackCapabilities, PlaybackMode, PlaybackPlatform, choose_playback_target, effective_source,
   next_episode_after, normalize_title, select_fixed_episodes,
 };
+use ani_cli::application_services::{PlaybackRequest, SearchRequest, WatchApplication};
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
 use ani_cli::cli::selection::{BackRequested, SelectionOutcome, read_paged_selection};
 use ani_cli::domain::anime::Anime;
