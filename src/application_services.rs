@@ -131,16 +131,30 @@ impl WatchApplication {
     };
     let store = HistoryStore::new(path.clone());
     let mut entries = store.read()?;
-    entries.retain(|entry| {
-      !(entry.anime_id == anime.id
-        && entry.provider.as_deref().unwrap_or("hianime") == provider.key())
-    });
-    entries.push(HistoryEntry::with_provider(
-      episode.number.clone(),
-      anime.id.clone(),
-      anime.title.clone(),
-      provider.key(),
-    ));
+    let provider_key = provider.key();
+    if let Some(existing) = entries.iter_mut().find(|entry| {
+      entry.anime_id == anime.id
+        && entry.provider.as_deref().unwrap_or("hianime") == provider_key
+    }) {
+      existing.episode_number = episode.number.clone();
+      existing.anime_title = anime.title.clone();
+    } else {
+      let entry = if provider == ProviderId::HiAnime {
+        HistoryEntry::new(
+          episode.number.clone(),
+          anime.id.clone(),
+          anime.title.clone(),
+        )
+      } else {
+        HistoryEntry::with_provider(
+          episode.number.clone(),
+          anime.id.clone(),
+          anime.title.clone(),
+          provider_key,
+        )
+      };
+      entries.push(entry);
+    }
     store.write(&entries).map_err(ApplicationError::from)
   }
 
