@@ -3,11 +3,7 @@
 use std::path::PathBuf;
 
 use crate::domain::{
-  anime::Anime,
-  episode::Episode,
-  history::HistoryEntry,
-  stream::Stream,
-  subtitle::Subtitle,
+  anime::Anime, episode::Episode, history::HistoryEntry, stream::Stream, subtitle::Subtitle,
 };
 use crate::infrastructure::history_store::HistoryStore;
 use crate::providers::{
@@ -117,7 +113,9 @@ impl WatchApplication {
     let Some(path) = self.history_path.as_ref() else {
       return Ok(Vec::new());
     };
-    HistoryStore::new(path.clone()).read().map_err(ApplicationError::from)
+    HistoryStore::new(path.clone())
+      .read()
+      .map_err(ApplicationError::from)
   }
 
   pub fn record_history(
