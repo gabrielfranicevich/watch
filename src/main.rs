@@ -5,10 +5,9 @@ use std::process::{Child, Command, ExitCode, ExitStatus};
 
 #[cfg(test)]
 use ani_cli::application::select_episode_range;
-use ani_cli::application_services::{PlaybackRequest, SearchRequest, WatchApplication};
 use ani_cli::application::{
-  choose_playback_target, effective_source, next_episode_after, normalize_title,
-  select_fixed_episodes, PlaybackCapabilities, PlaybackMode, PlaybackPlatform,
+  PlaybackCapabilities, PlaybackMode, PlaybackPlatform, choose_playback_target, effective_source,
+  next_episode_after, normalize_title, select_fixed_episodes,
 };
 use ani_cli::cli::menu::{self, MenuOutcome, TextPromptOutcome};
 use ani_cli::cli::selection::{BackRequested, SelectionOutcome, read_paged_selection};
