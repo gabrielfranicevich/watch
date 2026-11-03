@@ -289,7 +289,7 @@ fn updater_arguments_pin_repository_branch_and_install_root() {
   );
   assert!(args.contains(&"https://github.com/gabrielfranicevich/watch".to_owned()));
   assert!(args.contains(&"--force".to_owned()));
-  assert!(!args.contains(&"--locked".to_owned()));
+  assert!(args.contains(&"--locked".to_owned()));
 }
 
 #[test]
