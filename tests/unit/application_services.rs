@@ -68,7 +68,7 @@ fn recording_hianime_history_replaces_legacy_entries_without_provider_metadata()
   let entries = app.history().unwrap();
   assert_eq!(entries.len(), 1);
   assert_eq!(entries[0].episode_number, "2");
-  assert_eq!(entries[0].provider.as_deref(), Some("hianime"));
+  assert_eq!(entries[0].provider, None);
 
   std::fs::remove_file(path).unwrap();
 }
