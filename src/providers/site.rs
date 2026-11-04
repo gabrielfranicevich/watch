@@ -41,10 +41,11 @@ pub enum ProviderId {
   AnimeFenix,
   JkAnime,
   Gnula,
+  PelisPedia,
 }
 
 impl ProviderId {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -60,13 +61,14 @@ impl ProviderId {
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
   /// so history entries can still be read without querying unavailable sites.
-  pub const ACTIVE: [Self; 6] = [
+  pub const ACTIVE: [Self; 7] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
     Self::TioAnime,
     Self::JkAnime,
     Self::Gnula,
+    Self::PelisPedia,
   ];
 
   pub fn name(self) -> &'static str {
@@ -82,6 +84,7 @@ impl ProviderId {
       Self::AnimeFenix => "AnimeFenix",
       Self::JkAnime => "JKAnime",
       Self::Gnula => "Gnula",
+      Self::PelisPedia => "PelisPedia",
     }
   }
 
@@ -90,7 +93,7 @@ impl ProviderId {
       Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai => {
         Language::English
       }
-      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula => {
+      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia => {
         Language::Spanish
       }
     }
@@ -104,7 +107,7 @@ impl ProviderId {
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
         Some(LanguagePair::known("ja", "es"))
       }
-      Self::Gnula => None,
+      Self::Gnula | Self::PelisPedia => None,
     }
   }
 
@@ -121,6 +124,7 @@ impl ProviderId {
       Self::AnimeFenix => "https://ww1.animefenix.vip",
       Self::JkAnime => "https://jkanime.surf",
       Self::Gnula => "https://ver.gnula.one",
+      Self::PelisPedia => "https://pelispedia.mov",
     }
   }
 
@@ -137,11 +141,20 @@ impl ProviderId {
       Self::AnimeFenix => "animefenix",
       Self::JkAnime => "jkanime",
       Self::Gnula => "gnula",
+      Self::PelisPedia => "pelispedia",
     }
   }
 
   pub fn from_key(key: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|provider| provider.key() == key)
+  }
+
+  fn is_movie_path(self, url: &Url) -> bool {
+    match self {
+      Self::Gnula => url.path().starts_with("/movies/"),
+      Self::PelisPedia => url.path().starts_with("/pelicula/"),
+      _ => false,
+    }
   }
 
   fn search_routes(self) -> &'static [SearchRoute] {
@@ -271,6 +284,23 @@ impl ProviderId {
           slug: false,
         },
       ],
+      Self::PelisPedia => &[
+        SearchRoute {
+          path: "/peliculas",
+          key: None,
+          slug: false,
+        },
+        SearchRoute {
+          path: "/series",
+          key: None,
+          slug: false,
+        },
+        SearchRoute {
+          path: "/buscar",
+          key: Some("q"),
+          slug: false,
+        },
+      ],
       Self::Gnula => &[
         SearchRoute {
           path: "/",
@@ -342,6 +372,7 @@ impl ProviderId {
       }
       Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
       Self::Gnula => path.starts_with("/movies/") || path.starts_with("/series/"),
+      Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -517,12 +548,10 @@ impl SiteProvider {
     }
 
     let mut episodes = parse_episode_links(&body, &anime.url, &anime.url);
-    if episodes.is_empty() && self.id == ProviderId::Gnula {
-      if let Ok(url) = Url::parse(&anime.url) {
-        if url.path().starts_with("/movies/") {
-          episodes.push(Episode::new("1", Some("Movie".into()), anime.url.clone()));
-        }
-      }
+    if episodes.is_empty()
+      && Url::parse(&anime.url).is_ok_and(|url| self.id.is_movie_path(&url))
+    {
+      episodes.push(Episode::new("1", Some("Movie".into()), anime.url.clone()));
     }
     if self.id == ProviderId::TioAnime && episodes.is_empty() {
       episodes = parse_tioanime_episodes(&body, &anime.url);

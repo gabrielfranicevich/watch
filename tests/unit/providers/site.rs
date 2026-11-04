@@ -19,8 +19,10 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::JkAnime.language(), Language::Spanish);
   assert_eq!(ProviderId::Gnula.language(), Language::Spanish);
   assert_eq!(ProviderId::Gnula.language_pair(), None);
-  assert_eq!(ProviderId::ALL.len(), 11);
-  assert_eq!(ProviderId::ACTIVE.len(), 6);
+  assert_eq!(ProviderId::PelisPedia.language(), Language::Spanish);
+  assert_eq!(ProviderId::PelisPedia.language_pair(), None);
+  assert_eq!(ProviderId::ALL.len(), 12);
+  assert_eq!(ProviderId::ACTIVE.len(), 7);
   assert_eq!(
     ProviderId::ACTIVE,
     [
@@ -30,6 +32,7 @@ fn provider_metadata_matches_requested_language_groups() {
       ProviderId::TioAnime,
       ProviderId::JkAnime,
       ProviderId::Gnula,
+      ProviderId::PelisPedia,
     ]
   );
 }
@@ -501,4 +504,37 @@ fn gnula_cards_with_multiple_audio_options_do_not_choose_one() {
 fn gnula_movie_details_are_exposed_as_single_playable_entries() {
   let url = Url::parse("https://ver.gnula.one/movies/idiotas/").unwrap();
   assert!(url.path().starts_with("/movies/"));
+}
+
+#[test]
+fn pelispedia_uses_verified_catalog_and_detail_paths() {
+  let movies = Url::parse("https://pelispedia.mov/peliculas").unwrap();
+  let series = Url::parse("https://pelispedia.mov/series").unwrap();
+  let movie = Url::parse("https://pelispedia.mov/pelicula/example-film").unwrap();
+  let show = Url::parse("https://pelispedia.mov/serie/example-show").unwrap();
+  assert!(!ProviderId::PelisPedia.is_detail_path(&movies));
+  assert!(!ProviderId::PelisPedia.is_detail_path(&series));
+  assert!(ProviderId::PelisPedia.is_detail_path(&movie));
+  assert!(ProviderId::PelisPedia.is_detail_path(&show));
+  assert!(ProviderId::PelisPedia.is_movie_path(&movie));
+  assert!(!ProviderId::PelisPedia.is_movie_path(&show));
+}
+
+#[test]
+fn pelispedia_search_parser_keeps_unknown_audio_and_subtitle_languages() {
+  let html = r#"
+    <article>
+      <a href="/serie/las-hijas-de-la-criada-Kl42uo" title="Las hijas de la criada">
+        <h2>Las hijas de la criada</h2>
+      </a>
+    </article>
+  "#;
+  let results = parse_search_results(
+    html,
+    "https://pelispedia.mov/series",
+    ProviderId::PelisPedia,
+    "Las hijas de la criada",
+  );
+  assert_eq!(results.len(), 1);
+  assert_eq!(results[0].language_pair, None);
 }
