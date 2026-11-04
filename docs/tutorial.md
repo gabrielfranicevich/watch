@@ -42,6 +42,12 @@ On Windows, install tools in the same environment from which you launch watch. W
 
 See the dedicated [Android / Termux installation guide](android.md) for installing Watch, setting up MPV-Android's shared configuration, and testing playback.
 
+On Termux, Cargo may fail with `Text file busy (os error 26)` while executing a build script from its temporary install directory. The following command uses a temporary directory under `$HOME` and limits compilation to one job; this workaround was confirmed to work:
+
+~~~sh
+mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch android-support --locked --force
+~~~
+
 ## 3. Search and play
 
 Run a title query:
