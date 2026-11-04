@@ -63,7 +63,7 @@ watch --language english "Dragon Ball"
 watch --language ESPAÑOL "Dragon Ball"
 ~~~
 
-This filters catalog language, not audio. Use `--dub` to request dubbed audio.
+This filters the catalog category. Each result shows its detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means the provider did not expose reliable language metadata. Use `--dub` to request dubbed audio.
 
 Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
 

@@ -93,8 +93,8 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 ## What it supports
 
 - Parallel title search across the currently enabled providers: HiAnime, Gogoanime, AniWatch, TioAnime, and JKAnime. Provider availability and site support can change.
-- Duplicate titles are grouped by normalized title and language; when a title appears in both languages it is listed as separate `(en)` and `(es)` choices, and you can choose the provider after selecting a title.
-- `--language` filters catalog language; it does not select dubbed audio. `--dub` controls the audio version separately.
+- Duplicate titles are grouped by normalized title and audio/subtitle language pair. Choices show pairs such as `(ja/en)` or `(ja/es)`; unknown values remain `?` rather than being guessed, and you can choose the provider after selecting a title.
+- `--language` filters the provider catalog category. Each result also reports its audio/subtitle pair as `audio/subtitles` (for example, `ja/es`); this pair does not select a dubbed track. `--dub` controls dubbed playback separately.
 - Episode lists combine sources for a title. For each episode, playback tries providers that expose that episode and chooses the stream that best matches `--quality` (the highest available quality by default).
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
