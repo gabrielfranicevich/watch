@@ -42,10 +42,11 @@ pub enum ProviderId {
   JkAnime,
   Gnula,
   PelisPedia,
+  PelisPlus,
 }
 
 impl ProviderId {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 13] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -58,11 +59,12 @@ impl ProviderId {
     Self::JkAnime,
     Self::Gnula,
     Self::PelisPedia,
+    Self::PelisPlus,
   ];
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
   /// so history entries can still be read without querying unavailable sites.
-  pub const ACTIVE: [Self; 7] = [
+  pub const ACTIVE: [Self; 8] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -70,6 +72,7 @@ impl ProviderId {
     Self::JkAnime,
     Self::Gnula,
     Self::PelisPedia,
+    Self::PelisPlus,
   ];
 
   pub fn name(self) -> &'static str {
@@ -86,6 +89,7 @@ impl ProviderId {
       Self::JkAnime => "JKAnime",
       Self::Gnula => "Gnula",
       Self::PelisPedia => "PelisPedia",
+      Self::PelisPlus => "PelisPlus",
     }
   }
 
@@ -94,7 +98,7 @@ impl ProviderId {
       Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai => {
         Language::English
       }
-      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia => {
+      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia | Self::PelisPlus => {
         Language::Spanish
       }
     }
@@ -108,7 +112,7 @@ impl ProviderId {
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
         Some(LanguagePair::known("ja", "es"))
       }
-      Self::Gnula | Self::PelisPedia => None,
+      Self::Gnula | Self::PelisPedia | Self::PelisPlus => None,
     }
   }
 
@@ -126,6 +130,7 @@ impl ProviderId {
       Self::JkAnime => "https://jkanime.surf",
       Self::Gnula => "https://ver.gnula.one",
       Self::PelisPedia => "https://pelispedia.mov",
+      Self::PelisPlus => "https://pelisplusshd.com",
     }
   }
 
@@ -143,6 +148,7 @@ impl ProviderId {
       Self::JkAnime => "jkanime",
       Self::Gnula => "gnula",
       Self::PelisPedia => "pelispedia",
+      Self::PelisPlus => "pelisplus",
     }
   }
 
@@ -154,6 +160,7 @@ impl ProviderId {
     match self {
       Self::Gnula => url.path().starts_with("/movies/"),
       Self::PelisPedia => url.path().starts_with("/pelicula/"),
+      Self::PelisPlus => url.path().starts_with("/peliculas/"),
       _ => false,
     }
   }
@@ -285,6 +292,23 @@ impl ProviderId {
           slug: false,
         },
       ],
+      Self::PelisPlus => &[
+        SearchRoute {
+          path: "/inicio/",
+          key: None,
+          slug: false,
+        },
+        SearchRoute {
+          path: "/nuevas-peliculas/",
+          key: None,
+          slug: false,
+        },
+        SearchRoute {
+          path: "/ultimas-series/",
+          key: None,
+          slug: false,
+        },
+      ],
       Self::PelisPedia => &[
         SearchRoute {
           path: "/peliculas",
@@ -374,6 +398,7 @@ impl ProviderId {
       Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
       Self::Gnula => path.starts_with("/movies/") || path.starts_with("/series/"),
       Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
+      Self::PelisPlus => path.starts_with("/peliculas/") || path.starts_with("/serie/"),
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -548,7 +573,14 @@ impl SiteProvider {
       )));
     }
 
-    let mut episodes = parse_episode_links(&body, &anime.url, &anime.url);
+    let mut episodes = if self.id == ProviderId::PelisPlus {
+      parse_pelisplus_episodes(&body, &anime.url)
+    } else {
+      Vec::new()
+    };
+    if episodes.is_empty() {
+      episodes = parse_episode_links(&body, &anime.url, &anime.url);
+    }
     if episodes.is_empty()
       && Url::parse(&anime.url).is_ok_and(|url| self.id.is_movie_path(&url))
     {
@@ -852,6 +884,68 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
       .unwrap_or(f64::MAX)
       .total_cmp(&right.number.parse::<f64>().unwrap_or(f64::MAX))
       .then_with(|| left.url.cmp(&right.url))
+  });
+  episodes
+}
+
+fn parse_pelisplus_episodes(body: &str, anime_url: &str) -> Vec<Episode> {
+  let Ok(anime) = Url::parse(anime_url) else {
+    return Vec::new();
+  };
+  let segments: Vec<_> = anime.path().trim_matches('/').split('/').collect();
+  if segments.len() < 3 || segments[0] != "serie" {
+    return Vec::new();
+  }
+  let series_id = segments[1];
+  let slug = segments[2];
+  let document = Html::parse_document(body);
+  let Ok(selector) = Selector::parse("a[href]") else {
+    return Vec::new();
+  };
+  let mut episodes = Vec::new();
+  let mut seen = HashSet::new();
+
+  for anchor in document.select(&selector) {
+    let Some(href) = anchor.value().attr("href") else {
+      continue;
+    };
+    let Ok(url) = anime.join(href) else {
+      continue;
+    };
+    if url.host_str() != anime.host_str() {
+      continue;
+    }
+    let candidate: Vec<_> = url.path().trim_matches('/').split('/').collect();
+    if candidate.len() < 3 || candidate[0] != "serie" || candidate[2] != slug {
+      continue;
+    }
+    let Some(number_part) = candidate[1].strip_prefix(&format!("{series_id}-")) else {
+      continue;
+    };
+    let mut numbers = number_part.split('-');
+    let (Some(season), Some(episode)) = (numbers.next(), numbers.next()) else {
+      continue;
+    };
+    if numbers.next().is_some() {
+      continue;
+    }
+    let (Ok(season), Ok(episode)) = (season.parse::<u32>(), episode.parse::<u32>()) else {
+      continue;
+    };
+    let order = season.saturating_mul(1000).saturating_add(episode);
+    if order == 0 || !seen.insert(order) {
+      continue;
+    }
+    let label = normalize_whitespace(&anchor.text().collect::<String>());
+    let title = (!label.is_empty()).then(|| format!("S{season}E{episode} — {label}"));
+    episodes.push(Episode::new(order.to_string(), title, url.to_string()));
+  }
+
+  episodes.sort_by(|left, right| {
+    left.number
+      .parse::<u32>()
+      .unwrap_or(u32::MAX)
+      .cmp(&right.number.parse::<u32>().unwrap_or(u32::MAX))
   });
   episodes
 }
@@ -1435,6 +1529,16 @@ fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> V
           || label.contains("player"))
         .then(|| anchor.value().attr("href").map(str::to_owned))
         .flatten()
+      }));
+    }
+  }
+  if provider == ProviderId::PelisPlus {
+    if let Ok(selector) = Selector::parse("a[href]") {
+      links.extend(document.select(&selector).filter_map(|anchor| {
+        let label = normalize_whitespace(&anchor.text().collect::<String>()).to_ascii_lowercase();
+        (label == "watch now" || label == "ver película" || label == "ver serie")
+          .then(|| anchor.value().attr("href").map(str::to_owned))
+          .flatten()
       }));
     }
   }

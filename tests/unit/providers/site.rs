@@ -21,9 +21,12 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::Gnula.language_pair(), None);
   assert_eq!(ProviderId::PelisPedia.language(), Language::Spanish);
   assert_eq!(ProviderId::PelisPedia.language_pair(), None);
-  assert_eq!(ProviderId::ALL.len(), 12);
+  assert_eq!(ProviderId::PelisPlus.language(), Language::Spanish);
+  assert_eq!(ProviderId::PelisPlus.language_pair(), None);
+  assert_eq!(ProviderId::ALL.len(), 13);
+  assert!(ProviderId::ALL.contains(&ProviderId::PelisPlus));
   assert!(ProviderId::ALL.contains(&ProviderId::PelisPedia));
-  assert_eq!(ProviderId::ACTIVE.len(), 7);
+  assert_eq!(ProviderId::ACTIVE.len(), 8);
   assert_eq!(
     ProviderId::ACTIVE,
     [
@@ -34,6 +37,7 @@ fn provider_metadata_matches_requested_language_groups() {
       ProviderId::JkAnime,
       ProviderId::Gnula,
       ProviderId::PelisPedia,
+      ProviderId::PelisPlus,
     ]
   );
 }
@@ -538,4 +542,58 @@ fn pelispedia_search_parser_keeps_unknown_audio_and_subtitle_languages() {
   );
   assert_eq!(results.len(), 1);
   assert_eq!(results[0].language_pair, None);
+}
+
+#[test]
+fn pelisplus_matches_observed_movie_and_series_detail_paths() {
+  let movie = Url::parse(
+    "https://pelisplusshd.com/peliculas/apocalipsis-z-nuevo-mundo-A1507696Bx2/",
+  )
+  .unwrap();
+  let show = Url::parse("https://pelisplusshd.com/serie/213375/visionquest/").unwrap();
+  let episode = Url::parse("https://pelisplusshd.com/serie/213375-1-1/visionquest/").unwrap();
+  assert!(ProviderId::PelisPlus.is_detail_path(&movie));
+  assert!(ProviderId::PelisPlus.is_detail_path(&show));
+  assert!(ProviderId::PelisPlus.is_detail_path(&episode));
+  assert!(ProviderId::PelisPlus.is_movie_path(&movie));
+  assert!(!ProviderId::PelisPlus.is_movie_path(&show));
+}
+
+#[test]
+fn pelisplus_episode_parser_keeps_season_episode_order_and_series_identity() {
+  let html = r#"
+    <a href="/serie/213375-1-1/visionquest/">1x1 Sin ataduras (1x1)2026-10-13</a>
+    <a href="/serie/213375-1-2/visionquest/">1x2 Teseo (1x2)2026-10-13</a>
+    <a href="/serie/213375-2-1/visionquest/">2x1 Otra temporada (2x1)</a>
+    <a href="/serie/999999-1-1/other-show/">1x1 unrelated</a>
+    <a href="/serie/213375-1-2/visionquest/">Duplicate episode</a>
+  "#;
+  let episodes = parse_pelisplus_episodes(
+    html,
+    "https://pelisplusshd.com/serie/213375/visionquest/",
+  );
+  assert_eq!(episodes.len(), 3);
+  assert_eq!(episodes[0].number, "1001");
+  assert_eq!(episodes[1].number, "1002");
+  assert_eq!(episodes[2].number, "2001");
+  assert!(episodes[0].title.as_deref().unwrap().contains("S1E1"));
+}
+
+#[test]
+fn pelisplus_movie_pages_are_not_treated_as_series_episode_lists() {
+  let html = r#"<a href="/peliculas/related-movie/">Related movie</a>"#;
+  let episodes = parse_pelisplus_episodes(
+    html,
+    "https://pelisplusshd.com/peliculas/apocalipsis-z-nuevo-mundo-A1507696Bx2/",
+  );
+  assert!(episodes.is_empty());
+}
+
+#[test]
+fn pelisplus_watch_now_link_is_included_as_a_player_candidate() {
+  let document = Html::parse_document(
+    r#"<a href="/serie/213375/visionquest/ver/">Watch now</a>"#,
+  );
+  let links = provider_player_links(&document, "", ProviderId::PelisPlus);
+  assert_eq!(links, vec!["/serie/213375/visionquest/ver/"]);
 }
