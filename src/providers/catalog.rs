@@ -2,7 +2,7 @@ use std::{sync::mpsc, thread};
 
 use super::hianime::HiAnimeProvider;
 use super::site::{Language, ProviderId, ProviderStreamResolver, SiteProvider};
-use crate::domain::{anime::Anime, episode::Episode};
+use crate::domain::{anime::Anime, episode::Episode, language::LanguagePair};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderAnime {
@@ -111,8 +111,7 @@ impl ProviderCatalog {
 struct TitleBucket {
   key: String,
   display_title: String,
-  english: Vec<ProviderAnime>,
-  spanish: Vec<ProviderAnime>,
+  groups: Vec<(LanguagePair, Vec<ProviderAnime>)>,
 }
 
 fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
@@ -129,17 +128,26 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
         buckets.push(TitleBucket {
           key: key.clone(),
           display_title: clean_display_title(&source.anime.title),
-          english: Vec::new(),
-          spanish: Vec::new(),
+          groups: Vec::new(),
         });
         buckets.len() - 1
       }
     };
 
+    let pair = source
+      .anime
+      .language_pair
+      .clone()
+      .or_else(|| source.provider.language_pair())
+      .unwrap_or_else(|| LanguagePair::new(None, None));
     let bucket = &mut buckets[index];
-    let group = match source.provider.language() {
-      Language::English => &mut bucket.english,
-      Language::Spanish => &mut bucket.spanish,
+    let group_index = bucket.groups.iter().position(|(existing, _)| existing == &pair);
+    let group = match group_index {
+      Some(index) => &mut bucket.groups[index].1,
+      None => {
+        bucket.groups.push((pair, Vec::new()));
+        &mut bucket.groups.last_mut().expect("pair group was just inserted").1
+      }
     };
     if !group
       .iter()
@@ -151,16 +159,10 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
 
   let mut choices = Vec::new();
   for bucket in buckets {
-    if !bucket.english.is_empty() {
+    for (pair, sources) in bucket.groups {
       choices.push(AnimeOption {
-        label: language_label(&bucket.display_title, Language::English),
-        sources: bucket.english,
-      });
-    }
-    if !bucket.spanish.is_empty() {
-      choices.push(AnimeOption {
-        label: language_label(&bucket.display_title, Language::Spanish),
-        sources: bucket.spanish,
+        label: language_label(&bucket.display_title, &pair),
+        sources,
       });
     }
   }
@@ -176,8 +178,8 @@ fn sort_sources_by_provider_order(sources: &mut [ProviderAnime]) {
   });
 }
 
-fn language_label(title: &str, language: Language) -> String {
-  format!("({}) {title}", language.short_code())
+fn language_label(title: &str, pair: &LanguagePair) -> String {
+  format!("({}) {title}", pair.label())
 }
 
 fn is_episode_search_result(title: &str, url: &str) -> bool {

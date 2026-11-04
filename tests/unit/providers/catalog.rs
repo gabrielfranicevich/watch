@@ -14,7 +14,7 @@ fn two_english_providers_collapse_to_one_english_label() {
     source(ProviderId::NineAnime, "Dragon Ball Super Beerus", "beerus"),
   ]);
   assert_eq!(choices.len(), 1);
-  assert_eq!(choices[0].label, "(en) Dragon Ball Super: Beerus");
+  assert_eq!(choices[0].label, "(ja/en) Dragon Ball Super: Beerus");
   assert_eq!(choices[0].sources.len(), 2);
 }
 
@@ -25,7 +25,7 @@ fn two_spanish_providers_collapse_to_one_spanish_label() {
     source(ProviderId::JkAnime, "Dragon Ball Super Beerus", "beerus"),
   ]);
   assert_eq!(choices.len(), 1);
-  assert_eq!(choices[0].label, "(es) Dragon Ball Super: Beerus");
+  assert_eq!(choices[0].label, "(ja/es) Dragon Ball Super: Beerus");
   assert_eq!(choices[0].sources.len(), 2);
 }
 
@@ -44,8 +44,8 @@ fn bilingual_title_is_listed_in_english_then_spanish_order() {
     ),
   ]);
   assert_eq!(choices.len(), 2);
-  assert_eq!(choices[0].label, "(en) Frieren: Beyond Journey's End");
-  assert_eq!(choices[1].label, "(es) Frieren: Beyond Journey's End");
+  assert_eq!(choices[0].label, "(ja/en) Frieren: Beyond Journey's End");
+  assert_eq!(choices[1].label, "(ja/es) Frieren: Beyond Journey's End");
   assert_eq!(choices[0].sources.len(), 1);
   assert_eq!(choices[1].sources.len(), 1);
 }
@@ -54,7 +54,7 @@ fn bilingual_title_is_listed_in_english_then_spanish_order() {
 fn unambiguous_title_includes_its_language_label() {
   let choices = group_results(vec![source(ProviderId::NineAnime, "Frieren", "frieren")]);
   assert_eq!(choices.len(), 1);
-  assert_eq!(choices[0].label, "(en) Frieren");
+  assert_eq!(choices[0].label, "(ja/en) Frieren");
 }
 
 #[test]
@@ -97,8 +97,8 @@ fn strips_search_genre_and_status_prefixes_before_adding_language_labels() {
     ),
   ]);
   assert_eq!(choices.len(), 2);
-  assert_eq!(choices[0].label, "(en) Dragon Ball Super: Beerus");
-  assert_eq!(choices[1].label, "(es) Dragon Ball Super: Beerus");
+  assert_eq!(choices[0].label, "(ja/en) Dragon Ball Super: Beerus");
+  assert_eq!(choices[1].label, "(ja/es) Dragon Ball Super: Beerus");
   assert_eq!(choices[1].sources.len(), 2);
 }
 
@@ -110,7 +110,7 @@ fn grouping_discards_duplicate_cards_from_the_same_provider() {
     source(ProviderId::GoGoAnime, "Frieren", "frieren-two"),
   ]);
   assert_eq!(choices.len(), 1);
-  assert_eq!(choices[0].label, "(en) Frieren");
+  assert_eq!(choices[0].label, "(ja/en) Frieren");
   assert_eq!(choices[0].sources.len(), 2);
 }
 
@@ -147,4 +147,34 @@ fn normalizes_punctuation_and_common_language_suffixes() {
     normalize_provider_title("Frieren: Beyond Journey's End"),
     normalize_provider_title("Frieren Beyond Journey s End")
   );
+}
+
+#[test]
+fn explicit_source_language_pairs_override_provider_defaults() {
+  let mut source = source(ProviderId::TioAnime, "Frieren", "frieren");
+  source.anime.language_pair = Some(LanguagePair::known("ja", "en"));
+  let choices = group_results(vec![source]);
+  assert_eq!(choices.len(), 1);
+  assert_eq!(choices[0].label, "(ja/en) Frieren");
+}
+
+#[test]
+fn unknown_language_pairs_are_not_assumed_to_be_english_or_spanish() {
+  let mut source = source(ProviderId::TioAnime, "Frieren", "frieren");
+  source.anime.language_pair = Some(LanguagePair::new(None, None));
+  let choices = group_results(vec![source]);
+  assert_eq!(choices.len(), 1);
+  assert_eq!(choices[0].label, "(?/?) Frieren");
+}
+
+#[test]
+fn same_title_with_different_audio_subtitle_pairs_stays_separate() {
+  let mut japanese_english = source(ProviderId::TioAnime, "Frieren", "frieren-ja-en");
+  japanese_english.anime.language_pair = Some(LanguagePair::known("ja", "en"));
+  let mut japanese_spanish = source(ProviderId::TioAnime, "Frieren", "frieren-ja-es");
+  japanese_spanish.anime.language_pair = Some(LanguagePair::known("ja", "es"));
+  let choices = group_results(vec![japanese_english, japanese_spanish]);
+  assert_eq!(choices.len(), 2);
+  assert_eq!(choices[0].label, "(ja/en) Frieren");
+  assert_eq!(choices[1].label, "(ja/es) Frieren");
 }
