@@ -3,6 +3,21 @@ use std::fmt;
 
 use crate::domain::{language::LanguagePair, stream::Stream};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HlsRenditionType {
+  Audio,
+  Subtitles,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HlsRendition {
+  pub kind: HlsRenditionType,
+  pub name: Option<String>,
+  pub language: Option<String>,
+  pub is_default: bool,
+  pub url: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HlsVariant {
   pub bandwidth: u64,
@@ -53,6 +68,42 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
     ));
   }
   Ok(variants)
+}
+
+pub fn parse_renditions(
+  body: &str,
+  master_url: &str,
+) -> Result<Vec<HlsRendition>, HlsError> {
+  if !body.lines().any(|line| line.trim() == "#EXTM3U") {
+    return Err(HlsError("response is not an HLS playlist".into()));
+  }
+
+  body
+    .lines()
+    .map(str::trim)
+    .filter_map(|line| line.strip_prefix("#EXT-X-MEDIA:"))
+    .filter_map(|attributes| {
+      let kind = match attribute(attributes, "TYPE")? {
+        "AUDIO" => HlsRenditionType::Audio,
+        "SUBTITLES" => HlsRenditionType::Subtitles,
+        _ => return None,
+      };
+      Some((attributes, kind))
+    })
+    .map(|(attributes, kind)| {
+      let url = attribute(attributes, "URI")
+        .map(|uri| resolve_url(master_url, uri))
+        .transpose()?;
+
+      Ok(HlsRendition {
+        kind,
+        name: attribute(attributes, "NAME").map(str::to_owned),
+        language: attribute(attributes, "LANGUAGE").map(str::to_owned),
+        is_default: attribute(attributes, "DEFAULT") == Some("YES"),
+        url,
+      })
+    })
+    .collect()
 }
 
 pub fn parse_default_audio_url(body: &str, master_url: &str) -> Result<Option<String>, HlsError> {

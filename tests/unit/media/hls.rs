@@ -82,3 +82,18 @@ fn ignores_non_default_renditions_when_detecting_languages() {
 fn rejects_language_detection_from_non_playlist_responses() {
   assert!(parse_default_language_pair("not a playlist", "https://cdn.example/master.m3u8").is_err());
 }
+
+#[test]
+fn parses_default_and_alternative_audio_and_subtitle_renditions() {
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"audio/ja.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"audio/en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Spanish\",LANGUAGE=\"es-419\",DEFAULT=NO,URI=\"subs/es.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nvideo.m3u8\n";
+  let renditions = parse_renditions(playlist, "https://cdn.example/master.m3u8").unwrap();
+
+  assert_eq!(renditions.len(), 3);
+  assert_eq!(renditions[0].language.as_deref(), Some("ja"));
+  assert!(renditions[0].is_default);
+  assert_eq!(renditions[0].url.as_deref(), Some("https://cdn.example/audio/ja.m3u8"));
+  assert_eq!(renditions[1].language.as_deref(), Some("en"));
+  assert!(!renditions[1].is_default);
+  assert_eq!(renditions[2].language.as_deref(), Some("es-419"));
+  assert_eq!(renditions[2].kind, HlsRenditionType::Subtitles);
+}
