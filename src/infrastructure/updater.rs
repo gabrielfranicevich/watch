@@ -19,14 +19,15 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   let installed_revision_path = cache_root.join("installed-revision");
   std::fs::create_dir_all(&cache_root)?;
 
-  if repository_dir.exists() {
-    if !repository_dir.join(".git").is_dir() {
-      return Err(format!(
-        "updater cache at {} is not a Git checkout; remove it and retry",
-        repository_dir.display()
-      )
-      .into());
+  if repository_dir.exists() && !is_git_checkout(&repository_dir) {
+    if repository_dir.is_dir() {
+      std::fs::remove_dir_all(&repository_dir)?;
+    } else {
+      std::fs::remove_file(&repository_dir)?;
     }
+  }
+
+  if repository_dir.exists() {
     run_git(
       &repository_dir,
       &["fetch", "--quiet", "--depth=1", "origin", branch],
@@ -72,6 +73,10 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   std::fs::write(&installed_revision_path, format!("{}\n", available.trim()))?;
   eprintln!("watch update completed.");
   Ok(())
+}
+
+fn is_git_checkout(repository_dir: &Path) -> bool {
+  repository_dir.join(".git").is_dir()
 }
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {

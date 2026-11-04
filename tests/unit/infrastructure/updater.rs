@@ -83,3 +83,33 @@ fn empty_remote_revision_is_never_treated_as_installed() {
 fn changed_remote_revision_requires_installation() {
   assert!(needs_install(Some("old-commit"), "new-commit"));
 }
+
+#[test]
+fn recognizes_persistent_git_checkouts() {
+  let root = std::env::temp_dir().join(format!(
+    "watch-updater-test-{}-{}",
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap_or_default()
+      .as_nanos()
+  ));
+  std::fs::create_dir_all(root.join(".git")).unwrap();
+  assert!(is_git_checkout(&root));
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn rejects_cache_directories_without_git_metadata() {
+  let root = std::env::temp_dir().join(format!(
+    "watch-updater-test-{}-{}",
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap_or_default()
+      .as_nanos()
+  ));
+  std::fs::create_dir_all(&root).unwrap();
+  assert!(!is_git_checkout(&root));
+  std::fs::remove_dir_all(root).unwrap();
+}
