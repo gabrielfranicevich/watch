@@ -7,9 +7,12 @@ use serde_json::Value;
 use super::hianime::is_browser_verification_page;
 use std::time::Duration;
 
-use crate::domain::{episode::Episode, stream::Stream, subtitle::Subtitle};
+use crate::domain::{
+  episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle,
+};
 use crate::media::hls::{
-  HlsVariant, into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
+  HlsVariant, into_stream, parse_default_audio_url, parse_default_language_pair,
+  parse_master_playlist, select_quality,
 };
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
@@ -57,6 +60,7 @@ pub struct ResolvedMedia {
   pub subtitle: Option<Subtitle>,
   pub mal_id: Option<String>,
   pub qualities: Vec<QualityOption>,
+  pub language_pair: LanguagePair,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +182,7 @@ impl HiAnimeStreamResolver {
     let variants = parse_master_playlist(&playlist, master_url)?;
     let qualities = quality_options(&variants);
     let audio_url = parse_default_audio_url(&playlist, master_url)?;
+    let mut language_pair = parse_default_language_pair(&playlist, master_url)?;
     let selected = select_quality(&variants, quality)
       .or_else(|| select_quality(&variants, "best"))
       .ok_or_else(|| {
@@ -185,16 +190,21 @@ impl HiAnimeStreamResolver {
       })?;
     let stream = into_stream(selected, Some(referer)).with_audio(audio_url);
 
-    let subtitle = config
+    let default_subtitle = config
       .get("subtitles")
       .and_then(Value::as_array)
       .and_then(|subtitles| {
         subtitles
           .iter()
           .find(|item| item.get("default").and_then(Value::as_bool) == Some(true))
-      })
+      });
+    let subtitle_language = default_subtitle.and_then(subtitle_language_code);
+    if language_pair.subtitles.is_none() {
+      language_pair.subtitles = subtitle_language.clone();
+    }
+    let subtitle = default_subtitle
       .and_then(|item| item.get("src").and_then(Value::as_str))
-      .map(|url| Subtitle::new(url, Some("default".into())));
+      .map(|url| Subtitle::new(url, subtitle_language));
 
     eprintln!("Stream resolution: HLS stream selected successfully.");
     Ok(ResolvedMedia {
@@ -202,8 +212,22 @@ impl HiAnimeStreamResolver {
       subtitle,
       mal_id,
       qualities,
+      language_pair,
     })
   }
+}
+
+fn subtitle_language_code(item: &Value) -> Option<String> {
+  ["lang", "language", "srclang", "iso639"]
+    .iter()
+    .find_map(|key| {
+      item
+        .get(*key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_ascii_lowercase)
+    })
 }
 
 fn quality_options(variants: &[HlsVariant]) -> Vec<QualityOption> {

@@ -281,3 +281,19 @@ fn rejects_episode_urls_without_provider_episode_id() {
     Err(StreamResolveError::InvalidData(_))
   ));
 }
+
+#[test]
+fn reads_subtitle_language_from_explicit_embed_metadata() {
+  let value = serde_json::json!({
+    "lang": " ES "
+  });
+  assert_eq!(subtitle_language_code(&value).as_deref(), Some("es"));
+}
+
+#[test]
+fn does_not_guess_subtitle_language_from_a_display_label() {
+  let value = serde_json::json!({
+    "label": "English"
+  });
+  assert_eq!(subtitle_language_code(&value), None);
+}

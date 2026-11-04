@@ -59,3 +59,26 @@ fn returns_none_when_no_default_audio_rendition_is_declared() {
 fn rejects_non_playlist_response() {
   assert!(parse_master_playlist("not a playlist", "https://cdn.example/master").is_err());
 }
+
+#[test]
+fn detects_default_audio_and_subtitle_languages_independently() {
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"audio/ja.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",LANGUAGE=\"es\",DEFAULT=YES,URI=\"subs/es.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n360.m3u8\n";
+  let pair = parse_default_language_pair(playlist, "https://cdn.example/master.m3u8").unwrap();
+  assert_eq!(pair.audio.as_deref(), Some("ja"));
+  assert_eq!(pair.subtitles.as_deref(), Some("es"));
+  assert_eq!(pair.label(), "ja/es");
+}
+
+#[test]
+fn ignores_non_default_renditions_when_detecting_languages() {
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",LANGUAGE=\"ja\",DEFAULT=NO,URI=\"audio/ja.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"subs/en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n360.m3u8\n";
+  let pair = parse_default_language_pair(playlist, "https://cdn.example/master.m3u8").unwrap();
+  assert_eq!(pair.audio, None);
+  assert_eq!(pair.subtitles, None);
+  assert_eq!(pair.label(), "?/?");
+}
+
+#[test]
+fn rejects_language_detection_from_non_playlist_responses() {
+  assert!(parse_default_language_pair("not a playlist", "https://cdn.example/master.m3u8").is_err());
+}

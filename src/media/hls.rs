@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use crate::domain::stream::Stream;
+use crate::domain::{language::LanguagePair, stream::Stream};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HlsVariant {
@@ -75,6 +75,31 @@ pub fn parse_default_audio_url(body: &str, master_url: &str) -> Result<Option<St
     return resolve_url(master_url, uri).map(Some);
   }
   Ok(None)
+}
+
+pub fn parse_default_language_pair(
+  body: &str,
+  _master_url: &str,
+) -> Result<LanguagePair, HlsError> {
+  if !body.lines().any(|line| line.trim() == "#EXTM3U") {
+    return Err(HlsError("response is not an HLS playlist".into()));
+  }
+
+  let audio = default_track_language(body, "AUDIO");
+  let subtitles = default_track_language(body, "SUBTITLES");
+  Ok(LanguagePair::new(audio.as_deref(), subtitles.as_deref()))
+}
+
+fn default_track_language(body: &str, track_type: &str) -> Option<String> {
+  body.lines()
+    .map(str::trim)
+    .filter_map(|line| line.strip_prefix("#EXT-X-MEDIA:"))
+    .find_map(|attributes| {
+      (attribute(attributes, "TYPE") == Some(track_type)
+        && attribute(attributes, "DEFAULT") == Some("YES"))
+      .then(|| attribute(attributes, "LANGUAGE").map(str::to_owned))
+      .flatten()
+    })
 }
 
 pub fn select_quality<'a>(variants: &'a [HlsVariant], requested: &str) -> Option<&'a HlsVariant> {
