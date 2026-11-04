@@ -17,3 +17,17 @@ fn keeps_each_unknown_language_independent() {
   assert_eq!(subtitles_unknown.label(), "ja/?");
   assert_eq!(both_unknown.label(), "?/?");
 }
+
+#[test]
+fn normalizes_language_names_and_region_codes() {
+  assert_eq!(LanguagePair::new(Some("English"), Some("Español")).label(), "en/es");
+  assert_eq!(LanguagePair::new(Some("JA-jp"), Some("es-419")).label(), "ja-jp/es-419");
+}
+
+#[test]
+fn treats_unknown_language_names_as_unknown_codes_without_guessing() {
+  assert_eq!(
+    LanguagePair::new(Some("unknown language"), Some("")).label(),
+    "unknown language/?"
+  );
+}

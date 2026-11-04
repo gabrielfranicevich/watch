@@ -26,10 +26,25 @@ impl LanguagePair {
 }
 
 fn normalize_code(code: Option<&str>) -> Option<String> {
-  code
+  let code = code
     .map(str::trim)
-    .filter(|code| !code.is_empty())
-    .map(str::to_ascii_lowercase)
+    .filter(|code| !code.is_empty())?;
+
+  let normalized = match code.to_ascii_lowercase().as_str() {
+    "english" | "ingles" | "inglés" => "en",
+    "spanish" | "espanol" | "español" => "es",
+    "japanese" | "japonés" | "japones" => "ja",
+    "chinese" | "chino" => "zh",
+    "korean" | "coreano" => "ko",
+    "french" | "frances" | "francés" => "fr",
+    "german" | "aleman" | "alemán" => "de",
+    "portuguese" | "portugues" | "portugués" => "pt",
+    "italian" | "italiano" => "it",
+    "russian" | "ruso" => "ru",
+    _ => return Some(code.to_ascii_lowercase()),
+  };
+
+  Some(normalized.to_owned())
 }
 
 #[cfg(test)]
