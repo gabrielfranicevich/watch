@@ -58,6 +58,7 @@ fn source_quality_rank_uses_highest_available_resolution() {
         value: "720p".to_owned(),
       },
     ],
+    language_pair: ani_cli::domain::language::LanguagePair::new(None, None),
   };
   assert_eq!(media_quality_rank(&media), 1080);
 }
