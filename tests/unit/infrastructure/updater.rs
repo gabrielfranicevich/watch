@@ -84,32 +84,74 @@ fn changed_remote_revision_requires_installation() {
   assert!(needs_install(Some("old-commit"), "new-commit"));
 }
 
-#[test]
-fn recognizes_persistent_git_checkouts() {
-  let root = std::env::temp_dir().join(format!(
+fn temporary_repository_path() -> PathBuf {
+  std::env::temp_dir().join(format!(
     "watch-updater-test-{}-{}",
     std::process::id(),
     SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .unwrap_or_default()
       .as_nanos()
-  ));
-  std::fs::create_dir_all(root.join(".git")).unwrap();
+  ))
+}
+
+fn create_git_checkout(root: &Path) {
+  std::fs::create_dir_all(root).unwrap();
+  let init = Command::new("git")
+    .args(["init", "--quiet"])
+    .current_dir(root)
+    .status()
+    .unwrap();
+  assert!(init.success());
+
+  for (key, value) in [
+    ("user.name", "Watch Tests"),
+    ("user.email", "watch-tests@example.invalid"),
+  ] {
+    let config = Command::new("git")
+      .args(["config", key, value])
+      .current_dir(root)
+      .status()
+      .unwrap();
+    assert!(config.success());
+  }
+
+  std::fs::write(root.join("README.md"), "fixture\n").unwrap();
+  for arguments in [
+    vec!["add", "README.md"],
+    vec!["commit", "--quiet", "-m", "initial"],
+    vec!["remote", "add", "origin", "https://github.com/gabrielfranicevich/watch"],
+  ] {
+    let output = Command::new("git")
+      .args(arguments)
+      .current_dir(root)
+      .status()
+      .unwrap();
+    assert!(output.success());
+  }
+}
+
+#[test]
+fn recognizes_persistent_git_checkouts() {
+  let root = temporary_repository_path();
+  create_git_checkout(&root);
   assert!(is_git_checkout(&root));
   std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn rejects_cache_directories_without_git_metadata() {
-  let root = std::env::temp_dir().join(format!(
-    "watch-updater-test-{}-{}",
-    std::process::id(),
-    SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .unwrap_or_default()
-      .as_nanos()
-  ));
+  let root = temporary_repository_path();
   std::fs::create_dir_all(&root).unwrap();
+  assert!(!is_git_checkout(&root));
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn rejects_git_directories_with_an_invalid_head() {
+  let root = temporary_repository_path();
+  create_git_checkout(&root);
+  std::fs::write(root.join(".git").join("HEAD"), "ref: refs/heads/missing\n").unwrap();
   assert!(!is_git_checkout(&root));
   std::fs::remove_dir_all(root).unwrap();
 }

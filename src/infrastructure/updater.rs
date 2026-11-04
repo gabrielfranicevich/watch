@@ -79,7 +79,11 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
 }
 
 fn is_git_checkout(repository_dir: &Path) -> bool {
-  repository_dir.join(".git").is_dir()
+  repository_dir.join(".git").exists()
+    && git_output(repository_dir, &["rev-parse", "--is-inside-work-tree"])
+      .is_ok_and(|output| output.trim() == "true")
+    && git_output(repository_dir, &["rev-parse", "--verify", "HEAD^{commit}"]).is_ok()
+    && git_output(repository_dir, &["remote", "get-url", "origin"]).is_ok()
 }
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {
