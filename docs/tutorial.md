@@ -63,7 +63,7 @@ watch --language english "Dragon Ball"
 watch --language ESPAÑOL "Dragon Ball"
 ~~~
 
-This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown; provider defaults are not a live inspection of the selected stream. Use `--dub` to request dubbed audio. See [provider support](providers.md) for source-specific language metadata and limitations.
+This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown. Before playback, Watch prints the pair resolved from explicit HLS default-track or embed/HTML subtitle metadata when available; this does not enumerate every alternate track. Use `--dub` to request dubbed audio. See [provider support](providers.md) for source-specific language metadata and limitations.
 
 Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
 

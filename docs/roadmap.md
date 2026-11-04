@@ -25,12 +25,13 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 
 - [x] Replace unconditional `cargo install --force` updates with a persistent Git checkout and Cargo target cache; skip a revision only after its installation succeeds.
 - [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
+- [x] Detect default audio/subtitle language tags from HLS master manifests and explicit HiAnime/HTML subtitle metadata; print the resolved pair before playback.
 - [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
 
 ## Remaining work
 
 - Keep updater and documented Git installs on the committed `Cargo.lock` with `--locked`. Regenerate the lockfile deliberately when dependencies change, then rerun the complete CI quality matrix before merging.
-- Improve live audio/subtitle track detection from resolved manifests and player metadata; current provider defaults and site badges do not identify every selected stream's actual tracks.
+- Extend track detection to non-HLS manifests and runtime player track changes; current HLS support reports default renditions, not every alternate track or later player selection.
 - Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.

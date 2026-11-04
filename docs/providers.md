@@ -23,11 +23,13 @@ Provider markup, hostnames, search routes, and player embeds can change without 
 
 A result label uses the form audio/subtitles, for example ja/en or ja/es. Each side is independent. ? means Watch does not have reliable information for that field.
 
-The existing anime providers currently have configured defaults based on their provider category. These defaults are useful catalog labels, but they are not a live probe of the exact tracks selected from the player. Gnula exposes explicit LAT and CAS audio labels; its generic SUB badge does not identify a subtitle language. The newer movie/TV providers currently remain ?/? unless a provider-specific parser supplies explicit metadata.
+The existing anime providers currently have configured defaults based on their provider category. These defaults are useful catalog labels, but they are not a live probe of the exact tracks selected from the player. Gnula exposes explicit LAT and CAS audio labels; its generic SUB badge does not identify a subtitle language. For resolved episodes, Watch also reads the default AUDIO and SUBTITLES renditions declared by an HLS master manifest. It can use an explicit language field from the HiAnime embed subtitle metadata or the srclang attribute on an HTML track. The resolved pair is printed before playback.
+
+A resolved HLS pair describes the manifest's default tracks, not necessarily every alternate track or a track later changed inside the player. If a manifest or embed page has no explicit language metadata, that field remains ?. The newer movie/TV providers therefore remain ?/? until their media page or manifest exposes track language information.
 
 --language continues to filter the catalog category (English or Spanish); it does not select audio or subtitle tracks. --dub requests dubbed playback where the provider supports it.
 
-Improving track-level detection requires reliable metadata from the resolved manifest, embed page, or player track list. The client must not infer a language solely from a generic SUB badge, the catalog category, or the presence of a subtitle file.
+The client must not infer a language solely from a generic SUB badge, the catalog category, a display label such as English, or the presence of a subtitle file.
 
 ## Resolver and access boundaries
 
