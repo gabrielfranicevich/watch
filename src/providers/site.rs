@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt, thread, time::Duration};
 
 use reqwest::{Url, blocking::Client};
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 
 use super::hianime_stream::{
   HiAnimeStreamResolver, QualityOption, ResolvedMedia, StreamResolveError,
@@ -44,7 +44,7 @@ pub enum ProviderId {
 }
 
 impl ProviderId {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 11] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -642,7 +642,7 @@ fn provider_language_pair_from_anchor(
         evidence.push_str(value);
       }
     }
-    current = element.parent();
+    current = element.parent().and_then(ElementRef::wrap);
   }
 
   let upper = evidence.to_ascii_uppercase();
