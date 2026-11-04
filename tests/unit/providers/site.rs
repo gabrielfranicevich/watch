@@ -22,6 +22,7 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::PelisPedia.language(), Language::Spanish);
   assert_eq!(ProviderId::PelisPedia.language_pair(), None);
   assert_eq!(ProviderId::ALL.len(), 12);
+  assert!(ProviderId::ALL.contains(&ProviderId::PelisPedia));
   assert_eq!(ProviderId::ACTIVE.len(), 7);
   assert_eq!(
     ProviderId::ACTIVE,

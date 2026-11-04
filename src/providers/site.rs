@@ -57,6 +57,7 @@ impl ProviderId {
     Self::AnimeFenix,
     Self::JkAnime,
     Self::Gnula,
+    Self::PelisPedia,
   ];
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
