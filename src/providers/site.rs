@@ -44,10 +44,11 @@ pub enum ProviderId {
   PelisPedia,
   PelisPlus,
   HDToday,
+  Pelis7,
 }
 
 impl ProviderId {
-  pub const ALL: [Self; 14] = [
+  pub const ALL: [Self; 15] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -62,11 +63,12 @@ impl ProviderId {
     Self::PelisPedia,
     Self::PelisPlus,
     Self::HDToday,
+    Self::Pelis7,
   ];
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
   /// so history entries can still be read without querying unavailable sites.
-  pub const ACTIVE: [Self; 9] = [
+  pub const ACTIVE: [Self; 10] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -76,6 +78,7 @@ impl ProviderId {
     Self::PelisPedia,
     Self::PelisPlus,
     Self::HDToday,
+    Self::Pelis7,
   ];
 
   pub fn name(self) -> &'static str {
@@ -94,6 +97,7 @@ impl ProviderId {
       Self::PelisPedia => "PelisPedia",
       Self::PelisPlus => "PelisPlus",
       Self::HDToday => "HDToday",
+      Self::Pelis7 => "Pelis7",
     }
   }
 
@@ -102,7 +106,7 @@ impl ProviderId {
       Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai | Self::HDToday => {
         Language::English
       }
-      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia | Self::PelisPlus => {
+      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia | Self::PelisPlus | Self::Pelis7 => {
         Language::Spanish
       }
     }
@@ -116,7 +120,7 @@ impl ProviderId {
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
         Some(LanguagePair::known("ja", "es"))
       }
-      Self::Gnula | Self::PelisPedia | Self::PelisPlus | Self::HDToday => None,
+      Self::Gnula | Self::PelisPedia | Self::PelisPlus | Self::HDToday | Self::Pelis7 => None,
     }
   }
 
@@ -136,6 +140,7 @@ impl ProviderId {
       Self::PelisPedia => "https://pelispedia.mov",
       Self::PelisPlus => "https://pelisplusshd.com",
       Self::HDToday => "https://hdtoday24.at",
+      Self::Pelis7 => "https://pelis7.com",
     }
   }
 
@@ -155,6 +160,7 @@ impl ProviderId {
       Self::PelisPedia => "pelispedia",
       Self::PelisPlus => "pelisplus",
       Self::HDToday => "hdtoday24",
+      Self::Pelis7 => "pelis7",
     }
   }
 
@@ -168,6 +174,7 @@ impl ProviderId {
       Self::PelisPedia => url.path().starts_with("/pelicula/"),
       Self::PelisPlus => url.path().starts_with("/peliculas/"),
       Self::HDToday => url.path().starts_with("/movie/"),
+      Self::Pelis7 => url.path().starts_with("/pelicula/") || url.path().starts_with("/peliculas/"),
       _ => false,
     }
   }
@@ -299,6 +306,28 @@ impl ProviderId {
           slug: false,
         },
       ],
+      Self::Pelis7 => &[
+        SearchRoute {
+          path: "/",
+          key: Some("s"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/buscar",
+          key: Some("q"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/search",
+          key: Some("q"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/buscar",
+          key: None,
+          slug: true,
+        },
+      ],
       Self::HDToday => &[
         SearchRoute {
           path: "/home",
@@ -419,6 +448,7 @@ impl ProviderId {
       Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
       Self::PelisPlus => path.starts_with("/peliculas/") || path.starts_with("/serie/"),
       Self::HDToday => path.starts_with("/movie/") || path.starts_with("/tv/"),
+      Self::Pelis7 => path.starts_with("/pelicula/") || path.starts_with("/peliculas/") || path.starts_with("/serie/") || path.starts_with("/series/"),
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -1549,6 +1579,16 @@ fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> V
           || label.contains("player"))
         .then(|| anchor.value().attr("href").map(str::to_owned))
         .flatten()
+      }));
+    }
+  }
+  if provider == ProviderId::Pelis7 {
+    if let Ok(selector) = Selector::parse("a[href]") {
+      links.extend(document.select(&selector).filter_map(|anchor| {
+        let label = normalize_whitespace(&anchor.text().collect::<String>()).to_ascii_lowercase();
+        (label == "watch now" || label == "ver película" || label == "ver pelicula")
+          .then(|| anchor.value().attr("href").map(str::to_owned))
+          .flatten()
       }));
     }
   }

@@ -25,11 +25,14 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::PelisPlus.language_pair(), None);
   assert_eq!(ProviderId::HDToday.language(), Language::English);
   assert_eq!(ProviderId::HDToday.language_pair(), None);
-  assert_eq!(ProviderId::ALL.len(), 14);
+  assert_eq!(ProviderId::Pelis7.language(), Language::Spanish);
+  assert_eq!(ProviderId::Pelis7.language_pair(), None);
+  assert_eq!(ProviderId::ALL.len(), 15);
+  assert!(ProviderId::ALL.contains(&ProviderId::Pelis7));
   assert!(ProviderId::ALL.contains(&ProviderId::HDToday));
   assert!(ProviderId::ALL.contains(&ProviderId::PelisPlus));
   assert!(ProviderId::ALL.contains(&ProviderId::PelisPedia));
-  assert_eq!(ProviderId::ACTIVE.len(), 9);
+  assert_eq!(ProviderId::ACTIVE.len(), 10);
   assert_eq!(
     ProviderId::ACTIVE,
     [
@@ -42,6 +45,7 @@ fn provider_metadata_matches_requested_language_groups() {
       ProviderId::PelisPedia,
       ProviderId::PelisPlus,
       ProviderId::HDToday,
+      ProviderId::Pelis7,
     ]
   );
 }
@@ -656,4 +660,40 @@ fn hdtoday_movie_details_fall_back_to_a_single_movie_entry() {
   )
   .unwrap();
   assert!(ProviderId::HDToday.is_movie_path(&url));
+}
+
+#[test]
+fn pelis7_uses_fallback_detail_path_patterns_without_assuming_audio_or_subtitles() {
+  let movie = Url::parse("https://pelis7.com/peliculas/apocalipsis-z/").unwrap();
+  let show = Url::parse("https://pelis7.com/series/visionquest/").unwrap();
+  assert!(ProviderId::Pelis7.is_detail_path(&movie));
+  assert!(ProviderId::Pelis7.is_detail_path(&show));
+  assert!(ProviderId::Pelis7.is_movie_path(&movie));
+  assert!(!ProviderId::Pelis7.is_movie_path(&show));
+  assert_eq!(ProviderId::Pelis7.language_pair(), None);
+}
+
+#[test]
+fn pelis7_search_parser_accepts_fallback_movie_and_series_patterns() {
+  let html = r#"
+    <a href="/peliculas/apocalipsis-z/" title="Apocalipsis Z">Apocalipsis Z</a>
+    <a href="/series/visionquest/" title="VisionQuest">VisionQuest</a>
+  "#;
+  let results = parse_search_results(
+    html,
+    "https://pelis7.com/",
+    ProviderId::Pelis7,
+    "Apocalipsis Z",
+  );
+  assert_eq!(results.len(), 1);
+  assert_eq!(results[0].title, "Apocalipsis Z");
+  assert_eq!(results[0].language_pair, None);
+}
+
+#[test]
+fn pelis7_search_routes_include_common_search_form_fallbacks() {
+  let routes = ProviderId::Pelis7.search_routes();
+  assert!(routes.iter().any(|route| route.path == "/" && route.key == Some("s")));
+  assert!(routes.iter().any(|route| route.path == "/buscar" && route.key == Some("q")));
+  assert!(routes.iter().any(|route| route.path == "/search" && route.key == Some("q")));
 }
