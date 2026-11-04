@@ -139,7 +139,16 @@ fn git_output(repository: &Path, arguments: &[&str]) -> Result<String, Box<dyn s
   let mut command = Command::new("git");
   command.arg("-C").arg(repository).args(arguments);
   let output = command.output()?;
-  ensure_command_success(output.clone(), "git")?;
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let detail = if stderr.trim().is_empty() {
+      stdout.trim()
+    } else {
+      stderr.trim()
+    };
+    return Err(format!("git failed: {detail}").into());
+  }
   Ok(String::from_utf8(output.stdout)?)
 }
 
