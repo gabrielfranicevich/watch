@@ -23,10 +23,13 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::PelisPedia.language_pair(), None);
   assert_eq!(ProviderId::PelisPlus.language(), Language::Spanish);
   assert_eq!(ProviderId::PelisPlus.language_pair(), None);
-  assert_eq!(ProviderId::ALL.len(), 13);
+  assert_eq!(ProviderId::HDToday.language(), Language::English);
+  assert_eq!(ProviderId::HDToday.language_pair(), None);
+  assert_eq!(ProviderId::ALL.len(), 14);
+  assert!(ProviderId::ALL.contains(&ProviderId::HDToday));
   assert!(ProviderId::ALL.contains(&ProviderId::PelisPlus));
   assert!(ProviderId::ALL.contains(&ProviderId::PelisPedia));
-  assert_eq!(ProviderId::ACTIVE.len(), 8);
+  assert_eq!(ProviderId::ACTIVE.len(), 9);
   assert_eq!(
     ProviderId::ACTIVE,
     [
@@ -38,6 +41,7 @@ fn provider_metadata_matches_requested_language_groups() {
       ProviderId::Gnula,
       ProviderId::PelisPedia,
       ProviderId::PelisPlus,
+      ProviderId::HDToday,
     ]
   );
 }
@@ -596,4 +600,60 @@ fn pelisplus_watch_now_link_is_included_as_a_player_candidate() {
   );
   let links = provider_player_links(&document, "", ProviderId::PelisPlus);
   assert_eq!(links, vec!["/serie/213375/visionquest/ver/"]);
+}
+
+#[test]
+fn hdtoday_matches_observed_movie_and_tv_detail_paths() {
+  let movie = Url::parse(
+    "https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6",
+  )
+  .unwrap();
+  let show = Url::parse("https://hdtoday24.at/tv/deep-waters-oneomCeeW6XW").unwrap();
+  let player = Url::parse(
+    "https://hdtoday24.at/watch-movie/apocalypse-z-new-world-pEk4yidyema6",
+  )
+  .unwrap();
+  assert!(ProviderId::HDToday.is_detail_path(&movie));
+  assert!(ProviderId::HDToday.is_detail_path(&show));
+  assert!(!ProviderId::HDToday.is_detail_path(&player));
+  assert!(ProviderId::HDToday.is_movie_path(&movie));
+  assert!(!ProviderId::HDToday.is_movie_path(&show));
+}
+
+#[test]
+fn hdtoday_search_parser_accepts_movie_and_tv_cards() {
+  let html = r#"
+    <a href="/movie/apocalypse-z-new-world-pEk4yidyema6" title="Apocalypse Z: New World">Apocalypse Z: New World</a>
+    <a href="/tv/deep-waters-oneomCeeW6XW" title="Deep Waters">Deep Waters</a>
+  "#;
+  let results = parse_search_results(
+    html,
+    "https://hdtoday24.at/home",
+    ProviderId::HDToday,
+    "Apocalypse Z",
+  );
+  assert_eq!(results.len(), 1);
+  assert_eq!(results[0].title, "Apocalypse Z: New World");
+  assert_eq!(results[0].language_pair, None);
+}
+
+#[test]
+fn hdtoday_watch_now_link_is_followed_to_the_player_page() {
+  let document = Html::parse_document(
+    r#"<a href="/watch-movie/apocalypse-z-new-world-pEk4yidyema6">Watch now</a>"#,
+  );
+  let links = provider_player_links(&document, "", ProviderId::HDToday);
+  assert_eq!(
+    links,
+    vec!["/watch-movie/apocalypse-z-new-world-pEk4yidyema6"]
+  );
+}
+
+#[test]
+fn hdtoday_movie_details_fall_back_to_a_single_movie_entry() {
+  let url = Url::parse(
+    "https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6",
+  )
+  .unwrap();
+  assert!(ProviderId::HDToday.is_movie_path(&url));
 }

@@ -43,10 +43,11 @@ pub enum ProviderId {
   Gnula,
   PelisPedia,
   PelisPlus,
+  HDToday,
 }
 
 impl ProviderId {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 14] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -60,11 +61,12 @@ impl ProviderId {
     Self::Gnula,
     Self::PelisPedia,
     Self::PelisPlus,
+    Self::HDToday,
   ];
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
   /// so history entries can still be read without querying unavailable sites.
-  pub const ACTIVE: [Self; 8] = [
+  pub const ACTIVE: [Self; 9] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
@@ -73,6 +75,7 @@ impl ProviderId {
     Self::Gnula,
     Self::PelisPedia,
     Self::PelisPlus,
+    Self::HDToday,
   ];
 
   pub fn name(self) -> &'static str {
@@ -90,12 +93,13 @@ impl ProviderId {
       Self::Gnula => "Gnula",
       Self::PelisPedia => "PelisPedia",
       Self::PelisPlus => "PelisPlus",
+      Self::HDToday => "HDToday",
     }
   }
 
   pub fn language(self) -> Language {
     match self {
-      Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai => {
+      Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai | Self::HDToday => {
         Language::English
       }
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia | Self::PelisPlus => {
@@ -112,7 +116,7 @@ impl ProviderId {
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
         Some(LanguagePair::known("ja", "es"))
       }
-      Self::Gnula | Self::PelisPedia | Self::PelisPlus => None,
+      Self::Gnula | Self::PelisPedia | Self::PelisPlus | Self::HDToday => None,
     }
   }
 
@@ -131,6 +135,7 @@ impl ProviderId {
       Self::Gnula => "https://ver.gnula.one",
       Self::PelisPedia => "https://pelispedia.mov",
       Self::PelisPlus => "https://pelisplusshd.com",
+      Self::HDToday => "https://hdtoday24.at",
     }
   }
 
@@ -149,6 +154,7 @@ impl ProviderId {
       Self::Gnula => "gnula",
       Self::PelisPedia => "pelispedia",
       Self::PelisPlus => "pelisplus",
+      Self::HDToday => "hdtoday24",
     }
   }
 
@@ -161,6 +167,7 @@ impl ProviderId {
       Self::Gnula => url.path().starts_with("/movies/"),
       Self::PelisPedia => url.path().starts_with("/pelicula/"),
       Self::PelisPlus => url.path().starts_with("/peliculas/"),
+      Self::HDToday => url.path().starts_with("/movie/"),
       _ => false,
     }
   }
@@ -292,6 +299,18 @@ impl ProviderId {
           slug: false,
         },
       ],
+      Self::HDToday => &[
+        SearchRoute {
+          path: "/home",
+          key: None,
+          slug: false,
+        },
+        SearchRoute {
+          path: "/movie",
+          key: None,
+          slug: false,
+        },
+      ],
       Self::PelisPlus => &[
         SearchRoute {
           path: "/inicio/",
@@ -399,6 +418,7 @@ impl ProviderId {
       Self::Gnula => path.starts_with("/movies/") || path.starts_with("/series/"),
       Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
       Self::PelisPlus => path.starts_with("/peliculas/") || path.starts_with("/serie/"),
+      Self::HDToday => path.starts_with("/movie/") || path.starts_with("/tv/"),
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -1529,6 +1549,16 @@ fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> V
           || label.contains("player"))
         .then(|| anchor.value().attr("href").map(str::to_owned))
         .flatten()
+      }));
+    }
+  }
+  if provider == ProviderId::HDToday {
+    if let Ok(selector) = Selector::parse("a[href]") {
+      links.extend(document.select(&selector).filter_map(|anchor| {
+        let label = normalize_whitespace(&anchor.text().collect::<String>()).to_ascii_lowercase();
+        (label == "watch now")
+          .then(|| anchor.value().attr("href").map(str::to_owned))
+          .flatten()
       }));
     }
   }
