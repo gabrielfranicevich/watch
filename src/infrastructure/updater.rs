@@ -16,7 +16,7 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     .ok_or("cannot determine updater cache directory; set HOME or XDG_CACHE_HOME")?;
   let repository_dir = cache_root.join("repository");
   let target_dir = cache_root.join("target");
-  let checkout_created = !repository_dir.exists();
+  let installed_revision_path = cache_root.join("installed-revision");
   std::fs::create_dir_all(&cache_root)?;
 
   if repository_dir.exists() {
@@ -37,7 +37,8 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
 
   let current = git_output(&repository_dir, &["rev-parse", "HEAD"])?;
   let available = git_output(&repository_dir, &["rev-parse", "FETCH_HEAD"])?;
-  if !needs_install(checkout_created, current.trim(), available.trim()) {
+  let installed_revision = std::fs::read_to_string(&installed_revision_path).ok();
+  if !needs_install(installed_revision.as_deref().map(str::trim), available.trim()) {
     eprintln!("watch is already up to date ({})", &current.trim()[..12]);
     return Ok(());
   }
@@ -68,12 +69,13 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     }
   })?;
   ensure_command_success(output, "cargo install")?;
+  std::fs::write(&installed_revision_path, format!("{}\n", available.trim()))?;
   eprintln!("watch update completed.");
   Ok(())
 }
 
-fn needs_install(checkout_created: bool, current: &str, available: &str) -> bool {
-  checkout_created || current != available
+fn needs_install(installed: Option<&str>, available: &str) -> bool {
+  installed != Some(available)
 }
 
 fn cargo_install_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
