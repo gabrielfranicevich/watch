@@ -2,7 +2,7 @@
 
 ## Current status
 
-The stable installation target is `main`; Android stabilization is being developed on `android-support`. This repository is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli), whose original shell project remains available upstream.
+The active development branch is `develop`; `main` remains the stable installation target. Android ARM64 CLI compatibility remains part of the CI matrix. This repository is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli), whose original shell project remains available upstream.
 
 The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation, Clippy, tests, and CLI help/version smoke tests. It also cross-checks the Android ARM64 target. Provider regression tests use local fixtures rather than relying on the live service. These checks validate repository code, not the continued availability of external websites or media players.
 
@@ -21,9 +21,17 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [ ] Add native Android playback with stream headers, subtitles, and separate audio where supported.
 - [ ] Add Android app and bridge CI, then validate installation and playback on a physical device.
 
+## Completed development milestones
+
+- [x] Replace unconditional `cargo install --force` updates with a persistent Git checkout and Cargo target cache; skip a revision only after its installation succeeds.
+- [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
+- [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
+
 ## Remaining work
 
 - Keep updater and documented Git installs on the committed `Cargo.lock` with `--locked`. Regenerate the lockfile deliberately when dependencies change, then rerun the complete CI quality matrix before merging.
+- Improve live audio/subtitle track detection from resolved manifests and player metadata; current provider defaults and site badges do not identify every selected stream's actual tracks.
+- Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
 - Keep the README, tutorial, man page, and CLI help synchronized as options change.

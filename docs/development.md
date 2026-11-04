@@ -1,6 +1,6 @@
 # Development guide
 
-This guide describes the Rust implementation and Android stabilization workflow. `main` is the stable installation target; `android-support` is the Android stabilization branch. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); see the README for project credit.
+This guide describes the Rust implementation and Android stabilization workflow. `develop` is the active development branch; `main` is the stable installation target. Android-specific CI continues to validate the ARM64 CLI target. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); see the README for project credit.
 
 ## Build and test
 
@@ -22,8 +22,8 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 | `src/cli/` | Argument parsing, interactive menus, and selection. |
 | `src/application.rs` | Source selection, episode-range rules, and cross-cutting use-case policies. |
 | `src/application_services.rs` | Reusable search, episode, stream-resolution, and history use cases intended for multiple frontends. |
-| `src/domain/` | Anime, episode, stream, subtitle, and history types. |
-| `src/providers/` | Parallel searches across English and Spanish sites, title/language grouping, episode extraction, stream resolvers, and AnimeSchedule requests. |
+| `src/domain/` | Anime, episode, stream, subtitle, history, and audio/subtitle language-pair types. |
+| `src/providers/` | Parallel searches across anime and movie/TV sites, title/audio-subtitle grouping, provider-specific episode extraction, stream resolvers, and AnimeSchedule requests. |
 | `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
 | `src/main.rs` | CLI orchestration and end-to-end application flow; search, episode retrieval, and stream resolution use the shared service API. |
@@ -31,7 +31,7 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 
 ## Provider changes
 
-Provider structure is external and can change without notice. Before changing parsing behavior:
+Provider structure is external and can change without notice. Consult [provider support](providers.md) for the current enabled source list, the meaning of language-pair values, and known limitations. Before changing parsing behavior:
 
 1. Preserve a small response fixture for the case being handled.
 2. Add or update a parser test that uses the fixture without network access.

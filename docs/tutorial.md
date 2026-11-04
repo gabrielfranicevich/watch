@@ -1,6 +1,6 @@
 # watch tutorial
 
-This tutorial covers installation, searching, playback, downloads, and watch history. `main` is the stable installation target; `android-support` contains ongoing Android work.
+This tutorial covers installation, searching, playback, downloads, and watch history. `develop` is the active development branch; `main` is the stable installation target.
 
 ## 1. Install watch
 
@@ -63,7 +63,7 @@ watch --language english "Dragon Ball"
 watch --language ESPAÑOL "Dragon Ball"
 ~~~
 
-This filters the catalog category. Each result shows its detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means the provider did not expose reliable language metadata. Use `--dub` to request dubbed audio.
+This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown; provider defaults are not a live inspection of the selected stream. Use `--dub` to request dubbed audio. See [provider support](providers.md) for source-specific language metadata and limitations.
 
 Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
 
@@ -157,7 +157,7 @@ The setting selects a driver; it cannot add protocol support to the terminal. If
 | `watch --continue` | Resume from history. |
 | `watch --nextep-countdown "Frieren"` | Show the next-episode countdown; depends on AnimeSchedule data. |
 | `watch --logview` | View available application logs. |
-| `watch --update` | Update a Cargo installation; requires Cargo and network access. |
+| `watch --update` | Update a Cargo installation from a Git branch; requires Cargo and network access. The updater reuses its cached checkout and Cargo build artifacts. |
 
 ## Troubleshooting
 

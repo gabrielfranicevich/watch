@@ -2,13 +2,13 @@
 
 Search anime, select episodes, and stream or download them from your terminal.
 
-[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=android-support)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
+[![Rust CI](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml/badge.svg?branch=develop)](https://github.com/gabrielfranicevich/watch/actions/workflows/rust.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 ![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange)
 
-watch searches English and Spanish anime providers, groups duplicate titles by language, and hands playable media or downloads to tools installed on your machine. It does not host video files.
+watch searches anime, movie, and TV catalogs across enabled third-party providers, groups duplicate titles by audio/subtitle language pair, and hands resolved media or downloads to tools installed on your machine. It does not host video files.
 
-> **Project status:** `android-support` is the current Android stabilization branch; `main` remains the stable installation target. Prebuilt binaries and updated third-party packages are not published yet.
+> **Project status:** `develop` is the active development branch; `main` remains the stable installation target. Prebuilt binaries and updated third-party packages are not published yet.
 
 Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). This project builds on that original work; credit for the original project belongs to its author and contributors.
 
@@ -92,14 +92,14 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 
 ## What it supports
 
-- Parallel title search across the currently enabled providers: HiAnime, Gogoanime, AniWatch, TioAnime, and JKAnime. Provider availability and site support can change.
-- Duplicate titles are grouped by normalized title and audio/subtitle language pair. Choices show pairs such as `(ja/en)` or `(ja/es)`; unknown values remain `?` rather than being guessed, and you can choose the provider after selecting a title.
+- Parallel catalog search across HiAnime, Gogoanime, AniWatch, TioAnime, JKAnime, Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7. The newer movie/TV sources have provider-specific coverage limits; see [provider support](docs/providers.md).
+- Duplicate titles are grouped by normalized title and audio/subtitle language pair. Choices show pairs such as `(ja/en)` or `(ja/es)`; unknown values remain `?` rather than being guessed. Provider-level defaults are not a live probe of every playback track.
 - `--language` filters the provider catalog category. Each result also reports its audio/subtitle pair as `audio/subtitles` (for example, `ja/es`); this pair does not select a dubbed track. `--dub` controls dubbed playback separately.
 - Episode lists combine sources for a title. For each episode, playback tries providers that expose that episode and chooses the stream that best matches `--quality` (the highest available quality by default).
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
 - Downloads using yt-dlp when suitable, FFmpeg fallback, and FFmpeg muxing for separate audio/video streams.
-- Compatible watch history, continuation, log viewing, external menu backends, and a Cargo-based updater.
+- Compatible watch history, continuation, log viewing, external menu backends, and a Cargo-based updater that reuses a cached Git checkout and Cargo build artifacts, skipping installation when the last successfully installed revision is unchanged.
 
 These paths depend on the provider, platform, media player, and external tools. An implemented feature does not guarantee that the live provider or every player will always be available.
 
@@ -158,7 +158,7 @@ Install players and command-line tools with your operating system's package mana
 
 ## Caveats
 
-- Provider markup, stream hosts, search routes, and anti-bot responses can change without notice. Non-HiAnime providers use shared HTML and direct HLS/MP4 extraction; sites with encrypted or custom embedded players may require provider-specific resolver updates. CI does not guarantee live-provider availability.
+- Provider markup, stream hosts, search routes, and anti-bot responses can change without notice. Pelis7 route patterns are unverified; HDToday TV pages currently do not expose a usable episode list; some PelisPlus player pages may require registration. The client does not bypass registration, anti-bot checks, DRM, or access controls. CI does not guarantee live-provider availability.
 - Terminal playback may produce audio without visible frames when the terminal does not support MPV's selected graphics protocol. Use ordinary external playback in that case.
 - The client does not host or own the media it locates. You are responsible for complying with applicable laws and service terms; read the [disclaimer](docs/disclaimer.md).
 
@@ -166,6 +166,7 @@ Install players and command-line tools with your operating system's package mana
 
 - [Android / Termux installation guide](docs/android.md)
 - [Step-by-step tutorial](docs/tutorial.md)
+- [Provider support and language metadata](docs/providers.md)
 - [Development guide](docs/development.md)
 - [Contributing guide](docs/contributing.md)
 - [Rust migration notes](docs/rust-migration.md)

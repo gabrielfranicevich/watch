@@ -1,6 +1,6 @@
 # Rust migration notes
 
-The Rust implementation is developed on `main`. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); the upstream repository maintains the original shell implementation.
+The active development branch is `develop`; `main` remains the stable installation target. Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli); the upstream repository maintains the original shell implementation.
 
 ## Build and run
 
@@ -52,7 +52,7 @@ Downloads use yt-dlp when available for a compatible single media stream and FFm
 
 ## Catalog language
 
-Use `--language english` (also `en`, `ingles`, `inglés`) or `--language spanish` (also `es`, `espanol`, `español`) to filter catalog and history choices. Matching ignores case. This is separate from `--dub`, which selects dubbed audio.
+Use `--language english` (also `en`, `ingles`, `inglés`) or `--language spanish` (also `es`, `espanol`, `español`) to filter catalog and history choices. Matching ignores case. Search results show an `audio/subtitles` pair where configured or detected; unknown fields appear as `?`. Provider defaults are not a live inspection of the selected stream. This is separate from `--dub`, which requests dubbed playback.
 
 ## Known limitations
 
@@ -60,7 +60,7 @@ Use `--language english` (also `en`, `ingles`, `inglés`) or `--language spanish
 - Playback and downloads depend on external programs and platform-specific behavior. Install those tools separately and ensure they are accessible to the process.
 - Inline rendering depends on the selected MPV video output and support for its graphics protocol in the terminal emulator. An available MPV driver does not prove terminal support; if frames do not appear, use regular external playback.
 - The updater invokes Cargo to install from a selected Git branch. It requires Cargo and network access, validates the branch name, and passes arguments directly instead of invoking a shell. Windows may reject replacement of a currently running executable; close the application and retry or reinstall manually.
-- The updater intentionally does not pass `--locked` yet. Before adding that flag to updater or installation instructions, verify locked dependency resolution from a clean checkout with `cargo check --all-targets --locked` and `cargo test --all-targets --locked`. Regenerate `Cargo.lock` only if Cargo reports that it needs an update.
+- The updater stores its Git checkout and `CARGO_TARGET_DIR` in a platform cache directory. Cargo can reuse incremental build artifacts across updates; an unchanged successfully installed revision is a no-op. A revision marker is written only after `cargo install --locked` succeeds, so a failed install is retried on the next update.
 
 ## Related documentation
 
