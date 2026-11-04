@@ -75,6 +75,7 @@ fn revision_comparison_ignores_surrounding_whitespace() {
 
 #[test]
 fn empty_remote_revision_is_never_treated_as_installed() {
+  assert!(needs_install(None, ""));
   assert!(needs_install(Some(""), ""));
   assert!(needs_install(Some("same-commit"), "  "));
 }
