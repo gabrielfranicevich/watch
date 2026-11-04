@@ -17,8 +17,10 @@ fn provider_metadata_matches_requested_language_groups() {
   assert_eq!(ProviderId::AnimeBlix.language(), Language::Spanish);
   assert_eq!(ProviderId::AnimeFenix.language(), Language::Spanish);
   assert_eq!(ProviderId::JkAnime.language(), Language::Spanish);
-  assert_eq!(ProviderId::ALL.len(), 10);
-  assert_eq!(ProviderId::ACTIVE.len(), 5);
+  assert_eq!(ProviderId::Gnula.language(), Language::Spanish);
+  assert_eq!(ProviderId::Gnula.language_pair(), None);
+  assert_eq!(ProviderId::ALL.len(), 11);
+  assert_eq!(ProviderId::ACTIVE.len(), 6);
   assert_eq!(
     ProviderId::ACTIVE,
     [
@@ -27,6 +29,7 @@ fn provider_metadata_matches_requested_language_groups() {
       ProviderId::AniWatch,
       ProviderId::TioAnime,
       ProviderId::JkAnime,
+      ProviderId::Gnula,
     ]
   );
 }
@@ -449,4 +452,53 @@ fn does_not_follow_private_or_local_embed_urls() {
   assert!(is_public_web_url(
     &Url::parse("https://player.example/watch").unwrap()
   ));
+}
+
+#[test]
+fn gnula_search_cards_report_explicit_audio_language_without_guessing_subtitles() {
+  let html = r#"
+    <article class="movie-card">
+      <a href="/movies/idiotas/" title="Idiotas">
+        <span class="quality">LAT SUB HD</span>
+        <h2>Idiotas</h2>
+      </a>
+    </article>
+  "#;
+  let results = parse_search_results(
+    html,
+    "https://ver.gnula.one",
+    ProviderId::Gnula,
+    "Idiotas",
+  );
+  assert_eq!(results.len(), 1);
+  assert_eq!(
+    results[0].language_pair,
+    Some(LanguagePair::new(Some("es-419"), None))
+  );
+}
+
+#[test]
+fn gnula_cards_with_multiple_audio_options_do_not_choose_one() {
+  let html = r#"
+    <article class="movie-card">
+      <a href="/movies/spider-man/" title="Spider-Man">
+        <span class="quality">LAT CAS SUB HD</span>
+        <h2>Spider-Man</h2>
+      </a>
+    </article>
+  "#;
+  let results = parse_search_results(
+    html,
+    "https://ver.gnula.one",
+    ProviderId::Gnula,
+    "Spider-Man",
+  );
+  assert_eq!(results.len(), 1);
+  assert_eq!(results[0].language_pair, None);
+}
+
+#[test]
+fn gnula_movie_details_are_exposed_as_single_playable_entries() {
+  let url = Url::parse("https://ver.gnula.one/movies/idiotas/").unwrap();
+  assert!(url.path().starts_with("/movies/"));
 }

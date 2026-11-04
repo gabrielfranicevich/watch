@@ -40,6 +40,7 @@ pub enum ProviderId {
   AnimeBlix,
   AnimeFenix,
   JkAnime,
+  Gnula,
 }
 
 impl ProviderId {
@@ -54,16 +55,18 @@ impl ProviderId {
     Self::AnimeBlix,
     Self::AnimeFenix,
     Self::JkAnime,
+    Self::Gnula,
   ];
 
   /// Providers currently enabled for search. Legacy providers remain in `ALL`
   /// so history entries can still be read without querying unavailable sites.
-  pub const ACTIVE: [Self; 5] = [
+  pub const ACTIVE: [Self; 6] = [
     Self::HiAnime,
     Self::GoGoAnime,
     Self::AniWatch,
     Self::TioAnime,
     Self::JkAnime,
+    Self::Gnula,
   ];
 
   pub fn name(self) -> &'static str {
@@ -78,6 +81,7 @@ impl ProviderId {
       Self::AnimeBlix => "Animeblix",
       Self::AnimeFenix => "AnimeFenix",
       Self::JkAnime => "JKAnime",
+      Self::Gnula => "Gnula",
     }
   }
 
@@ -86,16 +90,21 @@ impl ProviderId {
       Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai => {
         Language::English
       }
-      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
+      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula => {
         Language::Spanish
       }
     }
   }
 
   pub fn language_pair(self) -> Option<LanguagePair> {
-    match self.language() {
-      Language::English => Some(LanguagePair::known("ja", "en")),
-      Language::Spanish => Some(LanguagePair::known("ja", "es")),
+    match self {
+      Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai => {
+        Some(LanguagePair::known("ja", "en"))
+      }
+      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
+        Some(LanguagePair::known("ja", "es"))
+      }
+      Self::Gnula => None,
     }
   }
 
@@ -111,6 +120,7 @@ impl ProviderId {
       Self::AnimeBlix => "https://animeblix.net",
       Self::AnimeFenix => "https://ww1.animefenix.vip",
       Self::JkAnime => "https://jkanime.surf",
+      Self::Gnula => "https://ver.gnula.one",
     }
   }
 
@@ -126,6 +136,7 @@ impl ProviderId {
       Self::AnimeBlix => "animeblix",
       Self::AnimeFenix => "animefenix",
       Self::JkAnime => "jkanime",
+      Self::Gnula => "gnula",
     }
   }
 
@@ -260,6 +271,23 @@ impl ProviderId {
           slug: false,
         },
       ],
+      Self::Gnula => &[
+        SearchRoute {
+          path: "/",
+          key: Some("s"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/search",
+          key: Some("keyword"),
+          slug: false,
+        },
+        SearchRoute {
+          path: "/buscar",
+          key: Some("q"),
+          slug: false,
+        },
+      ],
       Self::JkAnime => &[
         SearchRoute {
           path: "/buscar",
@@ -313,6 +341,7 @@ impl ProviderId {
         (path.starts_with("/animes/") || path.starts_with("/anime/")) && !path.contains("/ver-")
       }
       Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
+      Self::Gnula => path.starts_with("/movies/") || path.starts_with("/series/"),
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -488,6 +517,13 @@ impl SiteProvider {
     }
 
     let mut episodes = parse_episode_links(&body, &anime.url, &anime.url);
+    if episodes.is_empty() && self.id == ProviderId::Gnula {
+      if let Ok(url) = Url::parse(&anime.url) {
+        if url.path().starts_with("/movies/") {
+          episodes.push(Episode::new("1", Some("Movie".into()), anime.url.clone()));
+        }
+      }
+    }
     if self.id == ProviderId::TioAnime && episodes.is_empty() {
       episodes = parse_tioanime_episodes(&body, &anime.url);
     }
@@ -575,10 +611,67 @@ fn parse_search_results(
     }
     let id = url.path().trim_matches('/').to_owned();
     if !id.is_empty() && seen.insert(id.clone()) {
-      results.push(Anime::new(id, title, url.to_string()));
+      let mut anime = Anime::new(id, title, url.to_string());
+      anime.language_pair = provider_language_pair_from_anchor(anchor, provider);
+      results.push(anime);
     }
   }
   results
+}
+
+
+fn provider_language_pair_from_anchor(
+  anchor: scraper::ElementRef<'_>,
+  provider: ProviderId,
+) -> Option<LanguagePair> {
+  if provider != ProviderId::Gnula {
+    return None;
+  }
+
+  let mut evidence = String::new();
+  let mut current = Some(anchor);
+  for _ in 0..4 {
+    let Some(element) = current else {
+      break;
+    };
+    evidence.push(' ');
+    evidence.push_str(&element.text().collect::<String>());
+    for attribute in ["class", "title", "aria-label", "data-language"] {
+      if let Some(value) = element.value().attr(attribute) {
+        evidence.push(' ');
+        evidence.push_str(value);
+      }
+    }
+    current = element.parent();
+  }
+
+  let upper = evidence.to_ascii_uppercase();
+  let tokens: HashSet<_> = upper
+    .split(|character: char| !character.is_ascii_alphanumeric())
+    .filter(|token| !token.is_empty())
+    .collect();
+  let has_latino = tokens.contains("LAT");
+  let has_castilian = tokens.contains("CAS");
+  let audio = match (has_latino, has_castilian) {
+    (true, false) => Some("es-419"),
+    (false, true) => Some("es-ES"),
+    _ => None,
+  };
+  let lower = evidence.to_ascii_lowercase();
+  let subtitles = [
+    "subtitulado en español",
+    "subtitulos en español",
+    "subtítulos en español",
+    "spanish subtitles",
+  ]
+  .iter()
+  .any(|marker| lower.contains(marker))
+  .then_some("es");
+
+  if audio.is_none() && subtitles.is_none() {
+    return None;
+  }
+  Some(LanguagePair::new(audio, subtitles))
 }
 
 fn title_key(value: &str) -> String {
@@ -1300,6 +1393,21 @@ fn embedded_player_links(document: &Html, provider: ProviderId) -> Vec<String> {
 
 fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> Vec<String> {
   let mut links = embedded_player_links(document, provider);
+  if provider == ProviderId::Gnula {
+    if let Ok(selector) = Selector::parse("a[href]") {
+      links.extend(document.select(&selector).filter_map(|anchor| {
+        let label = normalize_whitespace(&anchor.text().collect::<String>()).to_ascii_lowercase();
+        (label.contains("links")
+          || label.contains("streamwish")
+          || label.contains("vidhide")
+          || label.contains("voe")
+          || label.contains("reproductor")
+          || label.contains("player"))
+        .then(|| anchor.value().attr("href").map(str::to_owned))
+        .flatten()
+      }));
+    }
+  }
   if provider == ProviderId::TioAnime {
     links.extend(js_array_urls(body, "videos"));
   }
