@@ -83,7 +83,13 @@ fn is_git_checkout(repository_dir: &Path) -> bool {
     && git_output(repository_dir, &["rev-parse", "--is-inside-work-tree"])
       .is_ok_and(|output| output.trim() == "true")
     && git_output(repository_dir, &["rev-parse", "--verify", "HEAD^{commit}"]).is_ok()
-    && git_output(repository_dir, &["remote", "get-url", "origin"]).is_ok()
+    && git_output(repository_dir, &["remote", "get-url", "origin"]).is_ok_and(|remote| {
+      remote
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        == REPOSITORY
+    })
 }
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {

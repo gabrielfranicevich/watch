@@ -85,6 +85,21 @@ fn changed_remote_revision_requires_installation() {
   assert!(needs_install(Some("old-commit"), "new-commit"));
 }
 
+
+#[test]
+fn rejects_checkouts_with_an_unexpected_origin() {
+  let root = temporary_repository_path();
+  create_git_checkout(&root);
+  let output = Command::new("git")
+    .args(["remote", "set-url", "origin", "https://example.invalid/watch"])
+    .current_dir(&root)
+    .status()
+    .unwrap();
+  assert!(output.success());
+  assert!(!is_git_checkout(&root));
+  std::fs::remove_dir_all(root).unwrap();
+}
+
 fn temporary_repository_path() -> PathBuf {
   std::env::temp_dir().join(format!(
     "watch-updater-test-{}-{}",
