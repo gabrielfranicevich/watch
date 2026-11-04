@@ -52,3 +52,18 @@ fn cargo_install_uses_persistent_checkout_and_install_root() {
     ]
   );
 }
+
+#[test]
+fn first_update_installs_even_when_the_new_checkout_matches_the_remote() {
+  assert!(needs_install(true, "same-commit", "same-commit"));
+}
+
+#[test]
+fn cached_checkout_skips_install_when_the_remote_is_unchanged() {
+  assert!(!needs_install(false, "same-commit", "same-commit"));
+}
+
+#[test]
+fn cached_checkout_installs_when_the_remote_commit_changes() {
+  assert!(needs_install(false, "old-commit", "new-commit"));
+}

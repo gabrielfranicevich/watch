@@ -16,6 +16,7 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     .ok_or("cannot determine updater cache directory; set HOME or XDG_CACHE_HOME")?;
   let repository_dir = cache_root.join("repository");
   let target_dir = cache_root.join("target");
+  let checkout_created = !repository_dir.exists();
   std::fs::create_dir_all(&cache_root)?;
 
   if repository_dir.exists() {
@@ -36,7 +37,7 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
 
   let current = git_output(&repository_dir, &["rev-parse", "HEAD"])?;
   let available = git_output(&repository_dir, &["rev-parse", "FETCH_HEAD"])?;
-  if current.trim() == available.trim() {
+  if !needs_install(checkout_created, current.trim(), available.trim()) {
     eprintln!("watch is already up to date ({})", &current.trim()[..12]);
     return Ok(());
   }
@@ -54,7 +55,8 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   let mut cargo = Command::new("cargo");
   cargo
     .args(install_arguments(&repository_dir, &install_root))
-    .env("CARGO_TARGET_DIR", &target_dir);
+    .env("CARGO_TARGET_DIR", &target_dir)
+    .env("CARGO_INCREMENTAL", "1");
   let output = cargo.output().map_err(|error| {
     if error.kind() == std::io::ErrorKind::NotFound {
       std::io::Error::new(
@@ -68,6 +70,10 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   ensure_command_success(output, "cargo install")?;
   eprintln!("watch update completed.");
   Ok(())
+}
+
+fn needs_install(checkout_created: bool, current: &str, available: &str) -> bool {
+  checkout_created || current != available
 }
 
 fn cargo_install_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
