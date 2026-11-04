@@ -417,6 +417,10 @@ impl PlaybackConfig<'_> {
       self.quality
     );
     let (source, media) = self.resolve_episode(episode)?;
+    eprintln!(
+      "Resolved audio/subtitle languages: {}",
+      media.language_pair.label()
+    );
     self.available_qualities = media
       .qualities
       .iter()

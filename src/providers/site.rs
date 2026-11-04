@@ -10,7 +10,8 @@ use crate::domain::{
   anime::Anime, episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle,
 };
 use crate::media::hls::{
-  into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
+  into_stream, parse_default_audio_url, parse_default_language_pair, parse_master_playlist,
+  select_quality,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1294,9 +1295,7 @@ impl SiteStreamResolver {
     {
       match self.resolve_media_url(candidate, page_url, quality) {
         Ok(mut media) => {
-          if media.subtitle.is_none() {
-            media.subtitle = subtitle.clone();
-          }
+          merge_page_subtitle_metadata(&mut media, subtitle.as_ref());
           return Ok(media);
         }
         Err(error) => last_error = Some(error.to_string()),
@@ -1308,9 +1307,7 @@ impl SiteStreamResolver {
     {
       match self.resolve_media_url(candidate, page_url, quality) {
         Ok(mut media) => {
-          if media.subtitle.is_none() {
-            media.subtitle = subtitle.clone();
-          }
+          merge_page_subtitle_metadata(&mut media, subtitle.as_ref());
           return Ok(media);
         }
         Err(error) => last_error = Some(error.to_string()),
@@ -1326,9 +1323,7 @@ impl SiteStreamResolver {
       }
       match self.find_media(next.as_str(), Some(page_url), quality, depth + 1, seen) {
         Ok(mut media) => {
-          if media.subtitle.is_none() {
-            media.subtitle = subtitle.clone();
-          }
+          merge_page_subtitle_metadata(&mut media, subtitle.as_ref());
           return Ok(media);
         }
         Err(error) => last_error = Some(error.to_string()),
@@ -1378,6 +1373,7 @@ impl SiteStreamResolver {
         subtitle: None,
         mal_id: None,
         qualities: Vec::new(),
+        language_pair: LanguagePair::new(None, None),
       });
     }
 
@@ -1408,6 +1404,7 @@ impl SiteStreamResolver {
         "media URL returned HTTP status {status}"
       )));
     }
+    let language_pair = parse_default_language_pair(&playlist, media_url)?;
     let variants = match parse_master_playlist(&playlist, media_url) {
       Ok(variants) => variants,
       Err(_) if playlist.lines().any(|line| line.trim() == "#EXTM3U") => {
@@ -1416,6 +1413,7 @@ impl SiteStreamResolver {
           subtitle: None,
           mal_id: None,
           qualities: Vec::new(),
+          language_pair,
         });
       }
       Err(error) => return Err(StreamResolveError::Hls(error)),
@@ -1492,6 +1490,7 @@ impl SiteStreamResolver {
       subtitle: None,
       mal_id: None,
       qualities,
+      language_pair,
     })
   }
 }
@@ -1523,6 +1522,19 @@ fn is_public_web_url(url: &Url) -> bool {
   true
 }
 
+fn merge_page_subtitle_metadata(media: &mut ResolvedMedia, subtitle: Option<&Subtitle>) {
+  if media.subtitle.is_none() {
+    media.subtitle = subtitle.cloned();
+  }
+  if media.language_pair.subtitles.is_none() {
+    media.language_pair.subtitles = subtitle
+      .and_then(|subtitle| subtitle.language.as_deref())
+      .map(str::trim)
+      .filter(|language| !language.is_empty())
+      .map(str::to_ascii_lowercase);
+  }
+}
+
 fn find_subtitle(document: &Html, page_url: &str) -> Option<Subtitle> {
   let selector = Selector::parse("track[src]").ok()?;
   let page = Url::parse(page_url).ok()?;
@@ -1530,13 +1542,7 @@ fn find_subtitle(document: &Html, page_url: &str) -> Option<Subtitle> {
     let value = element.value();
     let src = value.attr("src")?;
     let url = page.join(src).ok()?;
-    Some(Subtitle::new(
-      url.to_string(),
-      value
-        .attr("label")
-        .or_else(|| value.attr("srclang"))
-        .map(str::to_owned),
-    ))
+    Some(Subtitle::new(url.to_string(), value.attr("srclang").map(str::to_owned)))
   })
 }
 

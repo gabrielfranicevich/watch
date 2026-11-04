@@ -697,3 +697,67 @@ fn pelis7_search_routes_include_common_search_form_fallbacks() {
   assert!(routes.iter().any(|route| route.path == "/buscar" && route.key == Some("q")));
   assert!(routes.iter().any(|route| route.path == "/search" && route.key == Some("q")));
 }
+
+#[test]
+fn subtitle_track_uses_srclang_instead_of_display_label() {
+  let document = Html::parse_document(
+    r#"<video><track src="/subtitles/es.vtt" label="Español" srclang="es"></video>"#,
+  );
+  let subtitle = find_subtitle(
+    &document,
+    "https://cdn.example/player.html",
+  )
+  .unwrap();
+  assert_eq!(subtitle.language.as_deref(), Some("es"));
+}
+
+#[test]
+fn subtitle_track_without_srclang_does_not_guess_from_display_label() {
+  let document = Html::parse_document(
+    r#"<video><track src="/subtitles/en.vtt" label="English"></video>"#,
+  );
+  let subtitle = find_subtitle(
+    &document,
+    "https://cdn.example/player.html",
+  )
+  .unwrap();
+  assert_eq!(subtitle.language, None);
+}
+
+#[test]
+fn resolved_hls_language_pair_is_enriched_by_explicit_page_subtitle_language() {
+  let mut media = ResolvedMedia {
+    stream: Stream::new("https://cdn.example/video.m3u8", None, None),
+    subtitle: None,
+    mal_id: None,
+    qualities: Vec::new(),
+    language_pair: LanguagePair::new(Some("ja"), None),
+  };
+  let subtitle = Subtitle::new(
+    "https://cdn.example/subtitles/es.vtt",
+    Some("ES".into()),
+  );
+  merge_page_subtitle_metadata(&mut media, Some(&subtitle));
+  assert_eq!(media.language_pair.label(), "ja/es");
+  assert_eq!(
+    media.subtitle.as_ref().and_then(|track| track.language.as_deref()),
+    Some("ES")
+  );
+}
+
+#[test]
+fn explicit_manifest_subtitle_language_is_not_overwritten_by_page_track() {
+  let mut media = ResolvedMedia {
+    stream: Stream::new("https://cdn.example/video.m3u8", None, None),
+    subtitle: None,
+    mal_id: None,
+    qualities: Vec::new(),
+    language_pair: LanguagePair::known("ja", "en"),
+  };
+  let subtitle = Subtitle::new(
+    "https://cdn.example/subtitles/es.vtt",
+    Some("es".into()),
+  );
+  merge_page_subtitle_metadata(&mut media, Some(&subtitle));
+  assert_eq!(media.language_pair.label(), "ja/en");
+}
