@@ -6,7 +6,9 @@ use scraper::{Html, Selector};
 use super::hianime_stream::{
   HiAnimeStreamResolver, QualityOption, ResolvedMedia, StreamResolveError,
 };
-use crate::domain::{anime::Anime, episode::Episode, stream::Stream, subtitle::Subtitle};
+use crate::domain::{
+  anime::Anime, episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle,
+};
 use crate::media::hls::{
   into_stream, parse_default_audio_url, parse_master_playlist, select_quality,
 };
@@ -87,6 +89,13 @@ impl ProviderId {
       Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime => {
         Language::Spanish
       }
+    }
+  }
+
+  pub fn language_pair(self) -> Option<LanguagePair> {
+    match self.language() {
+      Language::English => Some(LanguagePair::known("ja", "en")),
+      Language::Spanish => Some(LanguagePair::known("ja", "es")),
     }
   }
 
