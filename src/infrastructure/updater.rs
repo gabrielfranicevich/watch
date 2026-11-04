@@ -88,7 +88,7 @@ fn is_git_checkout(repository_dir: &Path) -> bool {
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {
   let available = available.trim();
-  installed.map(str::trim) != Some(available)
+  available.is_empty() || installed.map(str::trim) != Some(available)
 }
 
 fn cargo_install_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
