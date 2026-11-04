@@ -38,6 +38,9 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
 
   let current = git_output(&repository_dir, &["rev-parse", "HEAD"])?;
   let available = git_output(&repository_dir, &["rev-parse", "FETCH_HEAD"])?;
+  if available.trim().is_empty() {
+    return Err("git returned an empty fetched revision".into());
+  }
   let installed_revision = std::fs::read_to_string(&installed_revision_path).ok();
   if !needs_install(installed_revision.as_deref().map(str::trim), available.trim()) {
     eprintln!("watch is already up to date ({})", &current.trim()[..12]);
@@ -81,7 +84,7 @@ fn is_git_checkout(repository_dir: &Path) -> bool {
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {
   let available = available.trim();
-  !available.is_empty() && installed.map(str::trim) != Some(available)
+  installed.map(str::trim) != Some(available)
 }
 
 fn cargo_install_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
