@@ -1,4 +1,4 @@
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode, ExitStatus};
@@ -17,6 +17,7 @@ use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
 use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
+use ani_cli::infrastructure::updater::update_rust_installation;
 use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
@@ -775,68 +776,6 @@ fn ensure_success(status: ExitStatus, program: &str) -> Result<(), Box<dyn std::
   } else {
     Err(format!("{program} exited with status {status}").into())
   }
-}
-
-fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::Error>> {
-  if !valid_branch_name(branch) {
-    return Err(format!("invalid Git branch name '{branch}'").into());
-  }
-
-  let executable = std::env::current_exe()?;
-  let bin_dir = executable
-    .parent()
-    .ok_or("cannot determine the current executable directory")?;
-  if bin_dir.file_name() != Some(OsStr::new("bin")) {
-    return Err(format!(
-            "cannot infer Cargo installation root from {}; update manually or install with cargo install",
-            executable.display()
-        )
-        .into());
-  }
-  let install_root = bin_dir
-    .parent()
-    .ok_or("cannot determine Cargo installation root")?;
-
-  eprintln!("Updating watch from branch '{branch}'...");
-  let status = Command::new("cargo")
-    .args(updater_arguments(install_root, branch))
-    .status()
-    .map_err(|error| {
-      if error.kind() == io::ErrorKind::NotFound {
-        io::Error::new(
-          io::ErrorKind::NotFound,
-          "cargo was not found; install the Rust toolchain to use --update",
-        )
-      } else {
-        error
-      }
-    })?;
-  ensure_success(status, "cargo install")?;
-  eprintln!("watch update completed.");
-  Ok(())
-}
-
-fn updater_arguments(install_root: &Path, branch: &str) -> Vec<OsString> {
-  vec![
-    OsString::from("install"),
-    OsString::from("--force"),
-    OsString::from("--locked"),
-    OsString::from("--git"),
-    OsString::from("https://github.com/gabrielfranicevich/watch"),
-    OsString::from("--branch"),
-    OsString::from(branch),
-    OsString::from("--root"),
-    install_root.as_os_str().to_owned(),
-  ]
-}
-
-fn valid_branch_name(branch: &str) -> bool {
-  !branch.is_empty()
-    && !branch.starts_with('-')
-    && !branch.contains("..")
-    && branch
-      .chars()
-      .all(|character| character.is_ascii_alphanumeric() || "-_./".contains(character))
 }
 
 fn show_logs() -> Result<(), Box<dyn std::error::Error>> {

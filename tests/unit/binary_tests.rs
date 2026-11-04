@@ -271,37 +271,6 @@ fn rejects_invalid_default_source_environment_value() {
 }
 
 #[test]
-fn updater_arguments_pin_repository_branch_and_install_root() {
-  let args = updater_arguments(Path::new("/home/user/.cargo"), "main");
-  let args: Vec<_> = args
-    .iter()
-    .map(|arg| arg.to_string_lossy().into_owned())
-    .collect();
-  assert!(
-    args
-      .windows(2)
-      .any(|pair| pair[0] == "--branch" && pair[1] == "main")
-  );
-  assert!(
-    args
-      .windows(2)
-      .any(|pair| pair[0] == "--root" && pair[1] == "/home/user/.cargo")
-  );
-  assert!(args.contains(&"https://github.com/gabrielfranicevich/watch".to_owned()));
-  assert!(args.contains(&"--force".to_owned()));
-  assert!(args.contains(&"--locked".to_owned()));
-}
-
-#[test]
-fn rejects_unsafe_branch_names_for_the_updater() {
-  assert!(valid_branch_name("main"));
-  assert!(valid_branch_name("feature/rust-port"));
-  assert!(!valid_branch_name("--help"));
-  assert!(!valid_branch_name("../main"));
-  assert!(!valid_branch_name(""));
-}
-
-#[test]
 fn download_filename_matches_legacy_episode_stem_format() {
   assert_eq!(
     episode_file_stem("Frieren: Beyond Journey's End", "2.5"),
