@@ -67,3 +67,19 @@ fn cached_checkout_skips_install_when_installed_revision_matches_remote() {
 fn cached_checkout_retries_after_a_failed_installation() {
   assert!(needs_install(Some("old-installed-commit"), "new-commit"));
 }
+
+#[test]
+fn revision_comparison_ignores_surrounding_whitespace() {
+  assert!(!needs_install(Some("same-commit\n"), " same-commit "));
+}
+
+#[test]
+fn empty_remote_revision_is_never_treated_as_installed() {
+  assert!(needs_install(Some(""), ""));
+  assert!(needs_install(Some("same-commit"), "  "));
+}
+
+#[test]
+fn changed_remote_revision_requires_installation() {
+  assert!(needs_install(Some("old-commit"), "new-commit"));
+}

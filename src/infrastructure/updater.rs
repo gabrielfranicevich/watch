@@ -75,7 +75,8 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
 }
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {
-  installed != Some(available)
+  let available = available.trim();
+  !available.is_empty() && installed.map(str::trim) != Some(available)
 }
 
 fn cargo_install_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
