@@ -401,6 +401,98 @@ fn cargo_uninstall_removes_staged_package_without_dropping_existing_packages() {
 }
 
 #[test]
+fn cargo_build_failure_preserves_installed_binary_and_tracking_metadata() {
+  let root = temporary_repository_path();
+  let existing_package = root.join("existing-package");
+  let failing_package = root.join("failing-package");
+  let install_root = root.join("cargo");
+  let staging_root = root.join("staging");
+  let target_dir = root.join("target");
+  create_fixture_package(&existing_package, "watch-existing-fixture");
+  create_fixture_package(&failing_package, "watch-failing-fixture");
+  std::fs::write(
+    failing_package.join("src/main.rs"),
+    "fn main() { let value: = ; }\n",
+  )
+  .unwrap();
+
+  install_fixture_package(&existing_package, &install_root, &target_dir);
+  let installed_binary = install_root.join("bin").join(installed_binary_name());
+  let previous_binary = std::fs::read(&installed_binary).unwrap();
+  let previous_crates = std::fs::read(install_root.join(".crates.toml")).unwrap();
+  let previous_crates2 = std::fs::read(install_root.join(".crates2.json")).unwrap();
+  std::fs::create_dir_all(&staging_root).unwrap();
+  seed_cargo_tracking_metadata(&install_root, &staging_root).unwrap();
+
+  let output = Command::new("cargo")
+    .args(["install", "--path"])
+    .arg(&failing_package)
+    .arg("--root")
+    .arg(&staging_root)
+    .args(["--force", "--locked", "--verbose"])
+    .env("CARGO_TARGET_DIR", &target_dir)
+    .env("CARGO_INCREMENTAL", "1")
+    .output()
+    .unwrap();
+  assert!(!output.status.success());
+
+  assert_eq!(std::fs::read(&installed_binary).unwrap(), previous_binary);
+  assert_eq!(
+    std::fs::read(install_root.join(".crates.toml")).unwrap(),
+    previous_crates
+  );
+  assert_eq!(
+    std::fs::read(install_root.join(".crates2.json")).unwrap(),
+    previous_crates2
+  );
+  assert!(!staging_root.join("bin").join(installed_binary_name()).exists());
+
+  let listing = Command::new("cargo")
+    .args(["install", "--list", "--root"])
+    .arg(&install_root)
+    .output()
+    .unwrap();
+  assert!(listing.status.success());
+  let listing = String::from_utf8_lossy(&listing.stdout);
+  assert!(listing.contains("watch-existing-fixture"), "{listing}");
+  assert!(!listing.contains("watch-failing-fixture"), "{listing}");
+
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn install_permission_failure_keeps_the_previous_executable() {
+  use std::os::unix::fs::PermissionsExt;
+
+  if unsafe { libc::geteuid() } == 0 {
+    return;
+  }
+
+  let root = temporary_repository_path();
+  let install_root = root.join("install");
+  let staging_root = root.join("staging");
+  let installed_dir = install_root.join("bin");
+  let staged_dir = staging_root.join("bin");
+  std::fs::create_dir_all(&installed_dir).unwrap();
+  std::fs::create_dir_all(&staged_dir).unwrap();
+  let installed_binary = installed_dir.join(installed_binary_name());
+  std::fs::write(&installed_binary, b"previous executable").unwrap();
+  std::fs::write(staged_dir.join(installed_binary_name()), b"staged executable").unwrap();
+  std::fs::set_permissions(&install_root, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+  let result = install_staged_binary(&staging_root, &install_root);
+  std::fs::set_permissions(&install_root, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+  assert!(result.is_err());
+  assert_eq!(
+    std::fs::read(&installed_binary).unwrap(),
+    b"previous executable"
+  );
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn cargo_installs_reuse_the_persistent_incremental_target_cache() {
   let root = temporary_repository_path();
   let package = root.join("package");
