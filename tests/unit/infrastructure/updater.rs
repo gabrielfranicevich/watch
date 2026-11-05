@@ -108,6 +108,34 @@ fn rejects_checkouts_with_an_unexpected_origin() {
 }
 
 #[test]
+fn interrupted_update_staging_directories_are_cleaned_without_touching_other_paths() {
+  let root = temporary_repository_path();
+  let stale = root.join(".watch-update-interrupted");
+  let unrelated = root.join("other-directory");
+  std::fs::create_dir_all(&stale).unwrap();
+  std::fs::create_dir_all(&unrelated).unwrap();
+  std::fs::write(stale.join("partial"), b"partial install").unwrap();
+
+  cleanup_stale_staging_roots(&root, SystemTime::now() + Duration::from_secs(1)).unwrap();
+
+  assert!(!stale.exists());
+  assert!(unrelated.is_dir());
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn recent_update_staging_directories_are_not_cleaned() {
+  let root = temporary_repository_path();
+  let recent = root.join(".watch-update-active");
+  std::fs::create_dir_all(&recent).unwrap();
+
+  cleanup_stale_staging_roots(&root, UNIX_EPOCH).unwrap();
+
+  assert!(recent.is_dir());
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn staged_install_replaces_the_existing_executable() {
   let root = temporary_repository_path();
   let install_root = root.join("install");

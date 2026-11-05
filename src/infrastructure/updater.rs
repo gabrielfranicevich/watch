@@ -1,7 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "https://github.com/gabrielfranicevich/watch";
 const INSTALLABLE_BINARY: &str = "watch";
@@ -18,6 +18,10 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   let target_dir = cache_root.join("target");
   let installed_revision_path = cache_root.join("installed-revision");
   std::fs::create_dir_all(&cache_root)?;
+  let stale_before = SystemTime::now()
+    .checked_sub(Duration::from_secs(24 * 60 * 60))
+    .unwrap_or(UNIX_EPOCH);
+  cleanup_stale_staging_roots(&install_root, stale_before)?;
 
   if repository_dir.exists() && !is_git_checkout(&repository_dir) {
     if repository_dir.is_dir() {
@@ -220,6 +224,27 @@ fn ensure_command_success(output: Output, program: &str) -> Result<(), Box<dyn s
     stderr.trim()
   };
   Err(format!("{program} failed: {detail}").into())
+}
+
+fn cleanup_stale_staging_roots(
+  install_root: &Path,
+  stale_before: SystemTime,
+) -> Result<(), Box<dyn std::error::Error>> {
+  for entry in std::fs::read_dir(install_root)? {
+    let entry = entry?;
+    let name = entry.file_name();
+    if !name.to_string_lossy().starts_with(".watch-update-") || !entry.file_type()?.is_dir() {
+      continue;
+    }
+    if entry
+      .metadata()?
+      .modified()
+      .is_ok_and(|modified| modified <= stale_before)
+    {
+      std::fs::remove_dir_all(entry.path())?;
+    }
+  }
+  Ok(())
 }
 
 fn staging_install_root(install_root: &Path) -> PathBuf {
