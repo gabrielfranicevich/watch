@@ -482,6 +482,78 @@ fn create_git_checkout(root: &Path) {
 }
 
 #[test]
+fn failed_fetch_preserves_a_valid_checkout_for_retry() {
+  let root = temporary_repository_path();
+  let remote = root.join("remote.git");
+  let source = root.join("source");
+  let cache_root = root.join("cache");
+  let repository_dir = cache_root.join("repository");
+  std::fs::create_dir_all(&source).unwrap();
+  std::fs::create_dir_all(&cache_root).unwrap();
+
+  let initialized = Command::new("git")
+    .args(["init", "--bare", "--quiet"])
+    .arg(&remote)
+    .status()
+    .unwrap();
+  assert!(initialized.success());
+  run_git_in(&source, &["init", "--quiet"]);
+  run_git_in(&source, &["checkout", "-b", "main"]);
+  for (key, value) in [
+    ("user.name", "Watch Tests"),
+    ("user.email", "watch-tests@example.invalid"),
+  ] {
+    run_git_in(&source, &["config", key, value]);
+  }
+  std::fs::write(source.join("README.md"), "preserve me\n").unwrap();
+  run_git_in(&source, &["add", "README.md"]);
+  run_git_in(&source, &["commit", "--quiet", "-m", "initial"]);
+  let remote_url = remote.to_str().unwrap();
+  run_git_in(&source, &["remote", "add", "origin", remote_url]);
+  run_git_in(&source, &["push", "--quiet", "-u", "origin", "main"]);
+
+  ensure_repository_checkout(
+    &cache_root,
+    &repository_dir,
+    "main",
+    remote_url,
+  )
+  .unwrap();
+  let original_revision = git_output(&repository_dir, &["rev-parse", "HEAD"]).unwrap();
+
+  assert!(ensure_repository_checkout(
+    &cache_root,
+    &repository_dir,
+    "missing-branch",
+    remote_url,
+  )
+  .is_err());
+
+  assert!(repository_dir.is_dir());
+  assert!(is_git_checkout_from(&repository_dir, remote_url));
+  assert_eq!(
+    git_output(&repository_dir, &["rev-parse", "HEAD"])
+      .unwrap()
+      .trim(),
+    original_revision.trim()
+  );
+  assert_eq!(
+    std::fs::read_to_string(repository_dir.join("README.md")).unwrap(),
+    "preserve me\n"
+  );
+
+  ensure_repository_checkout(
+    &cache_root,
+    &repository_dir,
+    "main",
+    remote_url,
+  )
+  .unwrap();
+  assert!(is_git_checkout_from(&repository_dir, remote_url));
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn clones_fetches_and_recovers_a_corrupted_checkout_end_to_end() {
   let root = temporary_repository_path();
   let remote = root.join("remote.git");
