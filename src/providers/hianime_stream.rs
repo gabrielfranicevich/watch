@@ -15,7 +15,7 @@ use crate::domain::{
 };
 use crate::media::hls::{
   HlsRendition, HlsRenditionType, HlsVariant, into_stream, parse_master_playlist, parse_renditions,
-  select_quality,
+  renditions_for_variant, select_quality,
 };
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
@@ -187,7 +187,12 @@ impl HiAnimeStreamResolver {
     let playlist = provider_response_body(playlist_response)?;
     let variants = parse_master_playlist(&playlist, master_url)?;
     let qualities = quality_options(&variants);
-    let renditions = parse_renditions(&playlist, master_url)?;
+    let selected = select_quality(&variants, quality)
+      .or_else(|| select_quality(&variants, "best"))
+      .ok_or_else(|| {
+        StreamResolveError::InvalidData("HLS playlist contains no selectable quality".into())
+      })?;
+    let renditions = renditions_for_variant(&parse_renditions(&playlist, master_url)?, selected);
     let audio_url = renditions
       .iter()
       .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
@@ -204,11 +209,6 @@ impl HiAnimeStreamResolver {
     let mut subtitle_language_source =
       subtitle_language.map(|_| LanguageMetadataSource::HlsManifest);
     let mut language_pair = LanguagePair::new(audio_language, subtitle_language);
-    let selected = select_quality(&variants, quality)
-      .or_else(|| select_quality(&variants, "best"))
-      .ok_or_else(|| {
-        StreamResolveError::InvalidData("HLS playlist contains no selectable quality".into())
-      })?;
     let stream = into_stream(selected, Some(referer)).with_audio(audio_url);
 
     let default_subtitle =
@@ -220,16 +220,37 @@ impl HiAnimeStreamResolver {
             .iter()
             .find(|item| item.get("default").and_then(Value::as_bool) == Some(true))
         });
+    let hls_default_subtitle = renditions
+      .iter()
+      .find(|rendition| rendition.kind == HlsRenditionType::Subtitles && rendition.is_default)
+      .and_then(|rendition| {
+        rendition
+          .url
+          .as_ref()
+          .map(|url| Subtitle::new(url.clone(), rendition.language.clone()))
+      });
     let embed_subtitle_language = default_subtitle.and_then(subtitle_language_code);
-    if language_pair.subtitles.is_none() {
-      language_pair.subtitles = embed_subtitle_language.clone();
-      if embed_subtitle_language.is_some() {
-        subtitle_language_source = Some(LanguageMetadataSource::EmbedMetadata);
+    let subtitle = if let Some(subtitle) = hls_default_subtitle {
+      language_pair.subtitles = subtitle
+        .language
+        .as_deref()
+        .and_then(|language| LanguagePair::new(None, Some(language)).subtitles);
+      subtitle_language_source = subtitle
+        .language
+        .as_ref()
+        .map(|_| LanguageMetadataSource::HlsManifest);
+      Some(subtitle)
+    } else {
+      if language_pair.subtitles.is_none() {
+        language_pair.subtitles = embed_subtitle_language.clone();
+        if embed_subtitle_language.is_some() {
+          subtitle_language_source = Some(LanguageMetadataSource::EmbedMetadata);
+        }
       }
-    }
-    let subtitle = default_subtitle
-      .and_then(|item| item.get("src").and_then(Value::as_str))
-      .map(|url| Subtitle::new(url, embed_subtitle_language));
+      default_subtitle
+        .and_then(|item| item.get("src").and_then(Value::as_str))
+        .map(|url| Subtitle::new(url, embed_subtitle_language))
+    };
 
     eprintln!("Stream resolution: HLS stream selected successfully.");
     Ok(ResolvedMedia {

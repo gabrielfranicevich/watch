@@ -32,7 +32,7 @@ Options:
   -N, --nextep-countdown   Show countdown to next episode
   -U, --update             Update watch
 
-watch searches English and Spanish anime providers, filters results with --language, merges duplicate titles by language, and supports episode selection, playback, downloads, subtitles, watch history, external menu backends, inline terminal video, the Cargo-based updater, and next-episode countdown.
+watch searches English and Spanish anime providers, filters results with --language, merges duplicate titles by language, and supports episode selection, playback, downloads, interactive selection of alternate HLS audio and subtitle tracks, watch history, external menu backends, inline terminal video, the Cargo-based updater, and next-episode countdown.
 ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

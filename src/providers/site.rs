@@ -14,8 +14,8 @@ use crate::domain::{
   subtitle::Subtitle,
 };
 use crate::media::hls::{
-  into_stream, parse_default_audio_url, parse_default_language_pair, parse_master_playlist,
-  parse_renditions, select_quality,
+  default_language_pair, into_stream, parse_default_language_pair, parse_master_playlist,
+  parse_renditions, renditions_for_variant, select_quality,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1427,7 +1427,7 @@ impl SiteStreamResolver {
         "media URL returned HTTP status {status}"
       )));
     }
-    let renditions = parse_renditions(&playlist, media_url)?;
+    let all_renditions = parse_renditions(&playlist, media_url)?;
     let language_pair = parse_default_language_pair(&playlist, media_url)?;
     let audio_language_source = language_pair
       .audio
@@ -1448,7 +1448,7 @@ impl SiteStreamResolver {
           language_pair,
           audio_language_source,
           subtitle_language_source,
-          renditions,
+          renditions: all_renditions,
         });
       }
       Err(error) => return Err(StreamResolveError::Hls(error)),
@@ -1458,6 +1458,16 @@ impl SiteStreamResolver {
       .ok_or_else(|| {
         StreamResolveError::InvalidData("HLS playlist has no selectable quality".into())
       })?;
+    let renditions = renditions_for_variant(&all_renditions, selected);
+    let language_pair = default_language_pair(&renditions);
+    let audio_language_source = language_pair
+      .audio
+      .as_ref()
+      .map(|_| LanguageMetadataSource::HlsManifest);
+    let subtitle_language_source = language_pair
+      .subtitles
+      .as_ref()
+      .map(|_| LanguageMetadataSource::HlsManifest);
     let selected_url = Url::parse(&selected.url).map_err(|error| {
       StreamResolveError::InvalidData(format!("invalid HLS variant URL: {error}"))
     })?;
@@ -1490,7 +1500,23 @@ impl SiteStreamResolver {
       }
     }
     let mut stream = into_stream(selected, Some(referer.to_owned()));
-    stream.audio_url = parse_default_audio_url(&playlist, media_url).ok().flatten();
+    stream.audio_url = renditions
+      .iter()
+      .find(|rendition| {
+        rendition.kind == crate::media::hls::HlsRenditionType::Audio && rendition.is_default
+      })
+      .and_then(|rendition| rendition.url.clone());
+    let subtitle = renditions
+      .iter()
+      .find(|rendition| {
+        rendition.kind == crate::media::hls::HlsRenditionType::Subtitles && rendition.is_default
+      })
+      .and_then(|rendition| {
+        rendition
+          .url
+          .as_ref()
+          .map(|url| Subtitle::new(url.clone(), rendition.language.clone()))
+      });
     let mut qualities: Vec<QualityOption> = variants
       .iter()
       .map(|variant| {
@@ -1522,7 +1548,7 @@ impl SiteStreamResolver {
     qualities.dedup_by(|left, right| left.value == right.value);
     Ok(ResolvedMedia {
       stream,
-      subtitle: None,
+      subtitle,
       mal_id: None,
       qualities,
       language_pair,

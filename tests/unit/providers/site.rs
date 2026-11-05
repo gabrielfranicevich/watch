@@ -226,6 +226,68 @@ fn tioanime_player_links_are_read_from_its_videos_array() {
 }
 
 #[test]
+fn generic_hls_resolver_sets_the_default_audio_and_subtitle_renditions() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let playlist = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Japanese",LANGUAGE="ja",DEFAULT=YES,URI="audio/ja.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",LANGUAGE="en",DEFAULT=NO,URI="audio/en.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Spanish",LANGUAGE="es",DEFAULT=YES,URI="subtitles/es.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720,AUDIO="audio",SUBTITLES="subs"
+video.m3u8
+"#;
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
+      }
+      request.extend_from_slice(&buffer[..count]);
+    }
+    write!(
+      connection,
+      "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{playlist}",
+      playlist.len()
+    )
+    .unwrap();
+  });
+
+  let resolver = SiteStreamResolver::new(ProviderId::JkAnime);
+  let master = format!("http://{address}/master.m3u8");
+  let resolved = resolver
+    .resolve_media_url(&master, &master, "best")
+    .unwrap();
+  server.join().unwrap();
+
+  assert_eq!(
+    resolved.stream.audio_url.as_deref(),
+    Some(format!("http://{address}/audio/ja.m3u8").as_str())
+  );
+  assert_eq!(
+    resolved
+      .subtitle
+      .as_ref()
+      .map(|subtitle| subtitle.url.as_str()),
+    Some(format!("http://{address}/subtitles/es.m3u8").as_str())
+  );
+  assert_eq!(resolved.language_pair.label(), "ja/es");
+  assert_eq!(
+    resolved.audio_language_source,
+    Some(LanguageMetadataSource::HlsManifest)
+  );
+  assert_eq!(
+    resolved.subtitle_language_source,
+    Some(LanguageMetadataSource::HlsManifest)
+  );
+}
+
+#[test]
 fn rejects_hls_variant_endpoints_that_return_html() {
   use std::io::{Read, Write};
   use std::net::TcpListener;

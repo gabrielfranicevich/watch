@@ -43,6 +43,140 @@ fn merges_provider_episode_lists_and_keeps_first_source_for_duplicate_numbers() 
 }
 
 #[test]
+fn audio_track_choices_include_provider_default_and_unique_alternatives() {
+  let renditions = vec![
+    HlsRendition {
+      kind: HlsRenditionType::Audio,
+      group_id: Some("audio".to_owned()),
+      name: Some("English".to_owned()),
+      language: Some("en".to_owned()),
+      is_default: true,
+      url: Some("https://cdn.example/audio/en.m3u8".to_owned()),
+    },
+    HlsRendition {
+      kind: HlsRenditionType::Audio,
+      group_id: Some("audio".to_owned()),
+      name: Some("Japanese".to_owned()),
+      language: Some("ja".to_owned()),
+      is_default: false,
+      url: Some("https://cdn.example/audio/ja.m3u8".to_owned()),
+    },
+    HlsRendition {
+      kind: HlsRenditionType::Audio,
+      group_id: Some("audio".to_owned()),
+      name: Some("Japanese duplicate".to_owned()),
+      language: Some("ja".to_owned()),
+      is_default: false,
+      url: Some("https://cdn.example/audio/ja.m3u8".to_owned()),
+    },
+  ];
+
+  let choices = track_choices(
+    HlsRenditionType::Audio,
+    &renditions,
+    Some("https://cdn.example/audio/en.m3u8"),
+    Some("en"),
+    Some(LanguageMetadataSource::HlsManifest),
+  );
+
+  assert_eq!(choices.len(), 2);
+  assert_eq!(choices[0].label, "Provider default (en)");
+  assert_eq!(choices[1].label, "Japanese (ja)");
+  assert_eq!(
+    choices[1].url.as_deref(),
+    Some("https://cdn.example/audio/ja.m3u8")
+  );
+}
+
+#[test]
+fn selecting_an_alternative_audio_rendition_updates_stream_and_language_provenance() {
+  let rendition = HlsRendition {
+    kind: HlsRenditionType::Audio,
+    group_id: Some("audio".to_owned()),
+    name: Some("Japanese".to_owned()),
+    language: Some("Japanese".to_owned()),
+    is_default: false,
+    url: Some("https://cdn.example/audio/ja.m3u8".to_owned()),
+  };
+  let choices = track_choices(
+    HlsRenditionType::Audio,
+    &[rendition],
+    Some("https://cdn.example/audio/en.m3u8"),
+    Some("en"),
+    Some(LanguageMetadataSource::HlsManifest),
+  );
+  let mut media = test_resolved_media();
+
+  apply_track_choice(&mut media, HlsRenditionType::Audio, &choices[1]);
+
+  assert_eq!(
+    media.stream.audio_url.as_deref(),
+    Some("https://cdn.example/audio/ja.m3u8")
+  );
+  assert_eq!(media.language_pair.audio.as_deref(), Some("ja"));
+  assert_eq!(
+    media.audio_language_source,
+    Some(LanguageMetadataSource::HlsManifest)
+  );
+}
+
+#[test]
+fn selecting_an_alternative_subtitle_rendition_updates_subtitle_and_language() {
+  let rendition = HlsRendition {
+    kind: HlsRenditionType::Subtitles,
+    group_id: Some("subs".to_owned()),
+    name: Some("Spanish".to_owned()),
+    language: Some("es-419".to_owned()),
+    is_default: false,
+    url: Some("https://cdn.example/subtitles/es.m3u8".to_owned()),
+  };
+  let choices = track_choices(
+    HlsRenditionType::Subtitles,
+    &[rendition],
+    Some("https://cdn.example/subtitles/en.vtt"),
+    Some("en"),
+    Some(LanguageMetadataSource::EmbedMetadata),
+  );
+  let mut media = test_resolved_media();
+
+  apply_track_choice(&mut media, HlsRenditionType::Subtitles, &choices[1]);
+
+  assert_eq!(
+    media
+      .subtitle
+      .as_ref()
+      .map(|subtitle| subtitle.url.as_str()),
+    Some("https://cdn.example/subtitles/es.m3u8")
+  );
+  assert_eq!(
+    media.subtitle.as_ref().unwrap().language.as_deref(),
+    Some("es-419")
+  );
+  assert_eq!(media.language_pair.subtitles.as_deref(), Some("es-419"));
+  assert_eq!(
+    media.subtitle_language_source,
+    Some(LanguageMetadataSource::HlsManifest)
+  );
+}
+
+fn test_resolved_media() -> ResolvedMedia {
+  ResolvedMedia {
+    stream: ani_cli::domain::stream::Stream::new("https://cdn.example/video.m3u8", None, None)
+      .with_audio(Some("https://cdn.example/audio/en.m3u8".to_owned())),
+    subtitle: Some(ani_cli::domain::subtitle::Subtitle::new(
+      "https://cdn.example/subtitles/en.vtt",
+      Some("en".to_owned()),
+    )),
+    mal_id: None,
+    qualities: Vec::new(),
+    language_pair: LanguagePair::known("en", "en"),
+    audio_language_source: Some(LanguageMetadataSource::HlsManifest),
+    subtitle_language_source: Some(LanguageMetadataSource::EmbedMetadata),
+    renditions: Vec::new(),
+  }
+}
+
+#[test]
 fn source_quality_rank_uses_highest_available_resolution() {
   let media = ResolvedMedia {
     stream: ani_cli::domain::stream::Stream::new("https://cdn.example/video.m3u8", None, None),

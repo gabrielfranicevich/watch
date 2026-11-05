@@ -106,11 +106,11 @@ fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>
              #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n\
              #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=NO,URI=\"../audio/ja.m3u8\"\n\
              #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Spanish\",LANGUAGE=\"es\",DEFAULT=NO,URI=\"../subtitles/es.m3u8\"\n\
-             #EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360,AUDIO=\"audio\",SUBTITLES=\"subs\"\n\
              ../variants/360/index.m3u8\n\
-             #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720,AUDIO=\"audio\",SUBTITLES=\"subs\"\n\
              ../variants/720/index.m3u8\n\
-             #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080,AUDIO=\"audio\",SUBTITLES=\"subs\"\n\
              ../variants/1080/index.m3u8\n",
   );
 

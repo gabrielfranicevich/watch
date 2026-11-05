@@ -12,6 +12,7 @@ pub enum HlsRenditionType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HlsRendition {
   pub kind: HlsRenditionType,
+  pub group_id: Option<String>,
   pub name: Option<String>,
   pub language: Option<String>,
   pub is_default: bool,
@@ -22,7 +23,16 @@ pub struct HlsRendition {
 pub struct HlsVariant {
   pub bandwidth: u64,
   pub resolution: Option<String>,
+  pub audio_group: Option<String>,
+  pub subtitle_group: Option<String>,
   pub url: String,
+}
+
+struct PendingVariant {
+  bandwidth: u64,
+  resolution: Option<String>,
+  audio_group: Option<String>,
+  subtitle_group: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +52,7 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
   }
 
   let mut variants = Vec::new();
-  let mut pending: Option<(u64, Option<String>)> = None;
+  let mut pending: Option<PendingVariant> = None;
 
   for line in body.lines().map(str::trim).filter(|line| !line.is_empty()) {
     if let Some(attributes) = line.strip_prefix("#EXT-X-STREAM-INF:") {
@@ -50,12 +60,21 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
         .and_then(|value| value.parse().ok())
         .unwrap_or(0);
       let resolution = attribute(attributes, "RESOLUTION").map(str::to_owned);
-      pending = Some((bandwidth, resolution));
+      let audio_group = attribute(attributes, "AUDIO").map(str::to_owned);
+      let subtitle_group = attribute(attributes, "SUBTITLES").map(str::to_owned);
+      pending = Some(PendingVariant {
+        bandwidth,
+        resolution,
+        audio_group,
+        subtitle_group,
+      });
     } else if !line.starts_with('#') {
-      if let Some((bandwidth, resolution)) = pending.take() {
+      if let Some(pending) = pending.take() {
         variants.push(HlsVariant {
-          bandwidth,
-          resolution,
+          bandwidth: pending.bandwidth,
+          resolution: pending.resolution,
+          audio_group: pending.audio_group,
+          subtitle_group: pending.subtitle_group,
           url: resolve_url(master_url, line)?,
         });
       }
@@ -94,6 +113,7 @@ pub fn parse_renditions(body: &str, master_url: &str) -> Result<Vec<HlsRendition
 
       Ok(HlsRendition {
         kind,
+        group_id: attribute(attributes, "GROUP-ID").map(str::to_owned),
         name: attribute(attributes, "NAME").map(str::to_owned),
         language: attribute(attributes, "LANGUAGE").map(str::to_owned),
         is_default: attribute(attributes, "DEFAULT") == Some("YES"),
@@ -101,6 +121,39 @@ pub fn parse_renditions(body: &str, master_url: &str) -> Result<Vec<HlsRendition
       })
     })
     .collect()
+}
+
+pub fn renditions_for_variant(
+  renditions: &[HlsRendition],
+  variant: &HlsVariant,
+) -> Vec<HlsRendition> {
+  renditions
+    .iter()
+    .filter(|rendition| {
+      let has_group_references = variant.audio_group.is_some() || variant.subtitle_group.is_some();
+      if !has_group_references {
+        return true;
+      }
+      let selected_group = match rendition.kind {
+        HlsRenditionType::Audio => variant.audio_group.as_deref(),
+        HlsRenditionType::Subtitles => variant.subtitle_group.as_deref(),
+      };
+      selected_group.is_some_and(|group| rendition.group_id.as_deref() == Some(group))
+    })
+    .cloned()
+    .collect()
+}
+
+pub fn default_language_pair(renditions: &[HlsRendition]) -> LanguagePair {
+  let audio = renditions
+    .iter()
+    .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
+    .and_then(|rendition| rendition.language.as_deref());
+  let subtitles = renditions
+    .iter()
+    .find(|rendition| rendition.kind == HlsRenditionType::Subtitles && rendition.is_default)
+    .and_then(|rendition| rendition.language.as_deref());
+  LanguagePair::new(audio, subtitles)
 }
 
 pub fn parse_default_audio_url(body: &str, master_url: &str) -> Result<Option<String>, HlsError> {
@@ -114,15 +167,7 @@ pub fn parse_default_audio_url(body: &str, master_url: &str) -> Result<Option<St
 
 pub fn parse_default_language_pair(body: &str, master_url: &str) -> Result<LanguagePair, HlsError> {
   let renditions = parse_renditions(body, master_url)?;
-  let audio = renditions
-    .iter()
-    .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
-    .and_then(|rendition| rendition.language.as_deref());
-  let subtitles = renditions
-    .iter()
-    .find(|rendition| rendition.kind == HlsRenditionType::Subtitles && rendition.is_default)
-    .and_then(|rendition| rendition.language.as_deref());
-  Ok(LanguagePair::new(audio, subtitles))
+  Ok(default_language_pair(&renditions))
 }
 pub fn select_quality<'a>(variants: &'a [HlsVariant], requested: &str) -> Option<&'a HlsVariant> {
   if variants.is_empty() {

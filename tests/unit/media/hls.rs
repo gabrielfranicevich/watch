@@ -79,6 +79,32 @@ fn ignores_non_default_renditions_when_detecting_languages() {
 }
 
 #[test]
+fn limits_available_renditions_to_the_selected_variant_groups() {
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"main-audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"ja.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"main-audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"commentary\",NAME=\"Commentary\",LANGUAGE=\"en\",DEFAULT=YES,URI=\"commentary.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"captions\",NAME=\"Spanish\",LANGUAGE=\"es\",DEFAULT=YES,URI=\"es.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,AUDIO=\"main-audio\",SUBTITLES=\"captions\"\nvideo.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1600000,AUDIO=\"commentary\"\ncommentary-video.m3u8\n";
+  let variants = parse_master_playlist(playlist, "https://cdn.example/master.m3u8").unwrap();
+  let renditions = parse_renditions(playlist, "https://cdn.example/master.m3u8").unwrap();
+
+  let main = renditions_for_variant(&renditions, &variants[0]);
+  assert_eq!(main.len(), 3);
+  assert_eq!(
+    main
+      .iter()
+      .filter(|rendition| rendition.kind == HlsRenditionType::Audio)
+      .count(),
+    2
+  );
+  assert_eq!(default_language_pair(&main).audio.as_deref(), Some("ja"));
+  assert_eq!(
+    default_language_pair(&main).subtitles.as_deref(),
+    Some("es")
+  );
+
+  let commentary = renditions_for_variant(&renditions, &variants[1]);
+  assert_eq!(commentary.len(), 1);
+  assert_eq!(commentary[0].name.as_deref(), Some("Commentary"));
+}
+
+#[test]
 fn rejects_language_detection_from_non_playlist_responses() {
   assert!(
     parse_default_language_pair("not a playlist", "https://cdn.example/master.m3u8").is_err()
@@ -87,7 +113,7 @@ fn rejects_language_detection_from_non_playlist_responses() {
 
 #[test]
 fn parses_default_and_alternative_audio_and_subtitle_renditions() {
-  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"audio/ja.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"audio/en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Spanish\",LANGUAGE=\"es-419\",DEFAULT=NO,URI=\"subs/es.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nvideo.m3u8\n";
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"audio/ja.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"audio/en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Spanish\",LANGUAGE=\"es-419\",DEFAULT=NO,URI=\"subs/es.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,AUDIO=\"audio\",SUBTITLES=\"subs\"\nvideo.m3u8\n";
   let renditions = parse_renditions(playlist, "https://cdn.example/master.m3u8").unwrap();
 
   assert_eq!(renditions.len(), 3);

@@ -16,10 +16,12 @@ use ani_cli::cli::selection::{BackRequested, SelectionOutcome, read_paged_select
 use ani_cli::domain::anime::Anime;
 use ani_cli::domain::episode::Episode;
 use ani_cli::domain::history::HistoryEntry;
+use ani_cli::domain::language::{LanguageMetadataSource, LanguagePair};
 use ani_cli::infrastructure::history_store::HistoryStore;
 use ani_cli::infrastructure::paths;
 use ani_cli::infrastructure::updater::update_rust_installation;
 use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
+use ani_cli::media::hls::{HlsRendition, HlsRenditionType};
 use ani_cli::media::player::Player;
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
@@ -337,6 +339,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     download: cli.download,
     download_dir: &download_dir,
     history: history.as_ref(),
+    cli: &cli,
   };
   let mut active_player: Option<Child> = None;
 
@@ -395,6 +398,7 @@ struct PlaybackConfig<'a> {
   download: bool,
   download_dir: &'a Path,
   history: Option<&'a HistoryStore>,
+  cli: &'a ani_cli::cli::args::Cli,
 }
 
 enum PlaybackResult {
@@ -416,7 +420,10 @@ impl PlaybackConfig<'_> {
       if self.dubbed { "dub" } else { "sub" },
       self.quality
     );
-    let (source, media) = self.resolve_episode(episode)?;
+    let (source, mut media) = self.resolve_episode(episode)?;
+    if !self.download {
+      self.select_alternative_tracks(&mut media)?;
+    }
     eprintln!(
       "Resolved audio/subtitle languages: {}",
       media.language_pair.label()
@@ -448,13 +455,19 @@ impl PlaybackConfig<'_> {
       let filename = format!("{}.mp4", episode_file_stem(&anime.title, &episode.number));
       let destination = self.download_dir.join(filename);
       if let Some(subtitle) = media.subtitle.as_ref() {
-        let subtitle_path = destination.with_extension("vtt");
-        if let Err(error) = SubtitleDownloader::download(
-          &subtitle.url,
-          media.stream.referer.as_deref(),
-          &subtitle_path,
-        ) {
-          eprintln!("watch: warning: could not download subtitles: {error}");
+        if subtitle.url.to_ascii_lowercase().contains(".m3u8") {
+          eprintln!(
+            "watch: warning: HLS subtitle playlists are not downloaded as standalone .vtt files"
+          );
+        } else {
+          let subtitle_path = destination.with_extension("vtt");
+          if let Err(error) = SubtitleDownloader::download(
+            &subtitle.url,
+            media.stream.referer.as_deref(),
+            &subtitle_path,
+          ) {
+            eprintln!("watch: warning: could not download subtitles: {error}");
+          }
         }
       }
 
@@ -506,6 +519,52 @@ impl PlaybackConfig<'_> {
       self.record(&source, episode)?;
       Ok(PlaybackResult::Detached(child))
     }
+  }
+
+  fn select_alternative_tracks(
+    &self,
+    media: &mut ResolvedMedia,
+  ) -> Result<(), Box<dyn std::error::Error>> {
+    let audio_choices = track_choices(
+      HlsRenditionType::Audio,
+      &media.renditions,
+      media.stream.audio_url.as_deref(),
+      media.language_pair.audio.as_deref(),
+      media.audio_language_source,
+    );
+    if audio_choices.len() > 1 {
+      let labels = audio_choices
+        .iter()
+        .map(|choice| choice.label.clone())
+        .collect::<Vec<_>>();
+      let selected = select_item(&labels, "Select audio track: ", None, self.cli)?;
+      apply_track_choice(media, HlsRenditionType::Audio, &audio_choices[selected]);
+    }
+
+    let subtitle_url = media
+      .subtitle
+      .as_ref()
+      .map(|subtitle| subtitle.url.as_str());
+    let subtitle_choices = track_choices(
+      HlsRenditionType::Subtitles,
+      &media.renditions,
+      subtitle_url,
+      media.language_pair.subtitles.as_deref(),
+      media.subtitle_language_source,
+    );
+    if subtitle_choices.len() > 1 {
+      let labels = subtitle_choices
+        .iter()
+        .map(|choice| choice.label.clone())
+        .collect::<Vec<_>>();
+      let selected = select_item(&labels, "Select subtitle track: ", None, self.cli)?;
+      apply_track_choice(
+        media,
+        HlsRenditionType::Subtitles,
+        &subtitle_choices[selected],
+      );
+    }
+    Ok(())
   }
 
   fn resolve_episode(
@@ -703,6 +762,98 @@ fn merge_provider_episodes(sources: &[ProviderEpisodes]) -> Vec<Episode> {
       .then_with(|| left.number.cmp(&right.number))
   });
   episodes
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrackChoice {
+  label: String,
+  url: Option<String>,
+  language: Option<String>,
+  language_source: Option<LanguageMetadataSource>,
+}
+
+fn track_choices(
+  kind: HlsRenditionType,
+  renditions: &[HlsRendition],
+  current_url: Option<&str>,
+  current_language: Option<&str>,
+  current_language_source: Option<LanguageMetadataSource>,
+) -> Vec<TrackChoice> {
+  let default_label = current_language
+    .map(|language| format!("Provider default ({language})"))
+    .unwrap_or_else(|| "Provider default".to_owned());
+  let mut choices = vec![TrackChoice {
+    label: default_label,
+    url: current_url.map(str::to_owned),
+    language: current_language.map(str::to_owned),
+    language_source: current_language_source,
+  }];
+
+  for (index, rendition) in renditions
+    .iter()
+    .filter(|rendition| rendition.kind == kind)
+    .enumerate()
+  {
+    let Some(url) = rendition.url.as_deref() else {
+      continue;
+    };
+    if current_url == Some(url)
+      || choices
+        .iter()
+        .any(|choice| choice.url.as_deref() == Some(url))
+    {
+      continue;
+    }
+    let language = rendition.language.as_deref().and_then(|language| {
+      let pair = match kind {
+        HlsRenditionType::Audio => LanguagePair::new(Some(language), None),
+        HlsRenditionType::Subtitles => LanguagePair::new(None, Some(language)),
+      };
+      match kind {
+        HlsRenditionType::Audio => pair.audio,
+        HlsRenditionType::Subtitles => pair.subtitles,
+      }
+    });
+    let name = rendition.name.as_deref().unwrap_or_else(|| {
+      language.as_deref().unwrap_or(match kind {
+        HlsRenditionType::Audio => "Audio track",
+        HlsRenditionType::Subtitles => "Subtitle track",
+      })
+    });
+    let label = language
+      .as_deref()
+      .map(|language| format!("{name} ({language})"))
+      .unwrap_or_else(|| format!("{name} (track {})", index + 1));
+    choices.push(TrackChoice {
+      label,
+      url: Some(url.to_owned()),
+      language_source: rendition
+        .language
+        .as_ref()
+        .map(|_| LanguageMetadataSource::HlsManifest),
+      language,
+    });
+  }
+
+  choices
+}
+
+fn apply_track_choice(media: &mut ResolvedMedia, kind: HlsRenditionType, choice: &TrackChoice) {
+  match kind {
+    HlsRenditionType::Audio => {
+      media.stream.audio_url = choice.url.clone();
+      media.language_pair.audio = choice.language.clone();
+      media.audio_language_source = choice.language_source;
+    }
+    HlsRenditionType::Subtitles => {
+      media.subtitle = choice
+        .url
+        .as_ref()
+        .map(|url| ani_cli::domain::subtitle::Subtitle::new(url.clone(), choice.language.clone()));
+      media.language_pair.subtitles = choice.language.clone();
+      media.subtitle_language_source = choice.language_source;
+    }
+  }
 }
 
 fn media_quality_rank(media: &ResolvedMedia) -> u32 {

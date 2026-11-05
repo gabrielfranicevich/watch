@@ -96,6 +96,30 @@ fn forwards_external_audio_to_mpv_and_vlc() {
 }
 
 #[test]
+fn selected_hls_audio_and_subtitle_renditions_are_forwarded_to_mpv_and_vlc() {
+  let stream = stream().with_audio(Some("https://cdn.example/audio/ja.m3u8".into()));
+  let subtitle = Subtitle::new("https://cdn.example/subtitles/es.m3u8", Some("es".into()));
+
+  let mpv = Player::Mpv.arguments(&stream, Some(&subtitle), "Example");
+  assert!(
+    mpv
+      .iter()
+      .any(|argument| argument == "--audio-file=https://cdn.example/audio/ja.m3u8")
+  );
+  assert!(
+    mpv
+      .iter()
+      .any(|argument| argument == "--sub-file=https://cdn.example/subtitles/es.m3u8")
+  );
+
+  let vlc = Player::Vlc.arguments(&stream, Some(&subtitle), "Example");
+  assert!(vlc.iter().any(|argument| {
+    argument
+      == ":input-slave=https://cdn.example/audio/ja.m3u8#https://cdn.example/subtitles/es.m3u8"
+  }));
+}
+
+#[test]
 fn syncplay_passes_media_url_and_mpv_arguments_after_separator() {
   let stream = stream().with_audio(Some("https://cdn.example/audio.m3u8".into()));
   let args = Player::Syncplay.arguments_with_options(
