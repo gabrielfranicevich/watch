@@ -21,7 +21,7 @@ Provider markup, hostnames, search routes, and player embeds can change without 
 
 ## Audio and subtitle language pairs
 
-A result label uses the form audio/subtitles, for example ja/en or ja/es. Each side is independent. ? means Watch does not have reliable information for that field.
+A result label uses the form audio/subtitles, for example ja/en or ja/es. Each side is independent. ? means Watch does not have reliable information for that field. The shared models retain the evidence source separately from the normalized language value: provider defaults and search-page metadata are recorded for catalog entries; HLS manifests, embed metadata, and HTML track attributes are recorded independently for resolved audio and subtitles.
 
 The existing anime providers currently have configured defaults based on their provider category. These defaults are useful catalog labels, but they are not a live probe of the exact tracks selected from the player. Gnula exposes explicit LAT and CAS audio labels; its generic SUB badge does not identify a subtitle language. For resolved episodes, Watch reads the AUDIO and SUBTITLES renditions declared by an HLS master manifest and exposes the complete rendition list on `ResolvedMedia` for shared frontends. It can also use an explicit language field from the HiAnime embed subtitle metadata or the `srclang` attribute on an HTML track. The CLI prints the default language pair before playback.
 

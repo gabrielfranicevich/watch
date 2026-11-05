@@ -22,8 +22,8 @@ The installed executable is `watch`. Run it from source with `cargo run --releas
 | `src/cli/` | Argument parsing, interactive menus, and selection. |
 | `src/application.rs` | Source selection, episode-range rules, and cross-cutting use-case policies. |
 | `src/application_services.rs` | Reusable search, episode, stream-resolution, and history use cases intended for multiple frontends. |
-| `src/domain/` | Anime, episode, stream, subtitle, history, and audio/subtitle language-pair types. |
-| `src/providers/` | Parallel searches across anime and movie/TV sites, title/audio-subtitle grouping, provider-specific episode extraction, stream resolvers, and AnimeSchedule requests. |
+| `src/domain/` | Anime, episode, stream, subtitle, history, normalized audio/subtitle language pairs, and language-evidence source types. |
+| `src/providers/` | Parallel searches across anime and movie/TV sites, title/audio-subtitle grouping, provider-specific episode extraction, stream resolvers, language-evidence provenance, and AnimeSchedule requests. |
 | `src/media/` | HLS parsing, playback arguments, terminal video backend selection, downloads, and external media-tool integration. |
 | `src/infrastructure/` | Portable paths, configuration, and watch-history persistence. |
 | `src/main.rs` | CLI orchestration and end-to-end application flow; search, episode retrieval, and stream resolution use the shared service API. |

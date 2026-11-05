@@ -28,6 +28,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
 - [x] Detect default audio/subtitle language tags from HLS master manifests and explicit HiAnime/HTML subtitle metadata; print the resolved pair before playback.
 - [x] Expose declared HLS audio and subtitle renditions, including alternatives, through `ResolvedMedia` for shared frontends.
+- [x] Track language evidence provenance for provider defaults, search metadata, HLS manifests, embed metadata, and HTML subtitle tracks; retain audio and subtitle provenance independently during media resolution.
 - [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
 - [x] Add independent `--audio` and `--subtitles` catalog filters, including tests for combined matching and unknown metadata.
 - [x] Document language filtering and derive default HLS audio/subtitle metadata through the shared rendition parser.
