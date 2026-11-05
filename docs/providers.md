@@ -29,6 +29,16 @@ A resolved HLS pair describes the manifest's default tracks, not necessarily eve
 
 --language continues to filter the catalog category (English or Spanish); it does not select audio or subtitle tracks. --dub requests dubbed playback where the provider supports it.
 
+`--audio LANGUAGE` and `--subtitles LANGUAGE` are independent source filters. They compare the requested value with the corresponding known field in each source's catalog language pair; when both are supplied, both conditions must match. Language names recognized by Watch normalize to short codes, while region-qualified values such as `es-419` remain distinct. For example:
+
+~~~sh
+watch --audio ja "Frieren"
+watch --subtitles es-419 "Frieren"
+watch --audio Japanese --subtitles Spanish "Frieren"
+~~~
+
+A filter excludes sources whose corresponding metadata is unknown. These options filter catalog results only: they do not force a player track, discover additional renditions, or change the active audio/subtitle selection during playback.
+
 The client must not infer a language solely from a generic SUB badge, the catalog category, a display label such as English, or the presence of a subtitle file.
 
 ## Resolver and access boundaries

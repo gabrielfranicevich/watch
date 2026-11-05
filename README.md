@@ -57,6 +57,9 @@ watch "Frieren"
 # Limit results to Spanish-language providers
 watch --language español "Dragon Ball"
 
+# Require Japanese audio and Spanish subtitles when catalog metadata is available
+watch --audio ja --subtitles es "Frieren"
+
 # Prefer 720p when the source offers it
 watch --quality 720p "Frieren"
 
@@ -94,7 +97,7 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 
 - Parallel catalog search across HiAnime, Gogoanime, AniWatch, TioAnime, JKAnime, Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7. The newer movie/TV sources have provider-specific coverage limits; see [provider support](docs/providers.md).
 - Duplicate titles are grouped by normalized title and audio/subtitle language pair. Choices show pairs such as `(ja/en)` or `(ja/es)`; unknown values remain `?` rather than being guessed. Provider-level defaults are not a live probe of every playback track.
-- `--language` filters the provider catalog category. Each result also reports its audio/subtitle pair as `audio/subtitles` (for example, `ja/es`); this pair does not select a dubbed track. `--dub` controls dubbed playback separately.
+- `--language` filters the provider catalog category. Each result also reports its audio/subtitle pair as `audio/subtitles` (for example, `ja/es`). `--audio` and `--subtitles` filter source results independently using that metadata; they do not switch tracks in the player. `--dub` controls dubbed playback separately.
 - Episode lists combine sources for a title. For each episode, playback tries providers that expose that episode and chooses the stream that best matches `--quality` (the highest available quality by default).
 - HLS stream resolution, quality selection, external audio, and subtitles.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
@@ -112,6 +115,8 @@ These paths depend on the provider, platform, media player, and external tools. 
 | `-e, --episode RANGE`, `-r, --range RANGE` | Choose ranges like `1-3` or individual episodes like `1 3 5`. Use `0` for the first and `-1` for the last episode. |
 | `-q, --quality QUALITY` | Request `best`, `worst`, or a resolution such as `720p`. |
 | `--language LANGUAGE` | Filter by English (`english`, `en`, `ingles`, `inglés`) or Spanish (`spanish`, `es`, `espanol`, `español`), case-insensitively. |
+| `--audio LANGUAGE` | Keep sources whose known audio metadata matches a language code or name, such as `ja` or `Japanese`. |
+| `--subtitles LANGUAGE` | Keep sources whose known subtitle metadata matches a language code or name, such as `es` or `Spanish`. |
 | `-S, --select-nth N` | Select an entry by its one-based index. |
 | `--dub` | Select dubbed audio when available. |
 | `-v, --vlc` / `-s, --syncplay` | Select VLC or Syncplay. |
