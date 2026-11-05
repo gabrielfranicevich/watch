@@ -27,9 +27,14 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Replace unconditional `cargo install --force` updates with a persistent Git checkout and Cargo target cache; skip a revision only after its installation succeeds.
 - [x] Stage updater installations separately, replace the installed executable only after Cargo succeeds, and retain the previous executable if replacement fails.
 - [x] Remove interrupted updater staging directories after 24 hours while leaving recent or active staging directories untouched.
+- [x] Preserve Cargo package-tracking metadata across staged installs and roll back the executable if metadata synchronization fails.
+- [x] Cover updater clone, fetch, invalid-checkout recovery, incremental target reuse, staged-install listing, and Windows executable-lock behavior with isolated integration tests.
 - [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
 - [x] Detect default audio/subtitle language tags from HLS master manifests and explicit HiAnime/HTML subtitle metadata; print the resolved pair before playback.
 - [x] Expose declared HLS audio and subtitle renditions, including alternatives, through `ResolvedMedia` for shared frontends.
+- [x] Associate renditions with the selected HLS video variant and exclude unrelated audio/subtitle groups.
+- [x] Offer pre-playback selection for alternate URL-backed HLS audio and subtitle tracks, retaining the provider default as the first option.
+- [x] Pass selected external track URLs to MPV-compatible players and VLC desktop.
 - [x] Track language evidence provenance for provider defaults, search metadata, HLS manifests, embed metadata, and HTML subtitle tracks; retain audio and subtitle provenance independently during media resolution.
 - [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
 - [x] Add independent `--audio` and `--subtitles` catalog filters, including tests for combined matching and unknown metadata.
@@ -37,8 +42,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 
 ## Remaining work
 
-- Add end-to-end updater tests with isolated Cargo roots; verify Cargo package-tracking metadata remains coherent after staged installs and test self-update behavior when the running executable is locked on Windows.
-- Add interactive selection and runtime switching for alternate HLS tracks, and extend metadata extraction to non-HLS manifests. The shared resolver API now exposes declared HLS renditions, but the CLI still uses default tracks.
+- Add runtime track switching after playback starts and extend language metadata extraction to non-HLS manifests. Current CLI track selection occurs before the player launches and only includes URL-backed renditions declared by HLS playlists.
 - Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.

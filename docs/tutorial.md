@@ -63,7 +63,7 @@ watch --language english "Dragon Ball"
 watch --language ESPAÑOL "Dragon Ball"
 ~~~
 
-This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown. Before playback, Watch prints the pair resolved from explicit HLS default-track or embed/HTML subtitle metadata when available; this does not enumerate every alternate track. Use `--dub` to request dubbed audio.
+This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown. Before playback, Watch prints the resolved pair. When the selected HLS variant declares multiple URL-backed renditions, Watch then offers audio and subtitle menus with the provider default first. Use `--dub` to request dubbed audio.
 
 Use `--audio` and `--subtitles` to filter source results independently by known metadata. When both are supplied, both values must match. For example:
 
@@ -73,9 +73,9 @@ watch --subtitles es "Frieren"
 watch --audio Japanese --subtitles Spanish "Frieren"
 ~~~
 
-These filters do not select the active track in the media player, and sources with unknown metadata are excluded. See [provider support](providers.md) for source-specific language metadata and limitations.
+These filters do not select the active track in the media player, and sources with unknown metadata are excluded. The separate pre-playback track menus apply only to alternative renditions exposed by the selected HLS variant. See [provider support](providers.md) for source-specific language metadata and limitations.
 
-Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
+Select a matching title, then choose an episode. The client resolves the stream, offers any available alternative HLS audio/subtitle tracks, and passes the selected URLs and referer to the configured player. External-player support varies by player build and provider.
 
 ### Choosing entries and going back
 
