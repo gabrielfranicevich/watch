@@ -102,7 +102,9 @@ fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>
   let embed_body = format!(r#"<script>window.__P="{embed_blob}";</script>"#);
   let playlist = String::from(
     "#EXTM3U\n\
-             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n\
+             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n\
+             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=NO,URI=\"../audio/ja.m3u8\"\n\
+             #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Spanish\",LANGUAGE=\"es\",DEFAULT=NO,URI=\"../subtitles/es.m3u8\"\n\
              #EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360\n\
              ../variants/360/index.m3u8\n\
              #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n\
@@ -177,6 +179,27 @@ fn resolves_server_embed_hls_audio_subtitles_and_available_qualities() {
     Some(format!("{base_url}/subtitles/en.vtt").as_str())
   );
   assert_eq!(resolved.mal_id.as_deref(), Some("12345"));
+  assert_eq!(resolved.renditions.len(), 3);
+  assert_eq!(
+    resolved
+      .renditions
+      .iter()
+      .map(|rendition| (
+        rendition.kind,
+        rendition.language.as_deref(),
+        rendition.is_default
+      ))
+      .collect::<Vec<_>>(),
+    vec![
+      (HlsRenditionType::Audio, Some("en"), true),
+      (HlsRenditionType::Audio, Some("ja"), false),
+      (HlsRenditionType::Subtitles, Some("es"), false)
+    ]
+  );
+  assert_eq!(
+    resolved.renditions[1].url.as_deref(),
+    Some(format!("{base_url}/audio/ja.m3u8").as_str())
+  );
   assert_eq!(
     resolved
       .qualities

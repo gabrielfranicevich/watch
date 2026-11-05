@@ -11,7 +11,7 @@ use crate::domain::{
 };
 use crate::media::hls::{
   into_stream, parse_default_audio_url, parse_default_language_pair, parse_master_playlist,
-  select_quality,
+  parse_renditions, select_quality,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1386,6 +1386,7 @@ impl SiteStreamResolver {
         mal_id: None,
         qualities: Vec::new(),
         language_pair: LanguagePair::new(None, None),
+        renditions: Vec::new(),
       });
     }
 
@@ -1416,6 +1417,7 @@ impl SiteStreamResolver {
         "media URL returned HTTP status {status}"
       )));
     }
+    let renditions = parse_renditions(&playlist, media_url)?;
     let language_pair = parse_default_language_pair(&playlist, media_url)?;
     let variants = match parse_master_playlist(&playlist, media_url) {
       Ok(variants) => variants,
@@ -1426,6 +1428,7 @@ impl SiteStreamResolver {
           mal_id: None,
           qualities: Vec::new(),
           language_pair,
+          renditions,
         });
       }
       Err(error) => return Err(StreamResolveError::Hls(error)),
@@ -1503,6 +1506,7 @@ impl SiteStreamResolver {
       mal_id: None,
       qualities,
       language_pair,
+      renditions,
     })
   }
 }

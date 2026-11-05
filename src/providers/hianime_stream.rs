@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use crate::domain::{episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{
-  HlsVariant, into_stream, parse_default_audio_url, parse_default_language_pair,
-  parse_master_playlist, select_quality,
+  HlsRendition, HlsRenditionType, HlsVariant, into_stream, parse_master_playlist, parse_renditions,
+  select_quality,
 };
 
 const XOR_KEY: &[u8] = b"otaku-embed-v1";
@@ -59,6 +59,7 @@ pub struct ResolvedMedia {
   pub mal_id: Option<String>,
   pub qualities: Vec<QualityOption>,
   pub language_pair: LanguagePair,
+  pub renditions: Vec<HlsRendition>,
 }
 
 #[derive(Debug, Clone)]
@@ -179,8 +180,20 @@ impl HiAnimeStreamResolver {
     let playlist = provider_response_body(playlist_response)?;
     let variants = parse_master_playlist(&playlist, master_url)?;
     let qualities = quality_options(&variants);
-    let audio_url = parse_default_audio_url(&playlist, master_url)?;
-    let mut language_pair = parse_default_language_pair(&playlist, master_url)?;
+    let renditions = parse_renditions(&playlist, master_url)?;
+    let audio_url = renditions
+      .iter()
+      .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
+      .and_then(|rendition| rendition.url.clone());
+    let audio_language = renditions
+      .iter()
+      .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
+      .and_then(|rendition| rendition.language.as_deref());
+    let subtitle_language = renditions
+      .iter()
+      .find(|rendition| rendition.kind == HlsRenditionType::Subtitles && rendition.is_default)
+      .and_then(|rendition| rendition.language.as_deref());
+    let mut language_pair = LanguagePair::new(audio_language, subtitle_language);
     let selected = select_quality(&variants, quality)
       .or_else(|| select_quality(&variants, "best"))
       .ok_or_else(|| {
@@ -212,6 +225,7 @@ impl HiAnimeStreamResolver {
       mal_id,
       qualities,
       language_pair,
+      renditions,
     })
   }
 }

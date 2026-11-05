@@ -735,6 +735,7 @@ fn resolved_hls_language_pair_is_enriched_by_explicit_page_subtitle_language() {
     mal_id: None,
     qualities: Vec::new(),
     language_pair: LanguagePair::new(Some("ja"), None),
+    renditions: Vec::new(),
   };
   let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("ES".into()));
   merge_page_subtitle_metadata(&mut media, Some(&subtitle));
@@ -756,6 +757,7 @@ fn explicit_manifest_subtitle_language_is_not_overwritten_by_page_track() {
     mal_id: None,
     qualities: Vec::new(),
     language_pair: LanguagePair::known("ja", "en"),
+    renditions: Vec::new(),
   };
   let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("es".into()));
   merge_page_subtitle_metadata(&mut media, Some(&subtitle));

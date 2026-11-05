@@ -59,6 +59,7 @@ fn source_quality_rank_uses_highest_available_resolution() {
       },
     ],
     language_pair: ani_cli::domain::language::LanguagePair::new(None, None),
+    renditions: Vec::new(),
   };
   assert_eq!(media_quality_rank(&media), 1080);
 }
