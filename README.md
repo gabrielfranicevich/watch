@@ -41,7 +41,7 @@ watch "Frieren"
 If the package is not available from crates.io, install the main branch directly:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch main
+cargo install --locked --git https://github.com/gabrielfranicevich/watch --branch main
 ~~~
 
 Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.

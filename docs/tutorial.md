@@ -14,7 +14,7 @@ watch --version
 If the package is not available from crates.io, install the main branch from GitHub:
 
 ~~~sh
-cargo install --git https://github.com/gabrielfranicevich/watch --branch main
+cargo install --locked --git https://github.com/gabrielfranicevich/watch --branch main
 ~~~
 
 If `watch` is not found, make sure Cargo's binary directory (`~/.cargo/bin`, or the equivalent on your platform) is on your `PATH`. On Linux, `watch` may conflict with the system process-monitoring utility; place `~/.cargo/bin` before system directories or run `~/.cargo/bin/watch` explicitly.
@@ -63,7 +63,17 @@ watch --language english "Dragon Ball"
 watch --language ESPAÑOL "Dragon Ball"
 ~~~
 
-This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown. Before playback, Watch prints the pair resolved from explicit HLS default-track or embed/HTML subtitle metadata when available; this does not enumerate every alternate track. Use `--dub` to request dubbed audio. See [provider support](providers.md) for source-specific language metadata and limitations.
+This filters the catalog category, not the playback tracks. Each result shows its configured or detected audio/subtitle pair as `audio/subtitles`, for example `ja/es` or `ja/en`. A `?` means that value is unknown. Before playback, Watch prints the pair resolved from explicit HLS default-track or embed/HTML subtitle metadata when available; this does not enumerate every alternate track. Use `--dub` to request dubbed audio.
+
+Use `--audio` and `--subtitles` to filter source results independently by known metadata. When both are supplied, both values must match. For example:
+
+~~~sh
+watch --audio ja "Frieren"
+watch --subtitles es "Frieren"
+watch --audio Japanese --subtitles Spanish "Frieren"
+~~~
+
+These filters do not select the active track in the media player, and sources with unknown metadata are excluded. See [provider support](providers.md) for source-specific language metadata and limitations.
 
 Select a matching title, then choose an episode. The client resolves the stream and passes the URL, referer, and available subtitle/audio options to the configured player.
 
