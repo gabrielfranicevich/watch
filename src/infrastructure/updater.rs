@@ -23,22 +23,7 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     .unwrap_or(UNIX_EPOCH);
   cleanup_stale_staging_roots(&install_root, stale_before)?;
 
-  if repository_dir.exists() && !is_git_checkout(&repository_dir) {
-    if repository_dir.is_dir() {
-      std::fs::remove_dir_all(&repository_dir)?;
-    } else {
-      std::fs::remove_file(&repository_dir)?;
-    }
-  }
-
-  if repository_dir.exists() {
-    run_git(
-      &repository_dir,
-      &["fetch", "--quiet", "--depth=1", "origin", branch],
-    )?;
-  } else {
-    clone_repository(&cache_root, &repository_dir, branch)?;
-  }
+  ensure_repository_checkout(&cache_root, &repository_dir, branch, REPOSITORY)?;
 
   let current = git_output(&repository_dir, &["rev-parse", "HEAD"])?;
   let available = git_output(&repository_dir, &["rev-parse", "FETCH_HEAD"])?;
@@ -73,6 +58,7 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   );
   let staging_root = staging_install_root(&install_root);
   std::fs::create_dir_all(&staging_root)?;
+  seed_cargo_tracking_metadata(&install_root, &staging_root)?;
   let install_result = (|| {
     let mut cargo = Command::new("cargo");
     cargo
@@ -99,14 +85,54 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
   Ok(())
 }
 
-fn is_git_checkout(repository_dir: &Path) -> bool {
+fn is_git_checkout_from(repository_dir: &Path, expected_remote: &str) -> bool {
   repository_dir.join(".git").exists()
     && git_output(repository_dir, &["rev-parse", "--is-inside-work-tree"])
       .is_ok_and(|output| output.trim() == "true")
     && git_output(repository_dir, &["rev-parse", "--verify", "HEAD^{commit}"]).is_ok()
     && git_output(repository_dir, &["remote", "get-url", "origin"]).is_ok_and(|remote| {
-      remote.trim().trim_end_matches('/').trim_end_matches(".git") == REPOSITORY
+      remote.trim().trim_end_matches('/').trim_end_matches(".git")
+        == expected_remote
+          .trim_end_matches('/')
+          .trim_end_matches(".git")
     })
+}
+
+fn ensure_repository_checkout(
+  cache_root: &Path,
+  repository_dir: &Path,
+  branch: &str,
+  remote: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+  if repository_dir.exists() && !is_git_checkout_from(repository_dir, remote) {
+    if repository_dir.is_dir() {
+      std::fs::remove_dir_all(repository_dir)?;
+    } else {
+      std::fs::remove_file(repository_dir)?;
+    }
+  }
+
+  if repository_dir.exists() {
+    fetch_remote_branch(repository_dir, branch)?;
+  } else {
+    clone_remote_repository(cache_root, repository_dir, branch, remote)?;
+  }
+  Ok(())
+}
+
+fn fetch_remote_branch(
+  repository_dir: &Path,
+  branch: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+  run_git(
+    repository_dir,
+    &["fetch", "--quiet", "--depth=1", "origin", branch],
+  )?;
+  let revision = git_output(repository_dir, &["rev-parse", "FETCH_HEAD"])?;
+  if revision.trim().is_empty() {
+    return Err("git returned an empty fetched revision".into());
+  }
+  Ok(revision)
 }
 
 fn needs_install(installed: Option<&str>, available: &str) -> bool {
@@ -158,10 +184,11 @@ fn updater_cache_dir() -> Option<PathBuf> {
     .map(|path| path.join("watch").join("updater"))
 }
 
-fn clone_repository(
+fn clone_remote_repository(
   cache_root: &Path,
   repository_dir: &Path,
   branch: &str,
+  remote: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
   let nonce = SystemTime::now()
     .duration_since(UNIX_EPOCH)
@@ -178,7 +205,7 @@ fn clone_repository(
       "--branch",
     ])
     .arg(branch)
-    .arg(REPOSITORY)
+    .arg(remote)
     .arg(&staging_dir);
   let output = command.output()?;
   if let Err(error) = ensure_command_success(output, "git clone") {
@@ -270,6 +297,7 @@ fn install_staged_binary(
   let staged_binary = staging_root.join("bin").join(installed_binary_name());
   let installed_binary = install_root.join("bin").join(installed_binary_name());
   let backup_binary = staging_root.join(format!("{}.previous", installed_binary_name()));
+  let rollback_binary = staging_root.join(format!("{}.rollback", installed_binary_name()));
   if !staged_binary.is_file() {
     return Err(
       format!(
@@ -279,8 +307,127 @@ fn install_staged_binary(
       .into(),
     );
   }
+
+  let had_installed_binary = installed_binary.is_file();
+  if had_installed_binary {
+    std::fs::copy(&installed_binary, &rollback_binary)?;
+  }
   replace_binary(&staged_binary, &installed_binary, &backup_binary)?;
+  if let Err(error) = sync_cargo_tracking_metadata(staging_root, install_root) {
+    let restore_result = if had_installed_binary {
+      restore_previous_binary(&rollback_binary, &installed_binary)
+    } else {
+      std::fs::remove_file(&installed_binary)
+    };
+    if let Err(restore_error) = restore_result {
+      return Err(std::io::Error::other(format!(
+        "Cargo tracking metadata synchronization failed ({error}) and executable rollback failed ({restore_error})"
+      ))
+      .into());
+    }
+    return Err(error.into());
+  }
   Ok(())
+}
+
+fn restore_previous_binary(backup: &Path, installed: &Path) -> std::io::Result<()> {
+  let temporary = installed.with_file_name(format!(
+    ".watch-restore-{}-{}",
+    std::process::id(),
+    installed_binary_name()
+  ));
+  std::fs::copy(backup, &temporary)?;
+  #[cfg(windows)]
+  {
+    let failed = installed.with_file_name(format!(
+      ".watch-failed-{}-{}",
+      std::process::id(),
+      installed_binary_name()
+    ));
+    std::fs::rename(installed, &failed)?;
+    if let Err(error) = std::fs::rename(&temporary, installed) {
+      let _ = std::fs::rename(&failed, installed);
+      return Err(error);
+    }
+    let _ = std::fs::remove_file(failed);
+  }
+  #[cfg(not(windows))]
+  std::fs::rename(&temporary, installed)?;
+  Ok(())
+}
+
+const CARGO_TRACKING_FILES: [&str; 2] = [".crates.toml", ".crates2.json"];
+
+fn seed_cargo_tracking_metadata(install_root: &Path, staging_root: &Path) -> std::io::Result<()> {
+  for file in CARGO_TRACKING_FILES {
+    let source = install_root.join(file);
+    if source.is_file() {
+      std::fs::copy(source, staging_root.join(file))?;
+    }
+  }
+  Ok(())
+}
+
+fn sync_cargo_tracking_metadata(staging_root: &Path, install_root: &Path) -> std::io::Result<()> {
+  let mut replacements = Vec::new();
+  for file in CARGO_TRACKING_FILES {
+    let staged = staging_root.join(file);
+    if !staged.is_file() {
+      continue;
+    }
+    let destination = install_root.join(file);
+    let temporary = install_root.join(format!(".watch-update-{}-{file}.tmp", std::process::id()));
+    let backup = staging_root.join(format!("{file}.previous"));
+    if let Err(error) = std::fs::copy(staged, &temporary) {
+      for (temporary, _, _, _) in &replacements {
+        let _ = std::fs::remove_file(temporary);
+      }
+      return Err(error);
+    }
+    replacements.push((temporary, destination, backup, false));
+  }
+
+  for (applied, index) in (0..replacements.len()).enumerate() {
+    let temporary = replacements[index].0.clone();
+    let destination = replacements[index].1.clone();
+    let backup = replacements[index].2.clone();
+    let had_destination = destination.exists();
+    if had_destination {
+      if let Err(error) = std::fs::rename(&destination, &backup) {
+        rollback_tracking_metadata(&replacements, applied);
+        return Err(error);
+      }
+      replacements[index].3 = true;
+    }
+    if let Err(error) = std::fs::rename(&temporary, &destination) {
+      if had_destination {
+        if let Err(restore_error) = std::fs::rename(&backup, &destination) {
+          rollback_tracking_metadata(&replacements, applied);
+          return Err(std::io::Error::other(format!(
+            "failed to replace Cargo tracking metadata ({error}) and failed to restore it ({restore_error})"
+          )));
+        }
+      }
+      rollback_tracking_metadata(&replacements, applied);
+      return Err(error);
+    }
+  }
+
+  for (_, _, backup, had_destination) in &replacements {
+    if *had_destination {
+      let _ = std::fs::remove_file(backup);
+    }
+  }
+  Ok(())
+}
+
+fn rollback_tracking_metadata(replacements: &[(PathBuf, PathBuf, PathBuf, bool)], applied: usize) {
+  for (_, destination, backup, had_destination) in replacements[..applied].iter().rev() {
+    let _ = std::fs::remove_file(destination);
+    if *had_destination {
+      let _ = std::fs::rename(backup, destination);
+    }
+  }
 }
 
 fn replace_binary(
