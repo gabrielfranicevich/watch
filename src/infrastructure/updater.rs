@@ -67,22 +67,29 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     &current.trim()[..12],
     &available.trim()[..12]
   );
-  let mut cargo = Command::new("cargo");
-  cargo
-    .args(install_arguments(&repository_dir, &install_root))
-    .env("CARGO_TARGET_DIR", &target_dir)
-    .env("CARGO_INCREMENTAL", "1");
-  let output = cargo.output().map_err(|error| {
-    if error.kind() == std::io::ErrorKind::NotFound {
-      std::io::Error::new(
-        std::io::ErrorKind::NotFound,
-        "cargo was not found; install the Rust toolchain to use --update",
-      )
-    } else {
-      error
-    }
-  })?;
-  ensure_command_success(output, "cargo install")?;
+  let staging_root = staging_install_root(&install_root);
+  std::fs::create_dir_all(&staging_root)?;
+  let install_result = (|| {
+    let mut cargo = Command::new("cargo");
+    cargo
+      .args(install_arguments(&repository_dir, &staging_root))
+      .env("CARGO_TARGET_DIR", &target_dir)
+      .env("CARGO_INCREMENTAL", "1");
+    let output = cargo.output().map_err(|error| {
+      if error.kind() == std::io::ErrorKind::NotFound {
+        std::io::Error::new(
+          std::io::ErrorKind::NotFound,
+          "cargo was not found; install the Rust toolchain to use --update",
+        )
+      } else {
+        error
+      }
+    })?;
+    ensure_command_success(output, "cargo install")?;
+    install_staged_binary(&staging_root, &install_root)
+  })();
+  let _ = std::fs::remove_dir_all(&staging_root);
+  install_result?;
   std::fs::write(&installed_revision_path, format!("{}\n", available.trim()))?;
   eprintln!("watch update completed.");
   Ok(())
@@ -213,6 +220,77 @@ fn ensure_command_success(output: Output, program: &str) -> Result<(), Box<dyn s
     stderr.trim()
   };
   Err(format!("{program} failed: {detail}").into())
+}
+
+fn staging_install_root(install_root: &Path) -> PathBuf {
+  let nonce = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap_or_default()
+    .as_nanos();
+  install_root.join(format!(".watch-update-{}-{nonce}", std::process::id()))
+}
+
+fn installed_binary_name() -> &'static str {
+  if cfg!(windows) {
+    "watch.exe"
+  } else {
+    INSTALLABLE_BINARY
+  }
+}
+
+fn install_staged_binary(
+  staging_root: &Path,
+  install_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+  let staged_binary = staging_root.join("bin").join(installed_binary_name());
+  let installed_binary = install_root.join("bin").join(installed_binary_name());
+  let backup_binary = staging_root.join(format!("{}.previous", installed_binary_name()));
+  if !staged_binary.is_file() {
+    return Err(
+      format!(
+        "cargo install did not produce the expected executable at {}",
+        staged_binary.display()
+      )
+      .into(),
+    );
+  }
+  replace_binary(&staged_binary, &installed_binary, &backup_binary)?;
+  Ok(())
+}
+
+fn replace_binary(
+  staged_binary: &Path,
+  installed_binary: &Path,
+  backup_binary: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+  #[cfg(not(windows))]
+  {
+    let _ = backup_binary;
+    std::fs::rename(staged_binary, installed_binary)?;
+  }
+
+  #[cfg(windows)]
+  {
+    let had_installed_binary = installed_binary.exists();
+    if had_installed_binary {
+      std::fs::rename(installed_binary, backup_binary)?;
+    }
+    if let Err(error) = std::fs::rename(staged_binary, installed_binary) {
+      if had_installed_binary {
+        if let Err(restore_error) = std::fs::rename(backup_binary, installed_binary) {
+          return Err(std::io::Error::other(format!(
+            "failed to install the staged executable ({error}) and failed to restore the previous executable ({restore_error})"
+          ))
+          .into());
+        }
+      }
+      return Err(error.into());
+    }
+    if had_installed_binary {
+      std::fs::remove_file(backup_binary)?;
+    }
+  }
+  Ok(())
 }
 
 fn install_arguments(repository_dir: &Path, install_root: &Path) -> Vec<OsString> {
