@@ -336,6 +336,71 @@ fn cargo_tracking_metadata_stays_coherent_after_a_staged_install() {
 }
 
 #[test]
+fn cargo_uninstall_removes_staged_package_without_dropping_existing_packages() {
+  let root = temporary_repository_path();
+  let install_root = root.join("cargo");
+  let staging_root = root.join("staging");
+  let target_dir = root.join("target");
+  let existing_package = root.join("existing-package");
+  let staged_package = root.join("staged-package");
+  create_fixture_package(&existing_package, "watch-existing-fixture");
+  create_fixture_package(&staged_package, "watch-staged-fixture");
+
+  install_fixture_package(&existing_package, &install_root, &target_dir);
+  std::fs::create_dir_all(&staging_root).unwrap();
+  seed_cargo_tracking_metadata(&install_root, &staging_root).unwrap();
+  install_fixture_package(&staged_package, &staging_root, &target_dir);
+  sync_cargo_tracking_metadata(&staging_root, &install_root).unwrap();
+
+  let uninstall = Command::new("cargo")
+    .args(["uninstall", "--root"])
+    .arg(&install_root)
+    .arg("watch-staged-fixture")
+    .output()
+    .unwrap();
+  assert!(
+    uninstall.status.success(),
+    "{}",
+    String::from_utf8_lossy(&uninstall.stderr)
+  );
+
+  let listing = Command::new("cargo")
+    .args(["install", "--list", "--root"])
+    .arg(&install_root)
+    .output()
+    .unwrap();
+  assert!(listing.status.success());
+  let listing = String::from_utf8_lossy(&listing.stdout);
+  assert!(listing.contains("watch-existing-fixture"), "{listing}");
+  assert!(!listing.contains("watch-staged-fixture"), "{listing}");
+
+  let uninstall = Command::new("cargo")
+    .args(["uninstall", "--root"])
+    .arg(&install_root)
+    .arg("watch-existing-fixture")
+    .output()
+    .unwrap();
+  assert!(
+    uninstall.status.success(),
+    "{}",
+    String::from_utf8_lossy(&uninstall.stderr)
+  );
+  let listing = Command::new("cargo")
+    .args(["install", "--list", "--root"])
+    .arg(&install_root)
+    .output()
+    .unwrap();
+  assert!(listing.status.success());
+  assert!(
+    String::from_utf8_lossy(&listing.stdout).trim().is_empty(),
+    "{}",
+    String::from_utf8_lossy(&listing.stdout)
+  );
+
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn cargo_installs_reuse_the_persistent_incremental_target_cache() {
   let root = temporary_repository_path();
   let package = root.join("package");
