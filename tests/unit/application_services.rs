@@ -1,8 +1,10 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::filter_anime_options;
 use crate::application_services::{ApplicationError, SearchRequest, WatchApplication};
 use crate::domain::{anime::Anime, episode::Episode, history::HistoryEntry};
 use crate::infrastructure::history_store::HistoryStore;
+use crate::providers::catalog::{AnimeOption, ProviderAnime};
 use crate::providers::site::{Language, ProviderId};
 
 fn temporary_history_path() -> std::path::PathBuf {
@@ -20,6 +22,8 @@ fn search_rejects_empty_queries_without_network_access() {
     .search(&SearchRequest {
       query: "  ".to_owned(),
       language: Some(Language::English),
+      audio: None,
+      subtitles: None,
     })
     .unwrap_err();
   assert!(matches!(error, ApplicationError::InvalidInput(_)));
@@ -83,4 +87,40 @@ fn history_operations_report_missing_configuration() {
     app.record_history(&anime, &episode, ProviderId::HiAnime),
     Err(ApplicationError::InvalidInput(_))
   ));
+}
+
+#[test]
+fn audio_and_subtitle_filters_are_applied_independently() {
+  let english = ProviderAnime {
+    provider: ProviderId::GoGoAnime,
+    anime: Anime::new("english", "Title", "https://example.test/english"),
+  };
+  let spanish = ProviderAnime {
+    provider: ProviderId::TioAnime,
+    anime: Anime::new("spanish", "Title", "https://example.test/spanish"),
+  };
+  let options = vec![
+    AnimeOption {
+      label: "ja/en Title".to_owned(),
+      sources: vec![english],
+    },
+    AnimeOption {
+      label: "ja/es Title".to_owned(),
+      sources: vec![spanish],
+    },
+  ];
+
+  let audio_filtered = filter_anime_options(options.clone(), Some("ja"), None);
+  assert_eq!(audio_filtered.len(), 2);
+
+  let subtitle_filtered = filter_anime_options(options.clone(), None, Some("es"));
+  assert_eq!(subtitle_filtered.len(), 1);
+  assert_eq!(
+    subtitle_filtered[0].sources[0].provider,
+    ProviderId::TioAnime
+  );
+
+  let combined = filter_anime_options(options, Some("ja"), Some("en"));
+  assert_eq!(combined.len(), 1);
+  assert_eq!(combined[0].sources[0].provider, ProviderId::GoGoAnime);
 }

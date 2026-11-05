@@ -141,12 +141,19 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
       .or_else(|| source.provider.language_pair())
       .unwrap_or_else(|| LanguagePair::new(None, None));
     let bucket = &mut buckets[index];
-    let group_index = bucket.groups.iter().position(|(existing, _)| existing == &pair);
+    let group_index = bucket
+      .groups
+      .iter()
+      .position(|(existing, _)| existing == &pair);
     let group = match group_index {
       Some(index) => &mut bucket.groups[index].1,
       None => {
         bucket.groups.push((pair, Vec::new()));
-        &mut bucket.groups.last_mut().expect("pair group was just inserted").1
+        &mut bucket
+          .groups
+          .last_mut()
+          .expect("pair group was just inserted")
+          .1
       }
     };
     if !group

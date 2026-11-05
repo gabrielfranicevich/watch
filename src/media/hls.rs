@@ -70,10 +70,7 @@ pub fn parse_master_playlist(body: &str, master_url: &str) -> Result<Vec<HlsVari
   Ok(variants)
 }
 
-pub fn parse_renditions(
-  body: &str,
-  master_url: &str,
-) -> Result<Vec<HlsRendition>, HlsError> {
+pub fn parse_renditions(body: &str, master_url: &str) -> Result<Vec<HlsRendition>, HlsError> {
   if !body.lines().any(|line| line.trim() == "#EXTM3U") {
     return Err(HlsError("response is not an HLS playlist".into()));
   }
@@ -142,7 +139,8 @@ pub fn parse_default_language_pair(
 }
 
 fn default_track_language(body: &str, track_type: &str) -> Option<String> {
-  body.lines()
+  body
+    .lines()
     .map(str::trim)
     .filter_map(|line| line.strip_prefix("#EXT-X-MEDIA:"))
     .find_map(|attributes| {

@@ -42,14 +42,24 @@ pub fn update_rust_installation(branch: &str) -> Result<(), Box<dyn std::error::
     return Err("git returned an empty fetched revision".into());
   }
   let installed_revision = std::fs::read_to_string(&installed_revision_path).ok();
-  if !needs_install(installed_revision.as_deref().map(str::trim), available.trim()) {
+  if !needs_install(
+    installed_revision.as_deref().map(str::trim),
+    available.trim(),
+  ) {
     eprintln!("watch is already up to date ({})", &current.trim()[..12]);
     return Ok(());
   }
 
   run_git(
     &repository_dir,
-    &["checkout", "--quiet", "--force", "-B", "watch-updater", "FETCH_HEAD"],
+    &[
+      "checkout",
+      "--quiet",
+      "--force",
+      "-B",
+      "watch-updater",
+      "FETCH_HEAD",
+    ],
   )?;
 
   eprintln!(
@@ -84,11 +94,7 @@ fn is_git_checkout(repository_dir: &Path) -> bool {
       .is_ok_and(|output| output.trim() == "true")
     && git_output(repository_dir, &["rev-parse", "--verify", "HEAD^{commit}"]).is_ok()
     && git_output(repository_dir, &["remote", "get-url", "origin"]).is_ok_and(|remote| {
-      remote
-        .trim()
-        .trim_end_matches('/')
-        .trim_end_matches(".git")
-        == REPOSITORY
+      remote.trim().trim_end_matches('/').trim_end_matches(".git") == REPOSITORY
     })
 }
 
@@ -123,9 +129,13 @@ fn updater_cache_dir() -> Option<PathBuf> {
       .map(|path| path.join("watch").join("updater"));
   }
   if cfg!(target_os = "macos") {
-    return std::env::var_os("HOME")
-      .map(PathBuf::from)
-      .map(|path| path.join("Library").join("Caches").join("watch").join("updater"));
+    return std::env::var_os("HOME").map(PathBuf::from).map(|path| {
+      path
+        .join("Library")
+        .join("Caches")
+        .join("watch")
+        .join("updater")
+    });
   }
   std::env::var_os("XDG_CACHE_HOME")
     .map(PathBuf::from)
@@ -149,7 +159,13 @@ fn clone_repository(
   let staging_dir = cache_root.join(format!("repository-clone-{}-{nonce}", std::process::id()));
   let mut command = Command::new("git");
   command
-    .args(["clone", "--quiet", "--depth=1", "--single-branch", "--branch"])
+    .args([
+      "clone",
+      "--quiet",
+      "--depth=1",
+      "--single-branch",
+      "--branch",
+    ])
     .arg(branch)
     .arg(REPOSITORY)
     .arg(&staging_dir);
@@ -185,10 +201,7 @@ fn run_git(repository: &Path, arguments: &[&str]) -> Result<(), Box<dyn std::err
   ensure_command_success(command.output()?, "git")
 }
 
-fn ensure_command_success(
-  output: Output,
-  program: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn ensure_command_success(output: Output, program: &str) -> Result<(), Box<dyn std::error::Error>> {
   if output.status.success() {
     return Ok(());
   }
@@ -224,11 +237,9 @@ fn valid_branch_name(branch: &str) -> bool {
     && !branch.contains("..")
     && !branch.contains("//")
     && !branch.contains("@{")
-    && branch.split('/').all(|part| {
-      !part.is_empty()
-        && !part.starts_with('.')
-        && !part.ends_with(".lock")
-    })
+    && branch
+      .split('/')
+      .all(|part| !part.is_empty() && !part.starts_with('.') && !part.ends_with(".lock"))
     && branch
       .chars()
       .all(|character| character.is_ascii_alphanumeric() || "-_./".contains(character))

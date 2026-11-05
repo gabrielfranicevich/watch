@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use crate::domain::{
-  anime::Anime, episode::Episode, history::HistoryEntry, stream::Stream, subtitle::Subtitle,
+  anime::Anime, episode::Episode, history::HistoryEntry, language::LanguagePair, stream::Stream,
+  subtitle::Subtitle,
 };
 use crate::infrastructure::history_store::HistoryStore;
 use crate::providers::{
@@ -16,6 +17,8 @@ use crate::providers::{
 pub struct SearchRequest {
   pub query: String,
   pub language: Option<Language>,
+  pub audio: Option<String>,
+  pub subtitles: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,10 +88,15 @@ impl WatchApplication {
         "search query must not be empty".to_owned(),
       ));
     }
-    self
+    let options = self
       .catalog
       .search_in_language(query, request.language)
-      .map_err(|error| ApplicationError::Provider(error.to_string()))
+      .map_err(|error| ApplicationError::Provider(error.to_string()))?;
+    Ok(filter_anime_options(
+      options,
+      request.audio.as_deref(),
+      request.subtitles.as_deref(),
+    ))
   }
 
   pub fn episodes(&self, source: &ProviderAnime) -> Result<Vec<Episode>, ApplicationError> {
@@ -167,6 +175,36 @@ impl WatchApplication {
       .write(entries)
       .map_err(ApplicationError::from)
   }
+}
+
+fn filter_anime_options(
+  options: Vec<AnimeOption>,
+  audio: Option<&str>,
+  subtitles: Option<&str>,
+) -> Vec<AnimeOption> {
+  let audio = LanguagePair::new(audio, None).audio;
+  let subtitles = LanguagePair::new(None, subtitles).subtitles;
+
+  options
+    .into_iter()
+    .filter_map(|mut option| {
+      option.sources.retain(|source| {
+        let pair = source
+          .anime
+          .language_pair
+          .clone()
+          .or_else(|| source.provider.language_pair())
+          .unwrap_or_else(|| LanguagePair::new(None, None));
+        audio
+          .as_ref()
+          .is_none_or(|language| pair.audio.as_ref() == Some(language))
+          && subtitles
+            .as_ref()
+            .is_none_or(|language| pair.subtitles.as_ref() == Some(language))
+      });
+      (!option.sources.is_empty()).then_some(option)
+    })
+    .collect()
 }
 
 pub fn playback_parts(media: ResolvedMedia) -> (Stream, Option<Subtitle>) {

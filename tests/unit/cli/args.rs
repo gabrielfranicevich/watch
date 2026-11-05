@@ -141,3 +141,18 @@ fn keeps_multiword_query_when_options_are_interspersed() {
   assert_eq!(cli.quality.as_deref(), Some("720p"));
   assert!(cli.download);
 }
+
+#[test]
+fn parses_independent_audio_and_subtitle_filters() {
+  let cli = Cli::parse(["--audio", "Japanese", "--subtitles", "es-419", "Frieren"]).unwrap();
+
+  assert_eq!(cli.audio.as_deref(), Some("Japanese"));
+  assert_eq!(cli.subtitles.as_deref(), Some("es-419"));
+  assert_eq!(cli.query.as_deref(), Some("Frieren"));
+}
+
+#[test]
+fn rejects_missing_audio_and_subtitle_filter_values() {
+  assert!(Cli::parse(["--audio"]).is_err());
+  assert!(Cli::parse(["--subtitles"]).is_err());
+}

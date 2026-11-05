@@ -22,7 +22,10 @@ fn rejects_invalid_or_option_like_branch_names() {
     "feature/name.lock",
     "feature @ name",
   ] {
-    assert!(!valid_branch_name(branch), "accepted invalid branch {branch}");
+    assert!(
+      !valid_branch_name(branch),
+      "accepted invalid branch {branch}"
+    );
   }
 }
 
@@ -85,13 +88,17 @@ fn changed_remote_revision_requires_installation() {
   assert!(needs_install(Some("old-commit"), "new-commit"));
 }
 
-
 #[test]
 fn rejects_checkouts_with_an_unexpected_origin() {
   let root = temporary_repository_path();
   create_git_checkout(&root);
   let output = Command::new("git")
-    .args(["remote", "set-url", "origin", "https://example.invalid/watch"])
+    .args([
+      "remote",
+      "set-url",
+      "origin",
+      "https://example.invalid/watch",
+    ])
     .current_dir(&root)
     .status()
     .unwrap();
@@ -136,7 +143,12 @@ fn create_git_checkout(root: &Path) {
   for arguments in [
     vec!["add", "README.md"],
     vec!["commit", "--quiet", "-m", "initial"],
-    vec!["remote", "add", "origin", "https://github.com/gabrielfranicevich/watch"],
+    vec![
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/gabrielfranicevich/watch",
+    ],
   ] {
     let output = Command::new("git")
       .args(arguments)

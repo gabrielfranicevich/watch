@@ -14,7 +14,9 @@ Options:
   -s, --syncplay            Use Syncplay
   -S, --select-nth N       Select the nth entry
   -q, --quality QUALITY    Specify video quality
-      --language LANGUAGE  Filter titles by language: english/en or spanish/español/es
+      --language LANGUAGE  Filter providers by catalog language: english/en or spanish/español/es
+      --audio LANGUAGE     Filter results by audio language code or name
+      --subtitles LANGUAGE Filter results by subtitle language code or name
   -v, --vlc                Use VLC
   -V, --version            Show version
   -h, --help               Show this help
@@ -68,6 +70,8 @@ pub struct Cli {
   pub select_index: Option<usize>,
   pub quality: Option<String>,
   pub language: Option<Language>,
+  pub audio: Option<String>,
+  pub subtitles: Option<String>,
   pub vlc: bool,
   pub version: bool,
   pub help: bool,
@@ -147,6 +151,14 @@ impl Cli {
               "{arg} must be English (english/en/ingles/inglés) or Spanish (spanish/español/espanol/es)"
             ))
           })?);
+        }
+        "--audio" => {
+          index += 1;
+          cli.audio = Some(required_value(&args, index, arg)?.clone());
+        }
+        "--subtitles" => {
+          index += 1;
+          cli.subtitles = Some(required_value(&args, index, arg)?.clone());
         }
         "-N" | "--nextep-countdown" => {
           cli.next_episode_countdown = true;

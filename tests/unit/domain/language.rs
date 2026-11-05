@@ -20,8 +20,14 @@ fn keeps_each_unknown_language_independent() {
 
 #[test]
 fn normalizes_language_names_and_region_codes() {
-  assert_eq!(LanguagePair::new(Some("English"), Some("Español")).label(), "en/es");
-  assert_eq!(LanguagePair::new(Some("JA-jp"), Some("es-419")).label(), "ja-jp/es-419");
+  assert_eq!(
+    LanguagePair::new(Some("English"), Some("Español")).label(),
+    "en/es"
+  );
+  assert_eq!(
+    LanguagePair::new(Some("JA-jp"), Some("es-419")).label(),
+    "ja-jp/es-419"
+  );
 }
 
 #[test]

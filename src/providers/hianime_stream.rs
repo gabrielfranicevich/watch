@@ -7,9 +7,7 @@ use serde_json::Value;
 use super::hianime::is_browser_verification_page;
 use std::time::Duration;
 
-use crate::domain::{
-  episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle,
-};
+use crate::domain::{episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle};
 use crate::media::hls::{
   HlsVariant, into_stream, parse_default_audio_url, parse_default_language_pair,
   parse_master_playlist, select_quality,
@@ -190,14 +188,15 @@ impl HiAnimeStreamResolver {
       })?;
     let stream = into_stream(selected, Some(referer)).with_audio(audio_url);
 
-    let default_subtitle = config
-      .get("subtitles")
-      .and_then(Value::as_array)
-      .and_then(|subtitles| {
-        subtitles
-          .iter()
-          .find(|item| item.get("default").and_then(Value::as_bool) == Some(true))
-      });
+    let default_subtitle =
+      config
+        .get("subtitles")
+        .and_then(Value::as_array)
+        .and_then(|subtitles| {
+          subtitles
+            .iter()
+            .find(|item| item.get("default").and_then(Value::as_bool) == Some(true))
+        });
     let subtitle_language = default_subtitle.and_then(subtitle_language_code);
     if language_pair.subtitles.is_none() {
       language_pair.subtitles = subtitle_language.clone();

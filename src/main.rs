@@ -150,7 +150,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         Some(query) => query,
         None => read_search_query(&cli)?,
       };
-      search_anime_choices(&application, &query, cli.language)?
+      search_anime_choices(&application, &query, cli.language, &cli)?
     };
 
     if choices.is_empty() {
@@ -890,10 +890,13 @@ fn search_anime_choices(
   application: &WatchApplication,
   query: &str,
   language: Option<ani_cli::cli::args::Language>,
+  cli: &ani_cli::cli::args::Cli,
 ) -> Result<Vec<AnimeChoice>, Box<dyn std::error::Error>> {
   let mut results = application.search(&SearchRequest {
     query: query.to_owned(),
     language: language.map(provider_language),
+    audio: cli.audio.clone(),
+    subtitles: cli.subtitles.clone(),
   })?;
   let exact = std::env::var("ANI_CLI_EXACT").is_ok_and(|value| value == "1");
   if exact {

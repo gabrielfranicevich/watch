@@ -26,9 +26,7 @@ impl LanguagePair {
 }
 
 fn normalize_code(code: Option<&str>) -> Option<String> {
-  let code = code
-    .map(str::trim)
-    .filter(|code| !code.is_empty())?;
+  let code = code.map(str::trim).filter(|code| !code.is_empty())?;
 
   let normalized = match code.to_ascii_lowercase().as_str() {
     "english" | "ingles" | "inglés" => "en",

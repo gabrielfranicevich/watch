@@ -480,12 +480,7 @@ fn gnula_search_cards_report_explicit_audio_language_without_guessing_subtitles(
       </a>
     </article>
   "#;
-  let results = parse_search_results(
-    html,
-    "https://ver.gnula.one",
-    ProviderId::Gnula,
-    "Idiotas",
-  );
+  let results = parse_search_results(html, "https://ver.gnula.one", ProviderId::Gnula, "Idiotas");
   assert_eq!(results.len(), 1);
   assert_eq!(
     results[0].language_pair,
@@ -554,10 +549,9 @@ fn pelispedia_search_parser_keeps_unknown_audio_and_subtitle_languages() {
 
 #[test]
 fn pelisplus_matches_observed_movie_and_series_detail_paths() {
-  let movie = Url::parse(
-    "https://pelisplusshd.com/peliculas/apocalipsis-z-nuevo-mundo-A1507696Bx2/",
-  )
-  .unwrap();
+  let movie =
+    Url::parse("https://pelisplusshd.com/peliculas/apocalipsis-z-nuevo-mundo-A1507696Bx2/")
+      .unwrap();
   let show = Url::parse("https://pelisplusshd.com/serie/213375/visionquest/").unwrap();
   let episode = Url::parse("https://pelisplusshd.com/serie/213375-1-1/visionquest/").unwrap();
   assert!(ProviderId::PelisPlus.is_detail_path(&movie));
@@ -576,10 +570,8 @@ fn pelisplus_episode_parser_keeps_season_episode_order_and_series_identity() {
     <a href="/serie/999999-1-1/other-show/">1x1 unrelated</a>
     <a href="/serie/213375-1-2/visionquest/">Duplicate episode</a>
   "#;
-  let episodes = parse_pelisplus_episodes(
-    html,
-    "https://pelisplusshd.com/serie/213375/visionquest/",
-  );
+  let episodes =
+    parse_pelisplus_episodes(html, "https://pelisplusshd.com/serie/213375/visionquest/");
   assert_eq!(episodes.len(), 3);
   assert_eq!(episodes[0].number, "1001");
   assert_eq!(episodes[1].number, "1002");
@@ -599,24 +591,17 @@ fn pelisplus_movie_pages_are_not_treated_as_series_episode_lists() {
 
 #[test]
 fn pelisplus_watch_now_link_is_included_as_a_player_candidate() {
-  let document = Html::parse_document(
-    r#"<a href="/serie/213375/visionquest/ver/">Watch now</a>"#,
-  );
+  let document = Html::parse_document(r#"<a href="/serie/213375/visionquest/ver/">Watch now</a>"#);
   let links = provider_player_links(&document, "", ProviderId::PelisPlus);
   assert_eq!(links, vec!["/serie/213375/visionquest/ver/"]);
 }
 
 #[test]
 fn hdtoday_matches_observed_movie_and_tv_detail_paths() {
-  let movie = Url::parse(
-    "https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6",
-  )
-  .unwrap();
+  let movie = Url::parse("https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6").unwrap();
   let show = Url::parse("https://hdtoday24.at/tv/deep-waters-oneomCeeW6XW").unwrap();
-  let player = Url::parse(
-    "https://hdtoday24.at/watch-movie/apocalypse-z-new-world-pEk4yidyema6",
-  )
-  .unwrap();
+  let player =
+    Url::parse("https://hdtoday24.at/watch-movie/apocalypse-z-new-world-pEk4yidyema6").unwrap();
   assert!(ProviderId::HDToday.is_detail_path(&movie));
   assert!(ProviderId::HDToday.is_detail_path(&show));
   assert!(!ProviderId::HDToday.is_detail_path(&player));
@@ -655,10 +640,7 @@ fn hdtoday_watch_now_link_is_followed_to_the_player_page() {
 
 #[test]
 fn hdtoday_movie_details_fall_back_to_a_single_movie_entry() {
-  let url = Url::parse(
-    "https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6",
-  )
-  .unwrap();
+  let url = Url::parse("https://hdtoday24.at/movie/apocalypse-z-new-world-pEk4yidyema6").unwrap();
   assert!(ProviderId::HDToday.is_movie_path(&url));
 }
 
@@ -693,9 +675,21 @@ fn pelis7_search_parser_accepts_fallback_movie_and_series_patterns() {
 #[test]
 fn pelis7_search_routes_include_common_search_form_fallbacks() {
   let routes = ProviderId::Pelis7.search_routes();
-  assert!(routes.iter().any(|route| route.path == "/" && route.key == Some("s")));
-  assert!(routes.iter().any(|route| route.path == "/buscar" && route.key == Some("q")));
-  assert!(routes.iter().any(|route| route.path == "/search" && route.key == Some("q")));
+  assert!(
+    routes
+      .iter()
+      .any(|route| route.path == "/" && route.key == Some("s"))
+  );
+  assert!(
+    routes
+      .iter()
+      .any(|route| route.path == "/buscar" && route.key == Some("q"))
+  );
+  assert!(
+    routes
+      .iter()
+      .any(|route| route.path == "/search" && route.key == Some("q"))
+  );
 }
 
 #[test]
@@ -703,24 +697,15 @@ fn subtitle_track_uses_srclang_instead_of_display_label() {
   let document = Html::parse_document(
     r#"<video><track src="/subtitles/es.vtt" label="Español" srclang="es"></video>"#,
   );
-  let subtitle = find_subtitle(
-    &document,
-    "https://cdn.example/player.html",
-  )
-  .unwrap();
+  let subtitle = find_subtitle(&document, "https://cdn.example/player.html").unwrap();
   assert_eq!(subtitle.language.as_deref(), Some("es"));
 }
 
 #[test]
 fn subtitle_track_without_srclang_does_not_guess_from_display_label() {
-  let document = Html::parse_document(
-    r#"<video><track src="/subtitles/en.vtt" label="English"></video>"#,
-  );
-  let subtitle = find_subtitle(
-    &document,
-    "https://cdn.example/player.html",
-  )
-  .unwrap();
+  let document =
+    Html::parse_document(r#"<video><track src="/subtitles/en.vtt" label="English"></video>"#);
+  let subtitle = find_subtitle(&document, "https://cdn.example/player.html").unwrap();
   assert_eq!(subtitle.language, None);
 }
 
@@ -733,14 +718,14 @@ fn resolved_hls_language_pair_is_enriched_by_explicit_page_subtitle_language() {
     qualities: Vec::new(),
     language_pair: LanguagePair::new(Some("ja"), None),
   };
-  let subtitle = Subtitle::new(
-    "https://cdn.example/subtitles/es.vtt",
-    Some("ES".into()),
-  );
+  let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("ES".into()));
   merge_page_subtitle_metadata(&mut media, Some(&subtitle));
   assert_eq!(media.language_pair.label(), "ja/es");
   assert_eq!(
-    media.subtitle.as_ref().and_then(|track| track.language.as_deref()),
+    media
+      .subtitle
+      .as_ref()
+      .and_then(|track| track.language.as_deref()),
     Some("ES")
   );
 }
@@ -754,10 +739,7 @@ fn explicit_manifest_subtitle_language_is_not_overwritten_by_page_track() {
     qualities: Vec::new(),
     language_pair: LanguagePair::known("ja", "en"),
   };
-  let subtitle = Subtitle::new(
-    "https://cdn.example/subtitles/es.vtt",
-    Some("es".into()),
-  );
+  let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("es".into()));
   merge_page_subtitle_metadata(&mut media, Some(&subtitle));
   assert_eq!(media.language_pair.label(), "ja/en");
 }

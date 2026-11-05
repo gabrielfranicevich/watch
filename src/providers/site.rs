@@ -104,12 +104,21 @@ impl ProviderId {
 
   pub fn language(self) -> Language {
     match self {
-      Self::HiAnime | Self::GoGoAnime | Self::AniWatch | Self::NineAnime | Self::AnimeKai | Self::HDToday => {
-        Language::English
-      }
-      Self::MonosChinos | Self::TioAnime | Self::AnimeBlix | Self::AnimeFenix | Self::JkAnime | Self::Gnula | Self::PelisPedia | Self::PelisPlus | Self::Pelis7 => {
-        Language::Spanish
-      }
+      Self::HiAnime
+      | Self::GoGoAnime
+      | Self::AniWatch
+      | Self::NineAnime
+      | Self::AnimeKai
+      | Self::HDToday => Language::English,
+      Self::MonosChinos
+      | Self::TioAnime
+      | Self::AnimeBlix
+      | Self::AnimeFenix
+      | Self::JkAnime
+      | Self::Gnula
+      | Self::PelisPedia
+      | Self::PelisPlus
+      | Self::Pelis7 => Language::Spanish,
     }
   }
 
@@ -449,7 +458,12 @@ impl ProviderId {
       Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
       Self::PelisPlus => path.starts_with("/peliculas/") || path.starts_with("/serie/"),
       Self::HDToday => path.starts_with("/movie/") || path.starts_with("/tv/"),
-      Self::Pelis7 => path.starts_with("/pelicula/") || path.starts_with("/peliculas/") || path.starts_with("/serie/") || path.starts_with("/series/"),
+      Self::Pelis7 => {
+        path.starts_with("/pelicula/")
+          || path.starts_with("/peliculas/")
+          || path.starts_with("/serie/")
+          || path.starts_with("/series/")
+      }
       Self::JkAnime => {
         path.starts_with("/anime/")
           || (path
@@ -632,9 +646,7 @@ impl SiteProvider {
     if episodes.is_empty() {
       episodes = parse_episode_links(&body, &anime.url, &anime.url);
     }
-    if episodes.is_empty()
-      && Url::parse(&anime.url).is_ok_and(|url| self.id.is_movie_path(&url))
-    {
+    if episodes.is_empty() && Url::parse(&anime.url).is_ok_and(|url| self.id.is_movie_path(&url)) {
       episodes.push(Episode::new("1", Some("Movie".into()), anime.url.clone()));
     }
     if self.id == ProviderId::TioAnime && episodes.is_empty() {
@@ -731,7 +743,6 @@ fn parse_search_results(
   }
   results
 }
-
 
 fn provider_language_pair_from_anchor(
   anchor: scraper::ElementRef<'_>,
@@ -993,7 +1004,8 @@ fn parse_pelisplus_episodes(body: &str, anime_url: &str) -> Vec<Episode> {
   }
 
   episodes.sort_by(|left, right| {
-    left.number
+    left
+      .number
       .parse::<u32>()
       .unwrap_or(u32::MAX)
       .cmp(&right.number.parse::<u32>().unwrap_or(u32::MAX))
@@ -1542,7 +1554,10 @@ fn find_subtitle(document: &Html, page_url: &str) -> Option<Subtitle> {
     let value = element.value();
     let src = value.attr("src")?;
     let url = page.join(src).ok()?;
-    Some(Subtitle::new(url.to_string(), value.attr("srclang").map(str::to_owned)))
+    Some(Subtitle::new(
+      url.to_string(),
+      value.attr("srclang").map(str::to_owned),
+    ))
   })
 }
 
