@@ -44,6 +44,10 @@ Do not make the test suite depend on the live provider. Keep provider changes na
 
 Playback and downloading delegate work to external programs. Test command-line argument construction without launching the program, including URLs, referers, separate audio, subtitles, and custom flags. Keep test bodies in `tests/unit/`; do not put `#[test]` functions in `src/`. Guard platform-specific behavior explicitly and document runtime prerequisites in the tutorial and Android guide.
 
+## Updater behavior
+
+The `--update` path reuses a persistent checkout and Cargo target directory. It installs into a unique staging root first; only after `cargo install --locked` succeeds does Watch replace the executable under the active Cargo installation root. The installed-revision marker is written after that replacement succeeds, so a failed build or replacement is retried on the next update. Staging directories left behind by an interrupted update are removed on a later run when they are more than 24 hours old; newer staging directories are left untouched. Unix replacement uses a same-filesystem rename. On Windows, the previous executable is moved to a temporary backup and restored if the staged executable cannot be moved into place; if the running executable cannot be renamed, the update fails without removing it. The updater does not delete the previous executable before a successful staged install.
+
 ## Pull request checklist
 
 See [contributing.md](contributing.md) for quality gates and [pull_request_template.md](pull_request_template.md) for the review checklist.

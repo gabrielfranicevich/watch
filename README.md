@@ -99,10 +99,10 @@ watch is for terminal users who want to search for anime, choose episodes, resum
 - Duplicate titles are grouped by normalized title and audio/subtitle language pair. Choices show pairs such as `(ja/en)` or `(ja/es)`; unknown values remain `?` rather than being guessed. Provider-level defaults are not a live probe of every playback track.
 - `--language` filters the provider catalog category. Each result also reports its audio/subtitle pair as `audio/subtitles` (for example, `ja/es`). `--audio` and `--subtitles` filter source results independently using that metadata; they do not switch tracks in the player. `--dub` controls dubbed playback separately.
 - Episode lists combine sources for a title. For each episode, playback tries providers that expose that episode and chooses the stream that best matches `--quality` (the highest available quality by default).
-- HLS stream resolution, quality selection, external audio, and subtitles.
+- HLS stream resolution, quality selection, default external audio/subtitle playback, and exposure of declared alternative renditions through the shared resolver API.
 - Playback through MPV, VLC, Syncplay, IINA, Flatpak MPV, and supported Android player integrations.
 - Downloads using yt-dlp when suitable, FFmpeg fallback, and FFmpeg muxing for separate audio/video streams.
-- Compatible watch history, continuation, log viewing, external menu backends, and a Cargo-based updater that reuses a cached Git checkout and Cargo build artifacts, skipping installation when the last successfully installed revision is unchanged.
+- Compatible watch history, continuation, log viewing, external menu backends, and a Cargo-based updater that reuses a cached Git checkout and Cargo build artifacts, stages the new executable before replacing the installed binary, and records a revision only after a successful replacement.
 
 These paths depend on the provider, platform, media player, and external tools. An implemented feature does not guarantee that the live provider or every player will always be available.
 

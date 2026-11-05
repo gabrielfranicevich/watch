@@ -24,15 +24,17 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 ## Completed development milestones
 
 - [x] Replace unconditional `cargo install --force` updates with a persistent Git checkout and Cargo target cache; skip a revision only after its installation succeeds.
+- [x] Stage updater installations separately, replace the installed executable only after Cargo succeeds, and retain the previous executable if replacement fails.
 - [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
 - [x] Detect default audio/subtitle language tags from HLS master manifests and explicit HiAnime/HTML subtitle metadata; print the resolved pair before playback.
+- [x] Expose declared HLS audio and subtitle renditions, including alternatives, through `ResolvedMedia` for shared frontends.
 - [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
 - [x] Add independent `--audio` and `--subtitles` catalog filters, including tests for combined matching and unknown metadata.
 - [x] Document language filtering and derive default HLS audio/subtitle metadata through the shared rendition parser.
 
 ## Remaining work
 
-- Extend track detection to non-HLS manifests and runtime player track changes; current HLS support reports default renditions, not every alternate track or later player selection.
+- Add interactive selection and runtime switching for alternate HLS tracks, and extend metadata extraction to non-HLS manifests. The shared resolver API now exposes declared HLS renditions, but the CLI still uses default tracks.
 - Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
 - Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
