@@ -28,7 +28,8 @@ impl LanguagePair {
 fn normalize_code(code: Option<&str>) -> Option<String> {
   let code = code.map(str::trim).filter(|code| !code.is_empty())?;
 
-  let normalized = match code.to_ascii_lowercase().as_str() {
+  let code = code.to_lowercase();
+  let normalized = match code.as_str() {
     "english" | "ingles" | "inglés" => "en",
     "spanish" | "espanol" | "español" => "es",
     "japanese" | "japonés" | "japones" => "ja",
@@ -39,7 +40,7 @@ fn normalize_code(code: Option<&str>) -> Option<String> {
     "portuguese" | "portugues" | "portugués" => "pt",
     "italian" | "italiano" => "it",
     "russian" | "ruso" => "ru",
-    _ => return Some(code.to_ascii_lowercase()),
+    _ => return Some(code),
   };
 
   Some(normalized.to_owned())

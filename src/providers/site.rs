@@ -781,7 +781,7 @@ fn provider_language_pair_from_anchor(
     (false, true) => Some("es-ES"),
     _ => None,
   };
-  let lower = evidence.to_ascii_lowercase();
+  let lower = evidence.to_lowercase();
   let subtitles = [
     "subtitulado en español",
     "subtitulos en español",

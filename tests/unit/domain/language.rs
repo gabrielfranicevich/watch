@@ -31,6 +31,18 @@ fn normalizes_language_names_and_region_codes() {
 }
 
 #[test]
+fn normalizes_uppercase_unicode_language_names() {
+  assert_eq!(
+    LanguagePair::new(Some("JAPONÉS"), Some("ESPAÑOL")).label(),
+    "ja/es"
+  );
+  assert_eq!(
+    LanguagePair::new(Some("FRANCÉS"), Some("ALEMÁN")).label(),
+    "fr/de"
+  );
+}
+
+#[test]
 fn treats_unknown_language_names_as_unknown_codes_without_guessing() {
   assert_eq!(
     LanguagePair::new(Some("unknown language"), Some("")).label(),

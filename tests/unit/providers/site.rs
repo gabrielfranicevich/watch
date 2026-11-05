@@ -489,6 +489,24 @@ fn gnula_search_cards_report_explicit_audio_language_without_guessing_subtitles(
 }
 
 #[test]
+fn gnula_recognizes_uppercase_accented_subtitle_labels() {
+  let html = r#"
+    <article class="movie-card">
+      <a href="/movies/idiotas/" title="Idiotas">
+        <span class="quality">LAT SUBTÍTULOS EN ESPAÑOL HD</span>
+        <h2>Idiotas</h2>
+      </a>
+    </article>
+  "#;
+  let results = parse_search_results(html, "https://ver.gnula.one", ProviderId::Gnula, "Idiotas");
+  assert_eq!(results.len(), 1);
+  assert_eq!(
+    results[0].language_pair,
+    Some(LanguagePair::new(Some("es-419"), Some("es")))
+  );
+}
+
+#[test]
 fn gnula_cards_with_multiple_audio_options_do_not_choose_one() {
   let html = r#"
     <article class="movie-card">
