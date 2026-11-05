@@ -13,7 +13,8 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Add VLC Android playback selection.
 - [x] Define a platform-independent automatic/explicit playback policy with regression tests.
 - [x] Add an ARM64 Android cross-compilation check to CI.
-- [ ] Validate playback, subtitles, referer-dependent streams, and history across Android versions and physical Termux devices.
+- [ ] Fix and validate MPV-Android external playback in Termux, including URI, referer, audio, and subtitle handoff; validate playback, subtitles, and history across Android versions and physical devices.
+- [ ] Define and test the Android behavior of `--here`, which currently works only on desktop platforms.
 - [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history, with contract tests for input validation and history updates.
 - [x] Route CLI search, episode retrieval, and stream resolution through the shared application services; history persistence retains the CLI-compatible path.
 - [ ] Add a JNI/UniFFI proof of concept and validate locked Android-target dependency resolution.
@@ -25,6 +26,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 
 - [x] Replace unconditional `cargo install --force` updates with a persistent Git checkout and Cargo target cache; skip a revision only after its installation succeeds.
 - [x] Stage updater installations separately, replace the installed executable only after Cargo succeeds, and retain the previous executable if replacement fails.
+- [x] Remove interrupted updater staging directories after 24 hours while leaving recent or active staging directories untouched.
 - [x] Represent audio and subtitle languages independently, preserve unknown values, and group catalog results by the pair.
 - [x] Detect default audio/subtitle language tags from HLS master manifests and explicit HiAnime/HTML subtitle metadata; print the resolved pair before playback.
 - [x] Expose declared HLS audio and subtitle renditions, including alternatives, through `ResolvedMedia` for shared frontends.
@@ -35,6 +37,7 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 
 ## Remaining work
 
+- Add end-to-end updater tests with isolated Cargo roots; verify Cargo package-tracking metadata remains coherent after staged installs and test self-update behavior when the running executable is locked on Windows.
 - Add interactive selection and runtime switching for alternate HLS tracks, and extend metadata extraction to non-HLS manifests. The shared resolver API now exposes declared HLS renditions, but the CLI still uses default tracks.
 - Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
 - Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
