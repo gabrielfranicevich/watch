@@ -55,6 +55,10 @@ fn unambiguous_title_includes_its_language_label() {
   let choices = group_results(vec![source(ProviderId::NineAnime, "Frieren", "frieren")]);
   assert_eq!(choices.len(), 1);
   assert_eq!(choices[0].label, "(ja/en) Frieren");
+  assert_eq!(
+    choices[0].sources[0].anime.language_pair_source,
+    Some(LanguageMetadataSource::ProviderDefault)
+  );
 }
 
 #[test]
@@ -156,6 +160,20 @@ fn explicit_source_language_pairs_override_provider_defaults() {
   let choices = group_results(vec![source]);
   assert_eq!(choices.len(), 1);
   assert_eq!(choices[0].label, "(ja/en) Frieren");
+  assert_eq!(
+    choices[0].sources[0].anime.language_pair_source,
+    Some(LanguageMetadataSource::SearchMetadata)
+  );
+}
+
+#[test]
+fn provider_defaults_are_marked_as_provider_default_evidence() {
+  let choices = group_results(vec![source(ProviderId::TioAnime, "Frieren", "frieren")]);
+  assert_eq!(choices.len(), 1);
+  assert_eq!(
+    choices[0].sources[0].anime.language_pair_source,
+    Some(LanguageMetadataSource::ProviderDefault)
+  );
 }
 
 #[test]

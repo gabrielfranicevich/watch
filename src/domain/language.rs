@@ -1,3 +1,12 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageMetadataSource {
+  ProviderDefault,
+  SearchMetadata,
+  HlsManifest,
+  EmbedMetadata,
+  HtmlTrack,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LanguagePair {
   pub audio: Option<String>,

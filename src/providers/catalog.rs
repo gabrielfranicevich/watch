@@ -2,7 +2,11 @@ use std::{sync::mpsc, thread};
 
 use super::hianime::HiAnimeProvider;
 use super::site::{Language, ProviderId, ProviderStreamResolver, SiteProvider};
-use crate::domain::{anime::Anime, episode::Episode, language::LanguagePair};
+use crate::domain::{
+  anime::Anime,
+  episode::Episode,
+  language::{LanguageMetadataSource, LanguagePair},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderAnime {
@@ -117,7 +121,7 @@ struct TitleBucket {
 fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
   let mut buckets: Vec<TitleBucket> = Vec::new();
 
-  for source in sources {
+  for mut source in sources {
     let key = normalize_provider_title(&source.anime.title);
     if key.is_empty() {
       continue;
@@ -134,12 +138,23 @@ fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
       }
     };
 
-    let pair = source
-      .anime
-      .language_pair
-      .clone()
-      .or_else(|| source.provider.language_pair())
-      .unwrap_or_else(|| LanguagePair::new(None, None));
+    let (pair, source_kind) = match source.anime.language_pair.clone() {
+      Some(pair) => (
+        pair,
+        Some(
+          source
+            .anime
+            .language_pair_source
+            .unwrap_or(LanguageMetadataSource::SearchMetadata),
+        ),
+      ),
+      None => match source.provider.language_pair() {
+        Some(pair) => (pair, Some(LanguageMetadataSource::ProviderDefault)),
+        None => (LanguagePair::new(None, None), None),
+      },
+    };
+    source.anime.language_pair = Some(pair.clone());
+    source.anime.language_pair_source = source_kind;
     let bucket = &mut buckets[index];
     let group_index = bucket
       .groups

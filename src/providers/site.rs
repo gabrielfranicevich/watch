@@ -7,7 +7,11 @@ use super::hianime_stream::{
   HiAnimeStreamResolver, QualityOption, ResolvedMedia, StreamResolveError,
 };
 use crate::domain::{
-  anime::Anime, episode::Episode, language::LanguagePair, stream::Stream, subtitle::Subtitle,
+  anime::Anime,
+  episode::Episode,
+  language::{LanguageMetadataSource, LanguagePair},
+  stream::Stream,
+  subtitle::Subtitle,
 };
 use crate::media::hls::{
   into_stream, parse_default_audio_url, parse_default_language_pair, parse_master_playlist,
@@ -738,6 +742,10 @@ fn parse_search_results(
     if !id.is_empty() && seen.insert(id.clone()) {
       let mut anime = Anime::new(id, title, url.to_string());
       anime.language_pair = provider_language_pair_from_anchor(anchor, provider);
+      anime.language_pair_source = anime
+        .language_pair
+        .as_ref()
+        .map(|_| LanguageMetadataSource::SearchMetadata);
       results.push(anime);
     }
   }
@@ -1386,6 +1394,8 @@ impl SiteStreamResolver {
         mal_id: None,
         qualities: Vec::new(),
         language_pair: LanguagePair::new(None, None),
+        audio_language_source: None,
+        subtitle_language_source: None,
         renditions: Vec::new(),
       });
     }
@@ -1419,6 +1429,14 @@ impl SiteStreamResolver {
     }
     let renditions = parse_renditions(&playlist, media_url)?;
     let language_pair = parse_default_language_pair(&playlist, media_url)?;
+    let audio_language_source = language_pair
+      .audio
+      .as_ref()
+      .map(|_| LanguageMetadataSource::HlsManifest);
+    let subtitle_language_source = language_pair
+      .subtitles
+      .as_ref()
+      .map(|_| LanguageMetadataSource::HlsManifest);
     let variants = match parse_master_playlist(&playlist, media_url) {
       Ok(variants) => variants,
       Err(_) if playlist.lines().any(|line| line.trim() == "#EXTM3U") => {
@@ -1428,6 +1446,8 @@ impl SiteStreamResolver {
           mal_id: None,
           qualities: Vec::new(),
           language_pair,
+          audio_language_source,
+          subtitle_language_source,
           renditions,
         });
       }
@@ -1506,6 +1526,8 @@ impl SiteStreamResolver {
       mal_id: None,
       qualities,
       language_pair,
+      audio_language_source,
+      subtitle_language_source,
       renditions,
     })
   }
@@ -1548,6 +1570,9 @@ fn merge_page_subtitle_metadata(media: &mut ResolvedMedia, subtitle: Option<&Sub
       .map(str::trim)
       .filter(|language| !language.is_empty())
       .map(str::to_ascii_lowercase);
+    if media.language_pair.subtitles.is_some() {
+      media.subtitle_language_source = Some(LanguageMetadataSource::HtmlTrack);
+    }
   }
 }
 

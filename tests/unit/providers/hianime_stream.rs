@@ -85,6 +85,7 @@ fn mock_stream_resolver_server() -> (String, std::thread::JoinHandle<Vec<String>
       "src": format!("{base_url}/hls/master.m3u8"),
       "subtitles": [{
           "src": format!("{base_url}/subtitles/en.vtt"),
+          "lang": "en",
           "default": true
       }]
   })
@@ -180,6 +181,14 @@ fn resolves_server_embed_hls_audio_subtitles_and_available_qualities() {
   );
   assert_eq!(resolved.mal_id.as_deref(), Some("12345"));
   assert_eq!(resolved.renditions.len(), 3);
+  assert_eq!(
+    resolved.audio_language_source,
+    Some(LanguageMetadataSource::HlsManifest)
+  );
+  assert_eq!(
+    resolved.subtitle_language_source,
+    Some(LanguageMetadataSource::EmbedMetadata)
+  );
   assert_eq!(
     resolved
       .renditions

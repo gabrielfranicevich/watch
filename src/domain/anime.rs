@@ -1,4 +1,4 @@
-use super::language::LanguagePair;
+use super::language::{LanguageMetadataSource, LanguagePair};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Anime {
@@ -6,6 +6,7 @@ pub struct Anime {
   pub title: String,
   pub url: String,
   pub language_pair: Option<LanguagePair>,
+  pub language_pair_source: Option<LanguageMetadataSource>,
 }
 
 impl Anime {
@@ -15,6 +16,7 @@ impl Anime {
       title: title.into(),
       url: url.into(),
       language_pair: None,
+      language_pair_source: None,
     }
   }
 }
