@@ -41,6 +41,8 @@ A filter excludes sources whose corresponding metadata is unknown. These options
 
 The client must not infer a language solely from a generic SUB badge, the catalog category, a display label such as English, or the presence of a subtitle file.
 
+Android VLC accepts an external subtitle through its documented `subtitles_location` intent extra, but its public VIEW intent has no documented separate-audio extra. Watch reports when a selected external audio track cannot be applied through Android VLC.
+
 ## Resolver and access boundaries
 
 Non-HiAnime sources currently share generic HTML, iframe, HLS, and direct MP4 extraction, with small provider-specific additions. Custom JavaScript players, encrypted embeds, expiring tokens, and unsupported media hosts may need dedicated resolver work.

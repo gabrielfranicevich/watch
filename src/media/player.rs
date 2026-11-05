@@ -321,6 +321,14 @@ impl Player {
           .map(OsString::from),
         );
         args.push(OsString::from(title));
+        if let Some(subtitle) = subtitle {
+          args.extend(
+            ["-e", "subtitles_location"]
+              .into_iter()
+              .map(OsString::from),
+          );
+          args.push(OsString::from(&subtitle.url));
+        }
         args.extend(command_flags.iter().map(OsString::from));
       }
       PlayerKind::Catt => {
@@ -409,6 +417,14 @@ impl Player {
       .map_err(|error| contextualize_program_error(error, program))
   }
   fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) {
+    if matches!(self, Self::AndroidVlc) {
+      if stream.audio_url.is_some() {
+        eprintln!(
+          "watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied"
+        );
+      }
+      return;
+    }
     if !matches!(self, Self::AndroidMpv) {
       return;
     }

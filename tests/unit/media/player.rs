@@ -189,8 +189,9 @@ fn flatpak_mpv_supports_intro_skip_options() {
 }
 
 #[test]
-fn android_vlc_uses_the_vlc_activity_and_title_extra() {
-  let args = Player::AndroidVlc.arguments(&stream(), None, "Frieren Episode 4");
+fn android_vlc_forwards_external_subtitles_through_the_supported_intent_extra() {
+  let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("es".into()));
+  let args = Player::AndroidVlc.arguments(&stream(), Some(&subtitle), "Frieren Episode 4");
   let args: Vec<_> = args
     .iter()
     .map(|arg| arg.to_string_lossy().into_owned())
@@ -199,6 +200,8 @@ fn android_vlc_uses_the_vlc_activity_and_title_extra() {
     pair[0] == "-n" && pair[1] == "org.videolan.vlc/org.videolan.vlc.gui.video.VideoPlayerActivity"
   }));
   assert!(args.contains(&"Frieren Episode 4".to_owned()));
+  assert!(args.windows(2).any(|pair| pair == ["-e", "subtitles_location"]));
+  assert!(args.contains(&"https://cdn.example/subtitles/es.vtt".to_owned()));
   assert_eq!(Player::AndroidVlc.command_name(), "am");
 }
 
