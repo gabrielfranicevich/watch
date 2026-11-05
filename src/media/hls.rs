@@ -104,53 +104,26 @@ pub fn parse_renditions(body: &str, master_url: &str) -> Result<Vec<HlsRendition
 }
 
 pub fn parse_default_audio_url(body: &str, master_url: &str) -> Result<Option<String>, HlsError> {
-  if !body.lines().any(|line| line.trim() == "#EXTM3U") {
-    return Err(HlsError("response is not an HLS playlist".into()));
-  }
-
-  for line in body.lines().map(str::trim) {
-    let Some(attributes) = line.strip_prefix("#EXT-X-MEDIA:") else {
-      continue;
-    };
-    if attribute(attributes, "TYPE") != Some("AUDIO")
-      || attribute(attributes, "DEFAULT") != Some("YES")
-    {
-      continue;
-    }
-    let Some(uri) = attribute(attributes, "URI") else {
-      return Ok(None);
-    };
-    return resolve_url(master_url, uri).map(Some);
-  }
-  Ok(None)
+  Ok(
+    parse_renditions(body, master_url)?
+      .into_iter()
+      .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
+      .and_then(|rendition| rendition.url),
+  )
 }
 
-pub fn parse_default_language_pair(
-  body: &str,
-  _master_url: &str,
-) -> Result<LanguagePair, HlsError> {
-  if !body.lines().any(|line| line.trim() == "#EXTM3U") {
-    return Err(HlsError("response is not an HLS playlist".into()));
-  }
-
-  let audio = default_track_language(body, "AUDIO");
-  let subtitles = default_track_language(body, "SUBTITLES");
-  Ok(LanguagePair::new(audio.as_deref(), subtitles.as_deref()))
+pub fn parse_default_language_pair(body: &str, master_url: &str) -> Result<LanguagePair, HlsError> {
+  let renditions = parse_renditions(body, master_url)?;
+  let audio = renditions
+    .iter()
+    .find(|rendition| rendition.kind == HlsRenditionType::Audio && rendition.is_default)
+    .and_then(|rendition| rendition.language.as_deref());
+  let subtitles = renditions
+    .iter()
+    .find(|rendition| rendition.kind == HlsRenditionType::Subtitles && rendition.is_default)
+    .and_then(|rendition| rendition.language.as_deref());
+  Ok(LanguagePair::new(audio, subtitles))
 }
-
-fn default_track_language(body: &str, track_type: &str) -> Option<String> {
-  body
-    .lines()
-    .map(str::trim)
-    .filter_map(|line| line.strip_prefix("#EXT-X-MEDIA:"))
-    .find_map(|attributes| {
-      (attribute(attributes, "TYPE") == Some(track_type)
-        && attribute(attributes, "DEFAULT") == Some("YES"))
-      .then(|| attribute(attributes, "LANGUAGE").map(str::to_owned))
-      .flatten()
-    })
-}
-
 pub fn select_quality<'a>(variants: &'a [HlsVariant], requested: &str) -> Option<&'a HlsVariant> {
   if variants.is_empty() {
     return None;

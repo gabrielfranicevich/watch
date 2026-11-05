@@ -36,10 +36,10 @@ fn selects_best_worst_and_requested_height() {
 
 #[test]
 fn parses_default_audio_rendition_and_resolves_its_url() {
-  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",DEFAULT=YES,URI=\"../audio/en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n360.m3u8\n";
+  let playlist = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=NO,URI=\"../audio/en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Japanese\",LANGUAGE=\"ja\",DEFAULT=YES,URI=\"../audio/ja.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n360.m3u8\n";
   assert_eq!(
     parse_default_audio_url(playlist, "https://cdn.example/hls/master.m3u8").unwrap(),
-    Some("https://cdn.example/audio/en.m3u8".to_owned())
+    Some("https://cdn.example/audio/ja.m3u8".to_owned())
   );
 }
 
