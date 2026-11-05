@@ -38,13 +38,13 @@ cargo install watch
 For the Android stabilization build, install directly from the `android-support` branch. On Termux, use this command to avoid Cargo's `Text file busy (os error 26)` temporary-build failure by using a directory under `$HOME` and a single build job:
 
 ```sh
-mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch android-support --locked --force
+mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop --locked --force
 ```
 
 For future updates, run:
 
 ```sh
-watch -U android-support
+watch -U develop
 ```
 
 Confirm the command is available:
@@ -110,7 +110,7 @@ If MPV plays the video, opening media with `termux-open` works. Anime stream ava
 You do not need to repeat the installation. Run:
 
 ```sh
-watch -U android-support
+watch -U develop
 ```
 
 Then continue using Watch as usual:
