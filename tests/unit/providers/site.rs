@@ -1085,7 +1085,6 @@ video.m3u8
   assert_eq!(media.renditions.len(), 2);
 }
 
-
 #[test]
 fn pelispedia_series_detail_fixture_records_season_episode_content_without_inventing_links() {
   let html = include_str!("../../fixtures/providers/pelispedia/moving-series.html");
@@ -1095,12 +1094,14 @@ fn pelispedia_series_detail_fixture_records_season_episode_content_without_inven
     first_text(&document, &[".season p"]).as_deref(),
     Some("(20 episodios)")
   );
-  assert!(parse_episode_links(
-    html,
-    "https://pelispedia.mov",
-    "https://pelispedia.mov/serie/moving"
-  )
-  .is_empty());
+  assert!(
+    parse_episode_links(
+      html,
+      "https://pelispedia.mov",
+      "https://pelispedia.mov/serie/moving"
+    )
+    .is_empty()
+  );
 }
 
 #[test]
@@ -1115,7 +1116,7 @@ fn pelispedia_series_detail_with_no_episode_urls_returns_a_provider_error() {
     let (mut connection, _) = listener.accept().unwrap();
     let mut request = Vec::new();
     let mut buffer = [0_u8; 1024];
-    while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
       let count = connection.read(&mut buffer).unwrap();
       if count == 0 {
         break;
@@ -1124,17 +1125,13 @@ fn pelispedia_series_detail_with_no_episode_urls_returns_a_provider_error() {
     }
     write!(
       connection,
-      "HTTP/1.1 200 OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{html}",
+      "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
       html.len()
     )
     .unwrap();
   });
 
-  let anime = Anime::new(
-    "moving",
-    "Moving",
-    format!("http://{address}/serie/moving"),
-  );
+  let anime = Anime::new("moving", "Moving", format!("http://{address}/serie/moving"));
   let provider = SiteProvider {
     id: ProviderId::PelisPedia,
     client: Client::new(),
@@ -1159,7 +1156,7 @@ fn pelispedia_generic_resolver_accepts_an_explicit_direct_mp4_url() {
     let (mut connection, _) = listener.accept().unwrap();
     let mut request = Vec::new();
     let mut buffer = [0_u8; 1024];
-    while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
       let count = connection.read(&mut buffer).unwrap();
       if count == 0 {
         break;
@@ -1170,7 +1167,7 @@ fn pelispedia_generic_resolver_accepts_an_explicit_direct_mp4_url() {
     assert!(request.lines().next().unwrap().contains("/episode.mp4"));
     write!(
       connection,
-      "HTTP/1.1 206 Partial Content\\r\\nContent-Type: video/mp4\\r\\nContent-Length: 1\\r\\nContent-Range: bytes 0-0/1\\r\\nConnection: close\\r\\n\\r\\nx"
+      "HTTP/1.1 206 Partial Content\r\nContent-Type: video/mp4\r\nContent-Length: 1\r\nContent-Range: bytes 0-0/1\r\nConnection: close\r\n\r\nx"
     )
     .unwrap();
   });
