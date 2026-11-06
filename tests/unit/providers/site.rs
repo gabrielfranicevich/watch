@@ -258,7 +258,11 @@ video.m3u8
     .unwrap();
   });
 
-  let resolver = SiteStreamResolver::new(ProviderId::JkAnime);
+  assert_eq!(
+    ProviderId::GoGoAnime.language_pair(),
+    Some(LanguagePair::new(Some("ja"), Some("en")))
+  );
+  let resolver = SiteStreamResolver::new(ProviderId::GoGoAnime);
   let master = format!("http://{address}/master.m3u8");
   let resolved = resolver
     .resolve_media_url(&master, &master, "best")
@@ -1425,4 +1429,70 @@ fn hdtoday_movie_and_tv_detail_pages_keep_distinct_episode_behavior() {
     tv_error.contains("no recognizable episode URLs"),
     "{tv_error}"
   );
+}
+
+#[test]
+fn movie_tv_catalog_language_metadata_is_not_reused_as_media_track_evidence() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+  use std::time::Duration;
+
+  let catalog = parse_search_results(
+    r#"<article><a href="/movies/idiotas/" title="Idiotas"><span>LAT SUB HD</span></a></article>"#,
+    "https://ver.gnula.one",
+    ProviderId::Gnula,
+    "Idiotas",
+  );
+  assert_eq!(
+    catalog[0].language_pair,
+    Some(LanguagePair::new(Some("es-419"), None))
+  );
+  assert_eq!(
+    catalog[0].language_pair_source,
+    Some(LanguageMetadataSource::SearchMetadata)
+  );
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let media_url = format!("http://{address}/movie.mp4");
+  let providers = [
+    ProviderId::Gnula,
+    ProviderId::PelisPedia,
+    ProviderId::PelisPlus,
+    ProviderId::HDToday,
+    ProviderId::Pelis7,
+  ];
+  let request_count = providers.len();
+  let server = std::thread::spawn(move || {
+    for _ in 0..request_count {
+      let (mut connection, _) = listener.accept().unwrap();
+      connection
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+      let mut request = Vec::new();
+      let mut buffer = [0_u8; 1024];
+      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = connection.read(&mut buffer).unwrap();
+        if count == 0 {
+          break;
+        }
+        request.extend_from_slice(&buffer[..count]);
+      }
+      write!(
+        connection,
+        "HTTP/1.1 206 Partial Content\r\nContent-Type: video/mp4\r\nContent-Range: bytes 0-0/1\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx"
+      )
+      .unwrap();
+    }
+  });
+
+  for provider in providers {
+    let media = SiteStreamResolver::new(provider)
+      .resolve_media_url(&media_url, "https://example.test/detail/", "best")
+      .unwrap();
+    assert_eq!(media.language_pair.label(), "?/?", "{}", provider.name());
+    assert_eq!(media.audio_language_source, None, "{}", provider.name());
+    assert_eq!(media.subtitle_language_source, None, "{}", provider.name());
+  }
+  server.join().unwrap();
 }
