@@ -640,3 +640,25 @@ fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
 
   std::fs::remove_dir_all(config_dir).unwrap();
 }
+
+
+#[test]
+fn android_mpv_playback_preparation_fails_when_shared_config_cannot_be_written() {
+  let root = std::env::temp_dir().join(format!(
+    "watch-android-config-error-{}-{}",
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  std::fs::write(&root, "not a directory").unwrap();
+
+  let error = prepare_android_mpv_config(&root, &stream(), None).unwrap_err();
+  assert!(matches!(
+    error.kind(),
+    io::ErrorKind::AlreadyExists | io::ErrorKind::NotADirectory
+  ));
+
+  std::fs::remove_file(root).unwrap();
+}

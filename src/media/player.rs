@@ -384,7 +384,7 @@ impl Player {
     command_flags: &[String],
     media_flags: &[String],
   ) -> io::Result<ExitStatus> {
-    self.prepare_playback(stream, subtitle);
+    self.prepare_playback(stream, subtitle)?;
     let program = self.command_name();
     Command::new(program)
       .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
@@ -437,7 +437,7 @@ impl Player {
     media_flags: &[String],
     enable_track_control: bool,
   ) -> io::Result<(Child, Option<MpvTrackController>)> {
-    self.prepare_playback(stream, subtitle);
+    self.prepare_playback(stream, subtitle)?;
     let program = self.command_name();
     let mut args = self.arguments_with_options(stream, subtitle, title, command_flags, media_flags);
     let controller = if enable_track_control && self.supports_runtime_track_switching() {
@@ -469,35 +469,36 @@ impl Player {
     Ok((child, controller))
   }
 
-  fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) {
+  fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) -> io::Result<()> {
     if matches!(self, Self::AndroidVlc) {
       if stream.audio_url.is_some() {
         eprintln!(
           "watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied"
         );
       }
-      return;
+      return Ok(());
     }
     if !matches!(self, Self::AndroidMpv) {
-      return;
-    }
-
-    let config = android_mpv_config(stream, subtitle);
-
-    if stream.referer.is_some() {
-      eprintln!(
-        "watch: this stream requires MPV-Android to send a Referer header.          In Android Settings, grant MPV-Android (is.xyz.mpv)          \"Allow access to manage all files\"; otherwise the player may open and immediately stop."
-      );
+      return Ok(());
     }
 
     let config_path = std::path::Path::new("/storage/emulated/0/mpv");
-    if let Err(error) = ensure_android_mpv_config(config_path, &config) {
+    prepare_android_mpv_config(config_path, stream, subtitle).map_err(|error| {
+      io::Error::new(
+        error.kind(),
+        format!(
+          "could not prepare MPV-Android playback configuration in {}: {error}. Run `termux-setup-storage`, grant Termux shared-storage access, and ensure MPV-Android can read its shared mpv.conf",
+          config_path.display()
+        ),
+      )
+    })?;
+
+    if stream.referer.is_some() {
       eprintln!(
-        "watch: warning: could not configure MPV for this stream: {error}. \
-         Run `termux-setup-storage` and allow MPV-Android access to shared storage; \
-         streams requiring a Referer header may otherwise fail."
+        "watch: this stream requires MPV-Android to send a Referer header; verify that its shared mpv.conf includes mpv.config.mp4 and that MPV-Android can read the shared mpv directory"
       );
     }
+    Ok(())
   }
 }
 
@@ -644,6 +645,14 @@ impl Drop for IpcEndpoint {
     let Self::Unix(path) = self;
     let _ = std::fs::remove_file(path);
   }
+}
+
+fn prepare_android_mpv_config(
+  config_dir: &std::path::Path,
+  stream: &Stream,
+  subtitle: Option<&Subtitle>,
+) -> io::Result<()> {
+  ensure_android_mpv_config(config_dir, &android_mpv_config(stream, subtitle))
 }
 
 fn ensure_android_mpv_config(config_dir: &std::path::Path, config: &str) -> io::Result<()> {
