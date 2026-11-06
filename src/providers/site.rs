@@ -1667,19 +1667,14 @@ fn parse_dash_language_pair(body: &str) -> LanguagePair {
       .map(str::to_ascii_lowercase);
     let is_audio = content_type == "audio" || mime_type.starts_with("audio/");
     let has_subtitle_role = adaptation.select(&roles).any(|role| {
-      role
-        .value()
-        .attr("value")
-        .is_some_and(|value| {
-          matches!(
-            value.to_ascii_lowercase().as_str(),
-            "subtitle" | "subtitles" | "caption" | "captions" | "forced-subtitle"
-          )
-        })
+      role.value().attr("value").is_some_and(|value| {
+        matches!(
+          value.to_ascii_lowercase().as_str(),
+          "subtitle" | "subtitles" | "caption" | "captions" | "forced-subtitle"
+        )
+      })
     });
-    let is_subtitle = content_type == "text"
-      || mime_type.starts_with("text/")
-      || has_subtitle_role;
+    let is_subtitle = content_type == "text" || mime_type.starts_with("text/") || has_subtitle_role;
 
     if let Some(language) = language {
       if is_audio {

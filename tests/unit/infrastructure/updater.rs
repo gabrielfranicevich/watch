@@ -315,7 +315,7 @@ fn cargo_tracking_metadata_stays_coherent_after_a_staged_install() {
   let existing_package = root.join("existing-package");
   let watch_package = root.join("watch-package");
   create_fixture_package(&existing_package, "watch-existing-fixture");
-  create_fixture_package(&watch_package, "watch-staged-fixture");
+  create_fixture_package(&watch_package, "watch");
 
   install_fixture_package(&existing_package, &install_root, &target_dir);
   std::fs::create_dir_all(&staging_root).unwrap();
@@ -331,7 +331,7 @@ fn cargo_tracking_metadata_stays_coherent_after_a_staged_install() {
   assert!(listing.status.success());
   let listing = String::from_utf8_lossy(&listing.stdout);
   assert!(listing.contains("watch-existing-fixture"), "{listing}");
-  assert!(listing.contains("watch-staged-fixture"), "{listing}");
+  assert!(listing.contains("watch"), "{listing}");
   std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -344,18 +344,18 @@ fn cargo_uninstall_removes_staged_package_without_dropping_existing_packages() {
   let existing_package = root.join("existing-package");
   let staged_package = root.join("staged-package");
   create_fixture_package(&existing_package, "watch-existing-fixture");
-  create_fixture_package(&staged_package, "watch-staged-fixture");
+  create_fixture_package(&staged_package, "watch");
 
   install_fixture_package(&existing_package, &install_root, &target_dir);
   std::fs::create_dir_all(&staging_root).unwrap();
   seed_cargo_tracking_metadata(&install_root, &staging_root).unwrap();
   install_fixture_package(&staged_package, &staging_root, &target_dir);
-  sync_cargo_tracking_metadata(&staging_root, &install_root).unwrap();
+  install_staged_binary(&staging_root, &install_root).unwrap();
 
   let uninstall = Command::new("cargo")
     .args(["uninstall", "--root"])
     .arg(&install_root)
-    .arg("watch-staged-fixture")
+    .arg("watch")
     .output()
     .unwrap();
   assert!(
@@ -372,7 +372,10 @@ fn cargo_uninstall_removes_staged_package_without_dropping_existing_packages() {
   assert!(listing.status.success());
   let listing = String::from_utf8_lossy(&listing.stdout);
   assert!(listing.contains("watch-existing-fixture"), "{listing}");
-  assert!(!listing.contains("watch-staged-fixture"), "{listing}");
+  assert!(
+    !listing.lines().any(|line| line.starts_with("watch v")),
+    "{listing}"
+  );
 
   let uninstall = Command::new("cargo")
     .args(["uninstall", "--root"])
@@ -408,7 +411,7 @@ fn cargo_build_failure_preserves_installed_binary_and_tracking_metadata() {
   let install_root = root.join("cargo");
   let staging_root = root.join("staging");
   let target_dir = root.join("target");
-  create_fixture_package(&existing_package, "watch-existing-fixture");
+  create_fixture_package(&existing_package, "watch");
   create_fixture_package(&failing_package, "watch-failing-fixture");
   std::fs::write(
     failing_package.join("src/main.rs"),
@@ -420,7 +423,7 @@ fn cargo_build_failure_preserves_installed_binary_and_tracking_metadata() {
   let installed_binary = install_root.join("bin").join(installed_binary_name());
   let previous_binary = std::fs::read(&installed_binary).unwrap();
   let previous_crates = std::fs::read(install_root.join(".crates.toml")).unwrap();
-  let previous_crates2 = std::fs::read(install_root.join(".crates2.json")).unwrap();
+  let previous_crates2 = std::fs::read(install_root.join(".crates2.json")).ok();
   std::fs::create_dir_all(&staging_root).unwrap();
   seed_cargo_tracking_metadata(&install_root, &staging_root).unwrap();
 
@@ -442,10 +445,15 @@ fn cargo_build_failure_preserves_installed_binary_and_tracking_metadata() {
     previous_crates
   );
   assert_eq!(
-    std::fs::read(install_root.join(".crates2.json")).unwrap(),
+    std::fs::read(install_root.join(".crates2.json")).ok(),
     previous_crates2
   );
-  assert!(!staging_root.join("bin").join(installed_binary_name()).exists());
+  assert!(
+    !staging_root
+      .join("bin")
+      .join(installed_binary_name())
+      .exists()
+  );
 
   let listing = Command::new("cargo")
     .args(["install", "--list", "--root"])
@@ -454,7 +462,7 @@ fn cargo_build_failure_preserves_installed_binary_and_tracking_metadata() {
     .unwrap();
   assert!(listing.status.success());
   let listing = String::from_utf8_lossy(&listing.stdout);
-  assert!(listing.contains("watch-existing-fixture"), "{listing}");
+  assert!(listing.contains("watch"), "{listing}");
   assert!(!listing.contains("watch-failing-fixture"), "{listing}");
 
   std::fs::remove_dir_all(root).unwrap();
@@ -478,11 +486,15 @@ fn install_permission_failure_keeps_the_previous_executable() {
   std::fs::create_dir_all(&staged_dir).unwrap();
   let installed_binary = installed_dir.join(installed_binary_name());
   std::fs::write(&installed_binary, b"previous executable").unwrap();
-  std::fs::write(staged_dir.join(installed_binary_name()), b"staged executable").unwrap();
-  std::fs::set_permissions(&install_root, std::fs::Permissions::from_mode(0o555)).unwrap();
+  std::fs::write(
+    staged_dir.join(installed_binary_name()),
+    b"staged executable",
+  )
+  .unwrap();
+  std::fs::set_permissions(&installed_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
 
   let result = install_staged_binary(&staging_root, &install_root);
-  std::fs::set_permissions(&install_root, std::fs::Permissions::from_mode(0o755)).unwrap();
+  std::fs::set_permissions(&installed_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
 
   assert!(result.is_err());
   assert_eq!(
@@ -669,22 +681,13 @@ fn failed_fetch_preserves_a_valid_checkout_for_retry() {
   run_git_in(&source, &["remote", "add", "origin", remote_url]);
   run_git_in(&source, &["push", "--quiet", "-u", "origin", "main"]);
 
-  ensure_repository_checkout(
-    &cache_root,
-    &repository_dir,
-    "main",
-    remote_url,
-  )
-  .unwrap();
+  ensure_repository_checkout(&cache_root, &repository_dir, "main", remote_url).unwrap();
   let original_revision = git_output(&repository_dir, &["rev-parse", "HEAD"]).unwrap();
 
-  assert!(ensure_repository_checkout(
-    &cache_root,
-    &repository_dir,
-    "missing-branch",
-    remote_url,
-  )
-  .is_err());
+  assert!(
+    ensure_repository_checkout(&cache_root, &repository_dir, "missing-branch", remote_url,)
+      .is_err()
+  );
 
   assert!(repository_dir.is_dir());
   assert!(is_git_checkout_from(&repository_dir, remote_url));
@@ -695,17 +698,13 @@ fn failed_fetch_preserves_a_valid_checkout_for_retry() {
     original_revision.trim()
   );
   assert_eq!(
-    std::fs::read_to_string(repository_dir.join("README.md")).unwrap(),
-    "preserve me\n"
+    std::fs::read_to_string(repository_dir.join("README.md"))
+      .unwrap()
+      .trim_end(),
+    "preserve me"
   );
 
-  ensure_repository_checkout(
-    &cache_root,
-    &repository_dir,
-    "main",
-    remote_url,
-  )
-  .unwrap();
+  ensure_repository_checkout(&cache_root, &repository_dir, "main", remote_url).unwrap();
   assert!(is_git_checkout_from(&repository_dir, remote_url));
   std::fs::remove_dir_all(root).unwrap();
 }

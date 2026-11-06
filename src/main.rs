@@ -22,7 +22,7 @@ use ani_cli::infrastructure::paths;
 use ani_cli::infrastructure::updater::update_rust_installation;
 use ani_cli::media::downloader::{MediaDownloader, SubtitleDownloader};
 use ani_cli::media::hls::{HlsRendition, HlsRenditionType};
-use ani_cli::media::player::Player;
+use ani_cli::media::player::{MpvTrackController, Player};
 use ani_cli::media::terminal_video::TerminalVideoBackend;
 use ani_cli::providers::anime_schedule::AnimeScheduleProvider;
 use ani_cli::providers::catalog::{AnimeOption, ProviderAnime};
@@ -340,6 +340,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     download_dir: &download_dir,
     history: history.as_ref(),
     cli: &cli,
+    track_selection: None,
+    track_controller: None,
   };
   let mut active_player: Option<Child> = None;
 
@@ -399,6 +401,15 @@ struct PlaybackConfig<'a> {
   download_dir: &'a Path,
   history: Option<&'a HistoryStore>,
   cli: &'a ani_cli::cli::args::Cli,
+  track_selection: Option<PlaybackTrackSelection>,
+  track_controller: Option<MpvTrackController>,
+}
+
+struct PlaybackTrackSelection {
+  audio: Vec<TrackChoice>,
+  selected_audio: usize,
+  subtitles: Vec<TrackChoice>,
+  selected_subtitles: usize,
 }
 
 enum PlaybackResult {
@@ -414,6 +425,8 @@ impl PlaybackConfig<'_> {
     episode: &Episode,
     attached: bool,
   ) -> Result<PlaybackResult, Box<dyn std::error::Error>> {
+    self.track_controller = None;
+    self.track_selection = None;
     eprintln!(
       "Resolving episode {} ({}) at quality {}...",
       episode.number,
@@ -509,20 +522,21 @@ impl PlaybackConfig<'_> {
       self.record(&source, episode)?;
       Ok(PlaybackResult::Attached(status))
     } else {
-      let child = self.player.launch_detached_with_options(
+      let (child, controller) = self.player.launch_detached_with_track_control(
         &media.stream,
         media.subtitle.as_ref(),
         &title,
         &self.player_flags,
         &media_flags,
       )?;
+      self.track_controller = controller;
       self.record(&source, episode)?;
       Ok(PlaybackResult::Detached(child))
     }
   }
 
   fn select_alternative_tracks(
-    &self,
+    &mut self,
     media: &mut ResolvedMedia,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let audio_choices = track_choices(
@@ -532,13 +546,18 @@ impl PlaybackConfig<'_> {
       media.language_pair.audio.as_deref(),
       media.audio_language_source,
     );
+    let mut selected_audio = 0;
     if audio_choices.len() > 1 {
       let labels = audio_choices
         .iter()
         .map(|choice| choice.label.clone())
         .collect::<Vec<_>>();
-      let selected = select_item(&labels, "Select audio track: ", None, self.cli)?;
-      apply_track_choice(media, HlsRenditionType::Audio, &audio_choices[selected]);
+      selected_audio = select_item(&labels, "Select audio track: ", None, self.cli)?;
+      apply_track_choice(
+        media,
+        HlsRenditionType::Audio,
+        &audio_choices[selected_audio],
+      );
     }
 
     let subtitle_url = media
@@ -552,18 +571,25 @@ impl PlaybackConfig<'_> {
       media.language_pair.subtitles.as_deref(),
       media.subtitle_language_source,
     );
+    let mut selected_subtitles = 0;
     if subtitle_choices.len() > 1 {
       let labels = subtitle_choices
         .iter()
         .map(|choice| choice.label.clone())
         .collect::<Vec<_>>();
-      let selected = select_item(&labels, "Select subtitle track: ", None, self.cli)?;
+      selected_subtitles = select_item(&labels, "Select subtitle track: ", None, self.cli)?;
       apply_track_choice(
         media,
         HlsRenditionType::Subtitles,
-        &subtitle_choices[selected],
+        &subtitle_choices[selected_subtitles],
       );
     }
+    self.track_selection = Some(PlaybackTrackSelection {
+      audio: audio_choices,
+      selected_audio,
+      subtitles: subtitle_choices,
+      selected_subtitles,
+    });
     Ok(())
   }
 
@@ -627,6 +653,18 @@ impl PlaybackConfig<'_> {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlaybackMenuAction {
+  ChangeAudio,
+  ChangeSubtitles,
+  NextEpisode,
+  ReplayEpisode,
+  PreviousEpisode,
+  SelectEpisode,
+  ChangeQuality,
+  Quit,
+}
+
 fn run_playback_menu(
   anime: &Anime,
   episodes: &[Episode],
@@ -636,21 +674,68 @@ fn run_playback_menu(
   cli: &ani_cli::cli::args::Cli,
   attached: bool,
 ) -> Result<ExitCode, Box<dyn std::error::Error>> {
-  let actions = vec![
-    "Next episode".to_owned(),
-    "Replay current episode".to_owned(),
-    "Previous episode".to_owned(),
-    "Select episode".to_owned(),
-    "Change quality".to_owned(),
-    "Quit".to_owned(),
-  ];
-
   loop {
+    let player_is_running = match active_player.as_mut() {
+      Some(child) => child.try_wait()?.is_none(),
+      None => false,
+    };
+    if !player_is_running {
+      *active_player = None;
+      playback.track_controller = None;
+    }
+
+    let mut actions = Vec::new();
+    if playback.track_controller.is_some() {
+      if let Some(selection) = playback.track_selection.as_ref() {
+        if selection.audio.len() > 1 {
+          actions.push((
+            format!(
+              "Change audio track ({})",
+              selection.audio[selection.selected_audio].label
+            ),
+            PlaybackMenuAction::ChangeAudio,
+          ));
+        }
+        if selection.subtitles.len() > 1 {
+          actions.push((
+            format!(
+              "Change subtitle track ({})",
+              selection.subtitles[selection.selected_subtitles].label
+            ),
+            PlaybackMenuAction::ChangeSubtitles,
+          ));
+        }
+      }
+    }
+    actions.extend([
+      ("Next episode".to_owned(), PlaybackMenuAction::NextEpisode),
+      (
+        "Replay current episode".to_owned(),
+        PlaybackMenuAction::ReplayEpisode,
+      ),
+      (
+        "Previous episode".to_owned(),
+        PlaybackMenuAction::PreviousEpisode,
+      ),
+      (
+        "Select episode".to_owned(),
+        PlaybackMenuAction::SelectEpisode,
+      ),
+      (
+        "Change quality".to_owned(),
+        PlaybackMenuAction::ChangeQuality,
+      ),
+      ("Quit".to_owned(), PlaybackMenuAction::Quit),
+    ]);
+    let labels = actions
+      .iter()
+      .map(|(label, _)| label.clone())
+      .collect::<Vec<_>>();
     let prompt = format!(
       "Playing episode {} of {} — choose action: ",
       episodes[*current_index].number, anime.title
     );
-    let action = match select_item(&actions, &prompt, None, cli) {
+    let action_index = match select_item(&labels, &prompt, None, cli) {
       Ok(index) => index,
       Err(error) if error.to_string() == "selection cancelled" => {
         return Ok(ExitCode::SUCCESS);
@@ -659,23 +744,107 @@ fn run_playback_menu(
     };
 
     let mut episodes_to_play = Vec::new();
-    match action {
-      0 => {
+    match actions[action_index].1 {
+      PlaybackMenuAction::ChangeAudio => {
+        let selection = playback
+          .track_selection
+          .as_ref()
+          .ok_or("audio track choices are unavailable")?;
+        let labels = selection
+          .audio
+          .iter()
+          .enumerate()
+          .map(|(index, choice)| {
+            if index == selection.selected_audio {
+              format!("{} (current)", choice.label)
+            } else {
+              choice.label.clone()
+            }
+          })
+          .collect::<Vec<_>>();
+        let selected = match select_item(&labels, "Select audio track: ", None, cli) {
+          Ok(index) => index,
+          Err(error) if error.to_string() == "selection cancelled" => continue,
+          Err(error) => return Err(error),
+        };
+        let choice = playback
+          .track_selection
+          .as_ref()
+          .and_then(|selection| selection.audio.get(selected))
+          .cloned()
+          .ok_or("selected audio track is unavailable")?;
+        let result = playback
+          .track_controller
+          .as_ref()
+          .ok_or("runtime track control is unavailable")?
+          .set_audio_track(choice.url.as_deref());
+        if let Err(error) = result {
+          eprintln!("watch: could not switch audio track: {error}");
+          continue;
+        }
+        if let Some(selection) = playback.track_selection.as_mut() {
+          selection.selected_audio = selected;
+        }
+        continue;
+      }
+      PlaybackMenuAction::ChangeSubtitles => {
+        let selection = playback
+          .track_selection
+          .as_ref()
+          .ok_or("subtitle track choices are unavailable")?;
+        let labels = selection
+          .subtitles
+          .iter()
+          .enumerate()
+          .map(|(index, choice)| {
+            if index == selection.selected_subtitles {
+              format!("{} (current)", choice.label)
+            } else {
+              choice.label.clone()
+            }
+          })
+          .collect::<Vec<_>>();
+        let selected = match select_item(&labels, "Select subtitle track: ", None, cli) {
+          Ok(index) => index,
+          Err(error) if error.to_string() == "selection cancelled" => continue,
+          Err(error) => return Err(error),
+        };
+        let choice = playback
+          .track_selection
+          .as_ref()
+          .and_then(|selection| selection.subtitles.get(selected))
+          .cloned()
+          .ok_or("selected subtitle track is unavailable")?;
+        let result = playback
+          .track_controller
+          .as_ref()
+          .ok_or("runtime track control is unavailable")?
+          .set_subtitle_track(choice.url.as_deref());
+        if let Err(error) = result {
+          eprintln!("watch: could not switch subtitle track: {error}");
+          continue;
+        }
+        if let Some(selection) = playback.track_selection.as_mut() {
+          selection.selected_subtitles = selected;
+        }
+        continue;
+      }
+      PlaybackMenuAction::NextEpisode => {
         if *current_index + 1 >= episodes.len() {
           eprintln!("Already at the last episode.");
           continue;
         }
         *current_index += 1;
       }
-      1 => {}
-      2 => {
+      PlaybackMenuAction::ReplayEpisode => {}
+      PlaybackMenuAction::PreviousEpisode => {
         if *current_index == 0 {
           eprintln!("Already at the first episode.");
           continue;
         }
         *current_index -= 1;
       }
-      3 => {
+      PlaybackMenuAction::SelectEpisode => {
         let labels: Vec<String> = episodes
           .iter()
           .map(|episode| {
@@ -692,7 +861,7 @@ fn run_playback_menu(
           .collect();
         episodes_to_play = select_items(&labels, "Select episode: ", None, true, cli)?;
       }
-      4 => {
+      PlaybackMenuAction::ChangeQuality => {
         let choices = quality_choices(&playback.available_qualities);
         let labels: Vec<String> = choices
           .iter()
@@ -711,7 +880,7 @@ fn run_playback_menu(
         };
         playback.quality = choices[selected].1.clone();
       }
-      _ => return Ok(ExitCode::SUCCESS),
+      PlaybackMenuAction::Quit => return Ok(ExitCode::SUCCESS),
     }
 
     if episodes_to_play.is_empty() {

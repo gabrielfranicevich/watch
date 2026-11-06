@@ -200,7 +200,11 @@ fn android_vlc_forwards_external_subtitles_through_the_supported_intent_extra() 
     pair[0] == "-n" && pair[1] == "org.videolan.vlc/org.videolan.vlc.gui.video.VideoPlayerActivity"
   }));
   assert!(args.contains(&"Frieren Episode 4".to_owned()));
-  assert!(args.windows(2).any(|pair| pair == ["-e", "subtitles_location"]));
+  assert!(
+    args
+      .windows(2)
+      .any(|pair| pair == ["-e", "subtitles_location"])
+  );
   assert!(args.contains(&"https://cdn.example/subtitles/es.vtt".to_owned()));
   assert_eq!(Player::AndroidVlc.command_name(), "am");
 }
@@ -445,4 +449,104 @@ fn android_mpv_config_reports_filesystem_errors() {
   ));
 
   std::fs::remove_file(root).unwrap();
+}
+
+#[cfg(unix)]
+fn mpv_ipc_test_controller(
+  requests: Vec<Value>,
+) -> (MpvTrackController, std::thread::JoinHandle<Vec<Value>>) {
+  let path = std::env::temp_dir().join(format!(
+    "watch-mpv-ipc-test-{}-{}.sock",
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  let listener = UnixListener::bind(&path).unwrap();
+  let server = std::thread::spawn(move || {
+    let mut received = Vec::new();
+    for response in requests {
+      let (mut stream, _) = listener.accept().unwrap();
+      let mut reader = BufReader::new(stream.try_clone().unwrap());
+      let mut line = String::new();
+      reader.read_line(&mut line).unwrap();
+      let request: Value = serde_json::from_str(&line).unwrap();
+      received.push(request.get("command").unwrap().clone());
+      let mut payload = serde_json::to_vec(&response).unwrap();
+      payload.push(b'\n');
+      stream.write_all(&payload).unwrap();
+    }
+    received
+  });
+  (
+    MpvTrackController {
+      endpoint: IpcEndpoint::Unix(path),
+    },
+    server,
+  )
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_audio_switch_adds_external_track_and_selects_it() {
+  let (controller, server) = mpv_ipc_test_controller(vec![
+    json!({"error": "success", "data": []}),
+    json!({"error": "success"}),
+  ]);
+  let url = "https://cdn.example/audio/en.m3u8";
+  controller.set_audio_track(Some(url)).unwrap();
+  assert_eq!(
+    server.join().unwrap(),
+    vec![
+      json!(["get_property", "track-list"]),
+      json!(["audio-add", url, "select"])
+    ]
+  );
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_subtitle_switch_reuses_an_existing_external_track() {
+  let url = "https://cdn.example/subtitles/es.m3u8";
+  let (controller, server) = mpv_ipc_test_controller(vec![
+    json!({
+      "error": "success",
+      "data": [{
+        "id": 7,
+        "type": "sub",
+        "external-filename": url
+      }]
+    }),
+    json!({"error": "success"}),
+  ]);
+  controller.set_subtitle_track(Some(url)).unwrap();
+  assert_eq!(
+    server.join().unwrap(),
+    vec![
+      json!(["get_property", "track-list"]),
+      json!(["set_property", "sid", 7])
+    ]
+  );
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_track_switch_can_restore_the_player_default() {
+  let (controller, server) = mpv_ipc_test_controller(vec![json!({"error": "success"})]);
+  controller.set_audio_track(None).unwrap();
+  assert_eq!(
+    server.join().unwrap(),
+    vec![json!(["set_property", "aid", "auto"])]
+  );
+}
+
+#[test]
+fn runtime_track_switching_is_limited_to_players_with_mpv_ipc_support() {
+  assert!(Player::Mpv.supports_runtime_track_switching());
+  assert!(Player::FlatpakMpv.supports_runtime_track_switching());
+  assert!(Player::from_options(false, false, true).supports_runtime_track_switching());
+  assert!(!Player::Vlc.supports_runtime_track_switching());
+  assert!(!Player::AndroidMpv.supports_runtime_track_switching());
+  assert!(!Player::AndroidVlc.supports_runtime_track_switching());
 }

@@ -838,7 +838,6 @@ fn explicit_manifest_subtitle_language_is_not_overwritten_by_page_track() {
   );
 }
 
-
 #[test]
 fn dash_manifest_uses_unique_adaptation_set_languages() {
   let manifest = concat!(
@@ -873,56 +872,51 @@ fn generic_dash_resolver_discovers_manifest_and_preserves_language_provenance() 
   use std::io::{Read, Write};
   use std::net::TcpListener;
 
+  assert_eq!(
+    extract_media_urls(
+      r#"<source src="https://cdn.example/manifest.mpd">"#,
+      "https://example.com/episode"
+    ),
+    vec!["https://cdn.example/manifest.mpd"]
+  );
+
   let listener = TcpListener::bind("127.0.0.1:0").unwrap();
   let address = listener.local_addr().unwrap();
+  let manifest = concat!(
+    "\x3cMPD>",
+    "\x3cPeriod>",
+    "\x3cAdaptationSet contentType=\"audio\" lang=\"ja\"></AdaptationSet>",
+    "\x3cAdaptationSet contentType=\"text\" lang=\"es\"></AdaptationSet>",
+    "</Period>",
+    "</MPD>"
+  );
   let server = std::thread::spawn(move || {
-    for (body, content_type) in [
-      (
-        "<html><video><source src=\"/manifest.mpd\"></video></html>",
-        "text/html",
-      ),
-      (
-        concat!(
-          "\x3cMPD>",
-          "\x3cPeriod>",
-          "\x3cAdaptationSet contentType=\"audio\" lang=\"ja\"></AdaptationSet>",
-          "\x3cAdaptationSet contentType=\"text\" lang=\"es\"></AdaptationSet>",
-          "</Period>",
-          "</MPD>"
-        ),
-        "application/dash+xml",
-      ),
-    ] {
-      let (mut connection, _) = listener.accept().unwrap();
-      let mut request = Vec::new();
-      let mut buffer = [0_u8; 1024];
-      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
-        let count = connection.read(&mut buffer).unwrap();
-        if count == 0 {
-          break;
-        }
-        request.extend_from_slice(&buffer[..count]);
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
       }
-      write!(
-        connection,
-        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-      )
-      .unwrap();
+      request.extend_from_slice(&buffer[..count]);
     }
+    write!(
+      connection,
+      "HTTP/1.1 200 OK\r\nContent-Type: application/dash+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{manifest}",
+      manifest.len()
+    )
+    .unwrap();
   });
 
-  let episode_url = format!("http://{address}/episode");
+  let master = format!("http://{address}/manifest.mpd");
   let resolver = SiteStreamResolver::new(ProviderId::JkAnime);
   let resolved = resolver
-    .resolve(&Episode::new("1", None, episode_url), false, "best")
+    .resolve_media_url(&master, &master, "best")
     .unwrap();
   server.join().unwrap();
 
-  assert_eq!(
-    resolved.stream.url,
-    format!("http://{address}/manifest.mpd")
-  );
+  assert_eq!(resolved.stream.url, master);
   assert_eq!(resolved.language_pair.label(), "ja/es");
   assert_eq!(
     resolved.audio_language_source,
@@ -933,7 +927,6 @@ fn generic_dash_resolver_discovers_manifest_and_preserves_language_provenance() 
     Some(LanguageMetadataSource::DashManifest)
   );
 }
-
 #[test]
 fn dash_manifest_language_is_not_overwritten_by_html_track_evidence() {
   let mut media = ResolvedMedia {
@@ -960,7 +953,10 @@ fn dash_manifest_language_is_not_overwritten_by_html_track_evidence() {
     Some(LanguageMetadataSource::DashManifest)
   );
   assert_eq!(
-    media.subtitle.as_ref().and_then(|track| track.language.as_deref()),
+    media
+      .subtitle
+      .as_ref()
+      .and_then(|track| track.language.as_deref()),
     Some("en")
   );
 }

@@ -1,6 +1,15 @@
 use std::ffi::OsString;
-use std::io;
+use std::io::{self, BufRead, BufReader, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde_json::{Value, json};
+
+#[cfg(unix)]
+#[cfg(test)]
+use std::os::unix::net::UnixListener;
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 
 use crate::domain::{stream::Stream, subtitle::Subtitle};
 
@@ -148,6 +157,14 @@ impl Player {
 
   pub fn supports_terminal_video(&self) -> bool {
     matches!(self.kind(), PlayerKind::Mpv | PlayerKind::FlatpakMpv)
+  }
+
+  pub fn supports_runtime_track_switching(&self) -> bool {
+    cfg!(any(unix, windows))
+      && matches!(
+        self.kind(),
+        PlayerKind::Mpv | PlayerKind::FlatpakMpv | PlayerKind::Iina
+      )
   }
 
   pub fn terminal_video_output_help(&self) -> io::Result<String> {
@@ -322,11 +339,7 @@ impl Player {
         );
         args.push(OsString::from(title));
         if let Some(subtitle) = subtitle {
-          args.extend(
-            ["-e", "subtitles_location"]
-              .into_iter()
-              .map(OsString::from),
-          );
+          args.extend(["-e", "subtitles_location"].into_iter().map(OsString::from));
           args.push(OsString::from(&subtitle.url));
         }
         args.extend(command_flags.iter().map(OsString::from));
@@ -399,23 +412,63 @@ impl Player {
     command_flags: &[String],
     media_flags: &[String],
   ) -> io::Result<Child> {
+    self
+      .launch_detached_internal(stream, subtitle, title, command_flags, media_flags, false)
+      .map(|(child, _)| child)
+  }
+
+  pub fn launch_detached_with_track_control(
+    &self,
+    stream: &Stream,
+    subtitle: Option<&Subtitle>,
+    title: &str,
+    command_flags: &[String],
+    media_flags: &[String],
+  ) -> io::Result<(Child, Option<MpvTrackController>)> {
+    self.launch_detached_internal(stream, subtitle, title, command_flags, media_flags, true)
+  }
+
+  fn launch_detached_internal(
+    &self,
+    stream: &Stream,
+    subtitle: Option<&Subtitle>,
+    title: &str,
+    command_flags: &[String],
+    media_flags: &[String],
+    enable_track_control: bool,
+  ) -> io::Result<(Child, Option<MpvTrackController>)> {
     self.prepare_playback(stream, subtitle);
     let program = self.command_name();
+    let mut args = self.arguments_with_options(stream, subtitle, title, command_flags, media_flags);
+    let controller = if enable_track_control && self.supports_runtime_track_switching() {
+      let (endpoint, address) = IpcEndpoint::new()?;
+      let option = if self.kind() == PlayerKind::Iina {
+        format!("--mpv-input-ipc-server={address}")
+      } else {
+        format!("--input-ipc-server={address}")
+      };
+      let stream_position = args
+        .iter()
+        .rposition(|argument| argument == &OsString::from(&stream.url))
+        .unwrap_or(args.len());
+      args.insert(stream_position, OsString::from(option));
+      Some(MpvTrackController { endpoint })
+    } else {
+      None
+    };
     let mut command = Command::new(program);
-    command
-      .args(self.arguments_with_options(stream, subtitle, title, command_flags, media_flags))
-      .stdin(Stdio::null());
+    command.args(args).stdin(Stdio::null());
     if matches!(self, Self::AndroidMpv | Self::AndroidVlc) {
-      // Keep Android Activity Manager errors visible; the detached child is
-      // only the short-lived `am` command, not the media player process.
       command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
     } else {
       command.stdout(Stdio::null()).stderr(Stdio::null());
     }
-    command
+    let child = command
       .spawn()
-      .map_err(|error| contextualize_program_error(error, program))
+      .map_err(|error| contextualize_program_error(error, program))?;
+    Ok((child, controller))
   }
+
   fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) {
     if matches!(self, Self::AndroidVlc) {
       if stream.audio_url.is_some() {
@@ -445,6 +498,151 @@ impl Player {
          streams requiring a Referer header may otherwise fail."
       );
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct MpvTrackController {
+  endpoint: IpcEndpoint,
+}
+
+impl MpvTrackController {
+  pub fn set_audio_track(&self, url: Option<&str>) -> io::Result<()> {
+    self.set_track("audio", url)
+  }
+
+  pub fn set_subtitle_track(&self, url: Option<&str>) -> io::Result<()> {
+    self.set_track("sub", url)
+  }
+
+  fn set_track(&self, kind: &str, url: Option<&str>) -> io::Result<()> {
+    let property = if kind == "audio" { "aid" } else { "sid" };
+    let Some(url) = url else {
+      self.request(json!(["set_property", property, "auto"]))?;
+      return Ok(());
+    };
+
+    let tracks = self.request(json!(["get_property", "track-list"]))?;
+    let existing_id = tracks
+      .get("data")
+      .and_then(Value::as_array)
+      .and_then(|tracks| {
+        tracks.iter().find_map(|track| {
+          let matches_kind = track.get("type").and_then(Value::as_str) == Some(kind);
+          let matches_url = track.get("external-filename").and_then(Value::as_str) == Some(url);
+          (matches_kind && matches_url)
+            .then(|| track.get("id").and_then(Value::as_u64))
+            .flatten()
+        })
+      });
+
+    if let Some(id) = existing_id {
+      self.request(json!(["set_property", property, id]))?;
+    } else if kind == "audio" {
+      self.request(json!(["audio-add", url, "select"]))?;
+    } else {
+      self.request(json!(["sub-add", url, "select"]))?;
+    }
+    Ok(())
+  }
+
+  fn request(&self, command: Value) -> io::Result<Value> {
+    let mut connection = BufReader::new(self.endpoint.connect()?);
+    let request = json!({"command": command, "request_id": 1});
+    let mut payload = serde_json::to_vec(&request).map_err(io::Error::other)?;
+    payload.push(b'\n');
+    connection.get_mut().write_all(&payload)?;
+    connection.get_mut().flush()?;
+    let mut response = String::new();
+    connection.read_line(&mut response)?;
+    let response: Value = serde_json::from_str(&response).map_err(io::Error::other)?;
+    if response.get("error").and_then(Value::as_str) != Some("success") {
+      return Err(io::Error::other(format!(
+        "MPV IPC command failed: {}",
+        response
+          .get("error")
+          .and_then(Value::as_str)
+          .unwrap_or("invalid response")
+      )));
+    }
+    Ok(response)
+  }
+}
+
+#[derive(Debug)]
+enum IpcEndpoint {
+  #[cfg(unix)]
+  Unix(std::path::PathBuf),
+  #[cfg(windows)]
+  Windows(String),
+}
+
+impl IpcEndpoint {
+  fn new() -> io::Result<(Self, String)> {
+    let nonce = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap_or_default()
+      .as_nanos();
+    #[cfg(unix)]
+    {
+      let path = std::path::PathBuf::from(format!("/tmp/wmpv-{}-{nonce}.sock", std::process::id()));
+      let address = path
+        .to_str()
+        .ok_or_else(|| io::Error::other("MPV IPC socket path is not valid UTF-8"))?
+        .to_owned();
+      Ok((Self::Unix(path), address))
+    }
+    #[cfg(windows)]
+    {
+      let address = format!(r"\\.\pipe\watch-mpv-{}-{nonce}", std::process::id());
+      Ok((Self::Windows(address.clone()), address))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+      let _ = nonce;
+      Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "runtime MPV track switching is not supported on this platform",
+      ))
+    }
+  }
+
+  fn connect(&self) -> io::Result<Box<dyn IpcReadWrite>> {
+    #[cfg(unix)]
+    {
+      let Self::Unix(path) = self;
+      let stream = UnixStream::connect(path)?;
+      stream.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
+      Ok(Box::new(stream))
+    }
+    #[cfg(windows)]
+    {
+      let Self::Windows(path) = self;
+      let stream = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?;
+      Ok(Box::new(stream))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+      Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "runtime MPV track switching is not supported on this platform",
+      ))
+    }
+  }
+}
+
+trait IpcReadWrite: io::Read + io::Write {}
+
+impl<T: io::Read + io::Write> IpcReadWrite for T {}
+
+#[cfg(unix)]
+impl Drop for IpcEndpoint {
+  fn drop(&mut self) {
+    let Self::Unix(path) = self;
+    let _ = std::fs::remove_file(path);
   }
 }
 
