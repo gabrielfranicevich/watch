@@ -1084,3 +1084,103 @@ video.m3u8
   assert!(media.stream.url.ends_with("/video.m3u8"));
   assert_eq!(media.renditions.len(), 2);
 }
+
+
+#[test]
+fn pelispedia_series_detail_fixture_records_season_episode_content_without_inventing_links() {
+  let html = include_str!("../../fixtures/providers/pelispedia/moving-series.html");
+  let document = Html::parse_document(html);
+  assert_eq!(first_text(&document, &["h1"]).as_deref(), Some("Moving"));
+  assert_eq!(
+    first_text(&document, &[".season p"]).as_deref(),
+    Some("(20 episodios)")
+  );
+  assert!(parse_episode_links(
+    html,
+    "https://pelispedia.mov",
+    "https://pelispedia.mov/serie/moving"
+  )
+  .is_empty());
+}
+
+#[test]
+fn pelispedia_series_detail_with_no_episode_urls_returns_a_provider_error() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let html = include_str!("../../fixtures/providers/pelispedia/moving-series.html").to_owned();
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
+      }
+      request.extend_from_slice(&buffer[..count]);
+    }
+    write!(
+      connection,
+      "HTTP/1.1 200 OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{html}",
+      html.len()
+    )
+    .unwrap();
+  });
+
+  let anime = Anime::new(
+    "moving",
+    "Moving",
+    format!("http://{address}/serie/moving"),
+  );
+  let provider = SiteProvider {
+    id: ProviderId::PelisPedia,
+    client: Client::new(),
+    base_url: format!("http://{address}"),
+  };
+  let error = provider.episodes(&anime).unwrap_err().to_string();
+  server.join().unwrap();
+
+  assert!(error.contains("no recognizable episode links"));
+  assert!(error.contains("Moving"));
+}
+
+#[test]
+fn pelispedia_generic_resolver_accepts_an_explicit_direct_mp4_url() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let media_url = format!("http://{address}/episode.mp4");
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\\r\\n\\r\\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
+      }
+      request.extend_from_slice(&buffer[..count]);
+    }
+    let request = String::from_utf8_lossy(&request);
+    assert!(request.lines().next().unwrap().contains("/episode.mp4"));
+    write!(
+      connection,
+      "HTTP/1.1 206 Partial Content\\r\\nContent-Type: video/mp4\\r\\nContent-Length: 1\\r\\nContent-Range: bytes 0-0/1\\r\\nConnection: close\\r\\n\\r\\nx"
+    )
+    .unwrap();
+  });
+
+  let media = SiteStreamResolver::new(ProviderId::PelisPedia)
+    .resolve_media_url(&media_url, &media_url, "best")
+    .unwrap();
+  server.join().unwrap();
+
+  assert_eq!(media.stream.url, media_url);
+  assert_eq!(media.language_pair.label(), "?/?");
+  assert!(media.renditions.is_empty());
+}
