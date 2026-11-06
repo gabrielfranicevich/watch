@@ -35,7 +35,7 @@ Install the executable from crates.io with Cargo:
 cargo install watch
 ```
 
-Install the current development build from the `develop` branch. On Termux, use a temporary directory under `$HOME` and a single build job to avoid Cargo's `Text file busy (os error 26)` temporary-build failure:
+For the Android stabilization build, install directly from the `android-support` branch. On Termux, use this command to avoid Cargo's `Text file busy (os error 26)` temporary-build failure by using a directory under `$HOME` and a single build job:
 
 ```sh
 mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop --locked --force
@@ -75,7 +75,7 @@ mkdir -p /storage/emulated/0/mpv
 include=/storage/emulated/0/mpv/mpv.config.mp4
 ```
 
-If playback opens but immediately stops on a stream that needs a `Referer`, check that MPV-Android can read shared storage and that the include is present in its active configuration. The exact configuration UI varies by MPV-Android version.
+If playback opens but immediately stops on a stream that needs a `Referer`, check that MPV-Android can read shared storage and that the include is present in its active configuration. The exact configuration UI varies by MPV-Android version. Watch now stops before launching MPV-Android when it cannot prepare the shared per-stream configuration, rather than silently launching without required headers or tracks.
 
 ## 4. Grant the required permissions
 
@@ -122,3 +122,18 @@ watch anime-title
 Keep the `include` line in MPV-Android’s `mpv.conf`. `watch` will add it when it can access shared storage, but reinstalling or resetting MPV-Android may reset the player's active configuration.
 
 `--inline` and its alias `--here` are not supported in Termux: detecting MPV output drivers does not prove that the terminal can render their graphics protocols. Omit these options to use Android external playback. Inline playback remains a desktop feature and depends on the terminal and MPV build.
+
+
+## 7. Compatibility and known limitations
+
+The Android CI job cross-compiles the Rust CLI for `aarch64-linux-android`; it does not run MPV-Android, validate Android intents on a device, or prove that a provider's stream can be played. There is not yet a maintained device/version compatibility matrix. Record the Android version, device model, Termux version, MPV-Android release, player choice, provider, and stream type when reporting a playback result.
+
+The currently supported handoff paths are:
+
+- **MPV-Android:** Watch opens the stream through `termux-open` using the `video/*` MIME type. Referer, external audio, and external subtitle options are written to `/storage/emulated/0/mpv/mpv.config.mp4`, which is included by the shared `mpv.conf`.
+- **VLC Android:** Watch uses the Android VIEW intent and can pass an external subtitle through `subtitles_location`. The public intent does not expose a documented separate-audio extra, so selected external audio cannot be applied.
+- **Runtime track switching:** not supported by either Android player integration. Select available tracks before launching playback.
+
+Before reporting a failure, test a public HLS stream with the standalone `termux-open` command above, then test a provider stream. If only provider streams fail, compare their referer requirement and media URL type. If the player opens but does not play, verify the shared-storage permission for Termux, the active MPV-Android configuration path, the include line, and the generated per-stream options. Do not assume that a successful ARM64 CI build proves physical-device playback.
+
+Physical-device acceptance remains necessary for MPV-Android and VLC, including HLS and MP4 streams, referer-dependent streams, external audio and subtitles, repeated playback with different options, history, and supported Android versions.
