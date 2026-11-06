@@ -987,3 +987,43 @@ fn html_track_only_fills_missing_subtitle_language_and_preserves_audio_evidence(
     Some(LanguageMetadataSource::HtmlTrack)
   );
 }
+
+
+#[test]
+fn gnula_series_detail_fixture_extracts_and_orders_episodes_without_related_content() {
+  let html = include_str!("../../fixtures/providers/gnula/cautiva-series.html");
+  let anime_url = "https://gnula.monster/series/cautiva/";
+  let episodes = parse_episode_links(html, "https://gnula.monster", anime_url);
+
+  assert_eq!(episodes.len(), 6);
+  assert_eq!(
+    episodes
+      .iter()
+      .map(|episode| episode.number.as_str())
+      .collect::<Vec<_>>(),
+    vec!["1001", "1002", "1003", "1004", "1005", "1006"]
+  );
+  assert_eq!(
+    episodes[0].url,
+    "https://gnula.monster/episodio/cautiva-1x1/"
+  );
+  assert_eq!(
+    episodes[5].url,
+    "https://gnula.monster/episodio/cautiva-1x6/"
+  );
+  assert!(
+    episodes
+      .iter()
+      .all(|episode| !episode.url.contains("bajo-la-superficie"))
+  );
+}
+
+#[test]
+fn gnula_series_detail_page_is_not_misclassified_as_a_movie() {
+  let series = Url::parse("https://gnula.monster/series/cautiva/").unwrap();
+  let movie = Url::parse("https://ver.gnula.one/movies/idiotas/").unwrap();
+
+  assert!(ProviderId::Gnula.is_detail_path(&series));
+  assert!(!ProviderId::Gnula.is_movie_path(&series));
+  assert!(ProviderId::Gnula.is_movie_path(&movie));
+}
