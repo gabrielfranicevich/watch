@@ -1330,3 +1330,31 @@ fn pelisplus_account_gate_is_reported_instead_of_missing_media() {
 
   assert!(error.contains("requires a free account"), "{error}");
 }
+
+#[test]
+fn hdtoday_movie_detail_fixture_exposes_its_watch_now_route() {
+  let html = include_str!("../../fixtures/providers/hdtoday/resident-evil-movie-excerpt.html");
+  let detail_url = Url::parse("https://hdtoday24.at/movie/resident-evil-bk7e3sql8bdk").unwrap();
+  let document = Html::parse_document(html);
+
+  assert!(ProviderId::HDToday.is_detail_path(&detail_url));
+  assert!(ProviderId::HDToday.is_movie_path(&detail_url));
+  assert_eq!(
+    provider_player_links(&document, html, ProviderId::HDToday),
+    vec!["/watch-movie/resident-evil-bk7e3sql8bdk"]
+  );
+}
+
+#[test]
+fn hdtoday_tv_detail_fixture_has_latest_episode_metadata_but_no_episode_routes() {
+  let html = include_str!("../../fixtures/providers/hdtoday/one-piece-series-excerpt.html");
+  let detail_url = Url::parse("https://hdtoday24.at/tv/one-piece-wrY2FmV29Er").unwrap();
+  let document = Html::parse_document(html);
+  let text = document.root_element().text().collect::<String>();
+
+  assert!(ProviderId::HDToday.is_detail_path(&detail_url));
+  assert!(!ProviderId::HDToday.is_movie_path(&detail_url));
+  assert!(text.contains("Latest Episode: S1 E1176"));
+  assert!(parse_episode_links(html, "https://hdtoday24.at", detail_url.as_str()).is_empty());
+  assert!(provider_player_links(&document, html, ProviderId::HDToday).is_empty());
+}
