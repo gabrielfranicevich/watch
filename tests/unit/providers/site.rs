@@ -858,6 +858,45 @@ fn dash_manifest_uses_unique_adaptation_set_languages() {
 }
 
 #[test]
+fn dash_manifest_reads_language_from_representations_when_adaptation_set_omits_it() {
+  let manifest = r#"
+    <MPD>
+      <Period>
+        <AdaptationSet mimeType="audio/mp4">
+          <Representation id="audio" lang="ja" />
+        </AdaptationSet>
+        <AdaptationSet contentType="text">
+          <Role value="subtitle" />
+          <Representation id="subtitles" lang="es" />
+        </AdaptationSet>
+      </Period>
+    </MPD>
+  "#;
+
+  assert_eq!(parse_dash_language_pair(manifest).label(), "ja/es");
+}
+
+#[test]
+fn dash_manifest_keeps_representation_language_unknown_when_tracks_conflict() {
+  let manifest = r#"
+    <MPD>
+      <Period>
+        <AdaptationSet mimeType="audio/mp4">
+          <Representation id="audio-ja" lang="ja" />
+          <Representation id="audio-en" lang="en" />
+        </AdaptationSet>
+        <AdaptationSet contentType="text">
+          <Role value="subtitle" />
+          <Representation id="subtitles" lang="es" />
+        </AdaptationSet>
+      </Period>
+    </MPD>
+  "#;
+
+  assert_eq!(parse_dash_language_pair(manifest).label(), "?/es");
+}
+
+#[test]
 fn dash_manifest_does_not_guess_when_multiple_languages_are_declared() {
   let manifest = concat!(
     "\x3cMPD>",

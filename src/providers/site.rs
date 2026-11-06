@@ -1710,6 +1710,9 @@ fn parse_dash_language_pair(body: &str) -> LanguagePair {
   let Ok(roles) = Selector::parse("role") else {
     return LanguagePair::new(None, None);
   };
+  let Ok(representations) = Selector::parse("representation") else {
+    return LanguagePair::new(None, None);
+  };
   let mut audio_languages = HashSet::new();
   let mut subtitle_languages = HashSet::new();
 
@@ -1723,11 +1726,6 @@ fn parse_dash_language_pair(body: &str) -> LanguagePair {
       .attr("contenttype")
       .unwrap_or_default()
       .to_ascii_lowercase();
-    let language = attributes
-      .attr("lang")
-      .map(str::trim)
-      .filter(|language| !language.is_empty())
-      .map(str::to_ascii_lowercase);
     let is_audio = content_type == "audio" || mime_type.starts_with("audio/");
     let has_subtitle_role = adaptation.select(&roles).any(|role| {
       role.value().attr("value").is_some_and(|value| {
@@ -1739,7 +1737,28 @@ fn parse_dash_language_pair(body: &str) -> LanguagePair {
     });
     let is_subtitle = content_type == "text" || mime_type.starts_with("text/") || has_subtitle_role;
 
-    if let Some(language) = language {
+    let mut languages = HashSet::new();
+    if let Some(language) = attributes
+      .attr("lang")
+      .map(str::trim)
+      .filter(|language| !language.is_empty())
+    {
+      languages.insert(language.to_ascii_lowercase());
+    } else {
+      for representation in adaptation.select(&representations) {
+        if let Some(language) = representation
+          .value()
+          .attr("lang")
+          .map(str::trim)
+          .filter(|language| !language.is_empty())
+        {
+          languages.insert(language.to_ascii_lowercase());
+        }
+      }
+    }
+
+    if languages.len() == 1 {
+      let language = languages.into_iter().next().unwrap();
       if is_audio {
         audio_languages.insert(language.clone());
       }
