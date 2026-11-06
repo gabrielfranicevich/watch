@@ -1,5 +1,6 @@
 package com.gabrielfranicevich.watch
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,6 +31,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +56,13 @@ data class AnimeSource(
 data class AnimeChoice(
   val label: String,
   val sources: List<AnimeSource>
+)
+
+data class PlaybackInfo(
+  val streamUrl: String,
+  val referer: String?,
+  val audioUrl: String?,
+  val subtitleUrl: String?
 )
 
 data class EpisodeChoice(
@@ -83,7 +101,7 @@ private fun WatchApp() {
   var results by remember { mutableStateOf(emptyList<AnimeChoice>()) }
   var episodes by remember { mutableStateOf(emptyList<EpisodeChoice>()) }
   var selectedAnime by remember { mutableStateOf<String?>(null) }
-  var resolved by remember { mutableStateOf<String?>(null) }
+  var playback by remember { mutableStateOf<PlaybackInfo?>(null) }
   var error by remember { mutableStateOf<String?>(null) }
   var busy by remember { mutableStateOf(false) }
 
@@ -93,7 +111,7 @@ private fun WatchApp() {
     error = null
     episodes = emptyList()
     selectedAnime = null
-    resolved = null
+    playback = null
     scope.launch {
       try {
         results = withContext(Dispatchers.IO) {
@@ -113,7 +131,7 @@ private fun WatchApp() {
     busy = true
     error = null
     selectedAnime = choice.label
-    resolved = null
+    playback = null
     episodes = emptyList()
     scope.launch {
       try {
@@ -146,10 +164,10 @@ private fun WatchApp() {
     if (busy) return
     busy = true
     error = null
-    resolved = null
+    playback = null
     scope.launch {
       try {
-        resolved = withContext(Dispatchers.IO) {
+        val json = withContext(Dispatchers.IO) {
           native.resolve(
             episode.provider,
             episode.number,
@@ -157,6 +175,7 @@ private fun WatchApp() {
             episode.url
           ).also(::throwIfBridgeError)
         }
+        playback = parsePlayback(json)
       } catch (failure: Exception) {
         error = failure.message ?: "Could not resolve this episode"
       } finally {
@@ -225,9 +244,7 @@ private fun WatchApp() {
         }
       }
     }
-    resolved?.let {
-      Text("Stream resolved. Native playback is available in the next stage.")
-    }
+    playback?.let { NativePlayer(it) }
   }
 }
 
@@ -275,4 +292,76 @@ private fun throwIfBridgeError(json: String) {
 
 private fun throwIfBridgeError(json: JSONObject) {
   if (json.has("error")) throw IllegalStateException(json.getString("error"))
+}
+
+private fun parsePlayback(json: String): PlaybackInfo {
+  val root = JSONObject(json)
+  throwIfBridgeError(root)
+  val stream = root.getJSONObject("stream")
+  val subtitle = root.optJSONObject("subtitle")
+  return PlaybackInfo(
+    streamUrl = stream.getString("url"),
+    referer = stream.optString("referer").takeIf { it.isNotBlank() && it != "null" },
+    audioUrl = stream.optString("audio_url").takeIf { it.isNotBlank() && it != "null" },
+    subtitleUrl = subtitle?.optString("url")?.takeIf { it.isNotBlank() && it != "null" }
+  )
+}
+
+@androidx.compose.runtime.Composable
+private fun NativePlayer(info: PlaybackInfo) {
+  val context = LocalContext.current
+  val player = remember(info) {
+    val headers = info.referer?.let { mapOf("Referer" to it) }.orEmpty()
+    val httpFactory = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)
+    val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
+    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+    val itemBuilder = MediaItem.Builder().setUri(info.streamUrl)
+    info.subtitleUrl?.let { subtitleUrl ->
+      val mimeType = when {
+        subtitleUrl.substringBefore('?').endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+        subtitleUrl.substringBefore('?').endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
+        else -> null
+      }
+      if (mimeType != null) {
+        itemBuilder.setSubtitleConfigurations(
+          listOf(
+            MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitleUrl))
+              .setMimeType(mimeType)
+              .build()
+          )
+        )
+      }
+    }
+    val exoPlayer = ExoPlayer.Builder(context)
+      .setMediaSourceFactory(mediaSourceFactory)
+      .build()
+    val video = mediaSourceFactory.createMediaSource(itemBuilder.build())
+    val source = info.audioUrl?.let { audioUrl ->
+      MergingMediaSource(
+        video,
+        mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
+      )
+    } ?: video
+    exoPlayer.setMediaSource(source)
+    exoPlayer.prepare()
+    exoPlayer.playWhenReady = true
+    exoPlayer
+  }
+
+  androidx.compose.runtime.DisposableEffect(player) {
+    onDispose { player.release() }
+  }
+
+  AndroidView(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(220.dp),
+    factory = { viewContext ->
+      PlayerView(viewContext).apply {
+        this.player = player
+        useController = true
+      }
+    },
+    update = { it.player = player }
+  )
 }
