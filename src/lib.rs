@@ -1,5 +1,6 @@
 //! Core library for watch.
 
+pub mod android_bridge;
 pub mod application;
 pub mod application_services;
 pub mod cli;

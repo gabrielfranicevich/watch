@@ -16,6 +16,7 @@ serde_json = "1"
 [lib]
 name = "ani_cli"
 path = "src/lib.rs"
+crate-type = ["rlib", "staticlib"]
 
 [[bin]]
 name = "watch"
