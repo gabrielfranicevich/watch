@@ -550,3 +550,93 @@ fn runtime_track_switching_is_limited_to_players_with_mpv_ipc_support() {
   assert!(!Player::AndroidMpv.supports_runtime_track_switching());
   assert!(!Player::AndroidVlc.supports_runtime_track_switching());
 }
+
+
+#[test]
+fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
+  let config_dir = std::env::temp_dir().join(format!(
+    "watch-android-handoff-{}-{}",
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  std::fs::create_dir_all(&config_dir).unwrap();
+
+  let first_stream = stream()
+    .with_audio(Some("https://cdn.example/audio/ja.m3u8".into()));
+  let first_subtitle = Subtitle::new(
+    "https://cdn.example/subtitles/es.vtt",
+    Some("Spanish".into()),
+  );
+  ensure_android_mpv_config(
+    &config_dir,
+    &android_mpv_config(&first_stream, Some(&first_subtitle)),
+  )
+  .unwrap();
+
+  let first_args = Player::AndroidMpv.arguments(
+    &first_stream,
+    Some(&first_subtitle),
+    "First episode",
+  );
+  let first_args: Vec<_> = first_args
+    .iter()
+    .map(|argument| argument.to_string_lossy().into_owned())
+    .collect();
+  assert_eq!(
+    first_args,
+    vec![
+      "--chooser",
+      "--content-type",
+      "video/*",
+      "https://cdn.example/video.m3u8"
+    ]
+  );
+  assert_eq!(
+    std::fs::read_to_string(config_dir.join("mpv.config.mp4")).unwrap(),
+    concat!(
+      "referrer=https://embed.example/\n",
+      "sub-file=https://cdn.example/subtitles/es.vtt\n",
+      "audio-file=https://cdn.example/audio/ja.m3u8\n"
+    )
+  );
+
+  let second_stream = Stream::new(
+    "https://cdn.example/next.mp4",
+    Some("720p".into()),
+    None,
+  );
+  ensure_android_mpv_config(&config_dir, &android_mpv_config(&second_stream, None)).unwrap();
+  let second_args = Player::AndroidMpv.arguments(&second_stream, None, "Second episode");
+  let second_args: Vec<_> = second_args
+    .iter()
+    .map(|argument| argument.to_string_lossy().into_owned())
+    .collect();
+
+  assert_eq!(
+    second_args,
+    vec![
+      "--chooser",
+      "--content-type",
+      "video/*",
+      "https://cdn.example/next.mp4"
+    ]
+  );
+  assert_eq!(
+    std::fs::read_to_string(config_dir.join("mpv.config.mp4")).unwrap(),
+    ""
+  );
+  let main_config = std::fs::read_to_string(config_dir.join("mpv.conf")).unwrap();
+  let include_line = format!("include={}", config_dir.join("mpv.config.mp4").display());
+  assert_eq!(
+    main_config
+      .lines()
+      .filter(|line| line.trim() == include_line)
+      .count(),
+    1
+  );
+
+  std::fs::remove_dir_all(config_dir).unwrap();
+}
