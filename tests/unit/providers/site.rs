@@ -988,7 +988,6 @@ fn html_track_only_fills_missing_subtitle_language_and_preserves_audio_evidence(
   );
 }
 
-
 #[test]
 fn gnula_series_detail_fixture_extracts_and_orders_episodes_without_related_content() {
   let html = include_str!("../../fixtures/providers/gnula/cautiva-series.html");
@@ -1026,4 +1025,62 @@ fn gnula_series_detail_page_is_not_misclassified_as_a_movie() {
   assert!(ProviderId::Gnula.is_detail_path(&series));
   assert!(!ProviderId::Gnula.is_movie_path(&series));
   assert!(ProviderId::Gnula.is_movie_path(&movie));
+}
+
+#[test]
+fn gnula_episode_page_exposes_the_observed_trembed_player_route() {
+  let document = Html::parse_document(
+    r#"<iframe src="/?trembed=0&amp;trid=78680&amp;trtype=2"></iframe>
+       <a href="https://youtube.com/embed/trailer">Trailer</a>"#,
+  );
+  assert_eq!(
+    provider_player_links(&document, "", ProviderId::Gnula),
+    vec!["/?trembed=0&trid=78680&trtype=2"]
+  );
+}
+
+#[test]
+fn gnula_stream_resolver_reads_hls_language_metadata_from_episode_media() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let master = format!("http://{address}/master.m3u8");
+  let playlist = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Spanish",LANGUAGE="es-419",DEFAULT=YES,URI="audio/es.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Spanish",LANGUAGE="es",DEFAULT=YES,URI="subtitles/es.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720,AUDIO="audio",SUBTITLES="subs"
+video.m3u8
+"#;
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
+      }
+      request.extend_from_slice(&buffer[..count]);
+    }
+    let request = String::from_utf8_lossy(&request);
+    assert!(request.lines().next().unwrap().contains("/master.m3u8"));
+    write!(
+      connection,
+      "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{playlist}",
+      playlist.len()
+    )
+    .unwrap();
+  });
+
+  let resolver = SiteStreamResolver::new(ProviderId::Gnula);
+  let media = resolver
+    .resolve_media_url(&master, &master, "best")
+    .unwrap();
+  server.join().unwrap();
+
+  assert_eq!(media.language_pair.label(), "es-419/es");
+  assert!(media.stream.url.ends_with("/video.m3u8"));
+  assert_eq!(media.renditions.len(), 2);
 }

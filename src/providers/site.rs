@@ -184,7 +184,11 @@ impl ProviderId {
 
   fn is_movie_path(self, url: &Url) -> bool {
     match self {
-      Self::Gnula => url.path().starts_with("/movies/"),
+      Self::Gnula => {
+        url.path().starts_with("/movies/")
+          || url.path().starts_with("/pelicula/")
+          || url.path().starts_with("/peliculas/")
+      }
       Self::PelisPedia => url.path().starts_with("/pelicula/"),
       Self::PelisPlus => url.path().starts_with("/peliculas/"),
       Self::HDToday => url.path().starts_with("/movie/"),
@@ -458,7 +462,13 @@ impl ProviderId {
         (path.starts_with("/animes/") || path.starts_with("/anime/")) && !path.contains("/ver-")
       }
       Self::AnimeFenix => path.starts_with("/anime/") || path.starts_with("/animes/"),
-      Self::Gnula => path.starts_with("/movies/") || path.starts_with("/series/"),
+      Self::Gnula => {
+        path.starts_with("/movies/")
+          || path.starts_with("/series/")
+          || path.starts_with("/ver-serie/")
+          || path.starts_with("/pelicula/")
+          || path.starts_with("/peliculas/")
+      }
       Self::PelisPedia => path.starts_with("/pelicula/") || path.starts_with("/serie/"),
       Self::PelisPlus => path.starts_with("/peliculas/") || path.starts_with("/serie/"),
       Self::HDToday => path.starts_with("/movie/") || path.starts_with("/tv/"),
@@ -864,6 +874,8 @@ fn is_episode_page(url: &Url) -> bool {
     "-episode-",
     "/episodio-",
     "-episodio-",
+    "/episodio/",
+    "/ver-episodio/",
     "/ep-",
   ]
   .iter()
@@ -918,7 +930,8 @@ fn parse_episode_links(body: &str, base_url: &str, anime_url: &str) -> Vec<Episo
       || path.contains("/ver/")
       || path.contains("/ep/")
       || path.contains("/capitulo/")
-      || path.contains("/episodio/");
+      || path.contains("/episodio/")
+      || path.contains("/ver-episodio/");
     if !episode_like_path {
       continue;
     }
@@ -1173,6 +1186,9 @@ fn episode_number_from(label: &str, url: &str) -> Option<String> {
   {
     return None;
   }
+  if let Some(number) = season_episode_number_from_path(path) {
+    return Some(number);
+  }
   path
     .rsplit('/')
     .next()?
@@ -1181,6 +1197,33 @@ fn episode_number_from(label: &str, url: &str) -> Option<String> {
     .rev()
     .find(|part| part.chars().all(|character| character.is_ascii_digit()))
     .map(str::to_owned)
+}
+
+fn season_episode_number_from_path(path: &str) -> Option<String> {
+  let segment = path.trim_end_matches('/').rsplit('/').next()?;
+  let (season_prefix, episode_suffix) = segment.rsplit_once('x')?;
+  let season = season_prefix
+    .chars()
+    .rev()
+    .take_while(|character| character.is_ascii_digit())
+    .collect::<String>()
+    .chars()
+    .rev()
+    .collect::<String>()
+    .parse::<u32>()
+    .ok()?;
+  let episode = episode_suffix
+    .chars()
+    .take_while(|character| character.is_ascii_digit())
+    .collect::<String>()
+    .parse::<u32>()
+    .ok()?;
+  (season > 0 && episode > 0).then(|| {
+    season
+      .saturating_mul(1000)
+      .saturating_add(episode)
+      .to_string()
+  })
 }
 
 fn first_number(value: &str) -> Option<String> {
@@ -1731,9 +1774,9 @@ fn find_subtitle(document: &Html, page_url: &str) -> Option<Subtitle> {
 
 fn embedded_player_links(document: &Html, provider: ProviderId) -> Vec<String> {
   let selector = if provider == ProviderId::MonosChinos {
-    "iframe[src], video[src], video source[src], source[src], a.direct-link[href]"
+    "iframe[src], iframe[data-src], video[src], video source[src], source[src], a.direct-link[href]"
   } else {
-    "iframe[src], video[src], video source[src], source[src]"
+    "iframe[src], iframe[data-src], video[src], video source[src], source[src]"
   };
   let Ok(selector) = Selector::parse(selector) else {
     return Vec::new();
@@ -1744,6 +1787,7 @@ fn embedded_player_links(document: &Html, provider: ProviderId) -> Vec<String> {
       let value = element.value();
       value
         .attr("src")
+        .or_else(|| value.attr("data-src"))
         .or_else(|| {
           (provider == ProviderId::MonosChinos)
             .then(|| value.attr("href"))
@@ -1764,6 +1808,8 @@ fn provider_player_links(document: &Html, body: &str, provider: ProviderId) -> V
           || label.contains("streamwish")
           || label.contains("vidhide")
           || label.contains("voe")
+          || label.contains("fastream")
+          || label.contains("unlimplay")
           || label.contains("reproductor")
           || label.contains("player"))
         .then(|| anchor.value().attr("href").map(str::to_owned))
