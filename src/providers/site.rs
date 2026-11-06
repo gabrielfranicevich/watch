@@ -1323,6 +1323,18 @@ impl SiteStreamResolver {
     }
     for candidate in media_candidates
       .iter()
+      .filter(|url| url.to_ascii_lowercase().contains(".mpd"))
+    {
+      match self.resolve_media_url(candidate, page_url, quality) {
+        Ok(mut media) => {
+          merge_page_subtitle_metadata(&mut media, subtitle.as_ref());
+          return Ok(media);
+        }
+        Err(error) => last_error = Some(error.to_string()),
+      }
+    }
+    for candidate in media_candidates
+      .iter()
       .filter(|url| url.to_ascii_lowercase().contains(".mp4"))
     {
       match self.resolve_media_url(candidate, page_url, quality) {
@@ -1360,6 +1372,47 @@ impl SiteStreamResolver {
     referer: &str,
     quality: &str,
   ) -> Result<ResolvedMedia, StreamResolveError> {
+    if is_direct_mpd_url(media_url) {
+      let response = self
+        .client
+        .get(media_url)
+        .header(reqwest::header::REFERER, referer)
+        .send()?;
+      let status = response.status();
+      let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+      let manifest = response.text()?;
+      if !status.is_success()
+        || content_type.contains("text/html")
+        || content_type.contains("application/xhtml+xml")
+        || !manifest.to_ascii_lowercase().contains("\x3cmpd")
+      {
+        return Err(StreamResolveError::InvalidData(format!(
+          "DASH manifest URL returned an invalid MPD response (HTTP status {status})"
+        )));
+      }
+      let language_pair = parse_dash_language_pair(&manifest);
+      return Ok(ResolvedMedia {
+        stream: Stream::new(media_url, None, Some(referer.into())),
+        subtitle: None,
+        mal_id: None,
+        qualities: Vec::new(),
+        audio_language_source: language_pair
+          .audio
+          .as_ref()
+          .map(|_| LanguageMetadataSource::DashManifest),
+        subtitle_language_source: language_pair
+          .subtitles
+          .as_ref()
+          .map(|_| LanguageMetadataSource::DashManifest),
+        language_pair,
+        renditions: Vec::new(),
+      });
+    }
     if is_direct_mp4_url(media_url) {
       let direct_url = Url::parse(media_url)
         .map_err(|error| StreamResolveError::InvalidData(format!("invalid MP4 URL: {error}")))?;
@@ -1586,6 +1639,71 @@ fn is_public_web_url(url: &Url) -> bool {
   true
 }
 
+fn parse_dash_language_pair(body: &str) -> LanguagePair {
+  let document = Html::parse_document(body);
+  let Ok(adaptations) = Selector::parse("adaptationset") else {
+    return LanguagePair::new(None, None);
+  };
+  let Ok(roles) = Selector::parse("role") else {
+    return LanguagePair::new(None, None);
+  };
+  let mut audio_languages = HashSet::new();
+  let mut subtitle_languages = HashSet::new();
+
+  for adaptation in document.select(&adaptations) {
+    let attributes = adaptation.value();
+    let mime_type = attributes
+      .attr("mimetype")
+      .unwrap_or_default()
+      .to_ascii_lowercase();
+    let content_type = attributes
+      .attr("contenttype")
+      .unwrap_or_default()
+      .to_ascii_lowercase();
+    let language = attributes
+      .attr("lang")
+      .map(str::trim)
+      .filter(|language| !language.is_empty())
+      .map(str::to_ascii_lowercase);
+    let is_audio = content_type == "audio" || mime_type.starts_with("audio/");
+    let has_subtitle_role = adaptation.select(&roles).any(|role| {
+      role
+        .value()
+        .attr("value")
+        .is_some_and(|value| {
+          matches!(
+            value.to_ascii_lowercase().as_str(),
+            "subtitle" | "subtitles" | "caption" | "captions" | "forced-subtitle"
+          )
+        })
+    });
+    let is_subtitle = content_type == "text"
+      || mime_type.starts_with("text/")
+      || has_subtitle_role;
+
+    if let Some(language) = language {
+      if is_audio {
+        audio_languages.insert(language.clone());
+      }
+      if is_subtitle {
+        subtitle_languages.insert(language);
+      }
+    }
+  }
+
+  let audio = if audio_languages.len() == 1 {
+    audio_languages.into_iter().next()
+  } else {
+    None
+  };
+  let subtitles = if subtitle_languages.len() == 1 {
+    subtitle_languages.into_iter().next()
+  } else {
+    None
+  };
+  LanguagePair::new(audio.as_deref(), subtitles.as_deref())
+}
+
 fn merge_page_subtitle_metadata(media: &mut ResolvedMedia, subtitle: Option<&Subtitle>) {
   if media.subtitle.is_none() {
     media.subtitle = subtitle.cloned();
@@ -1733,6 +1851,10 @@ fn is_direct_mp4_url(media_url: &str) -> bool {
   Url::parse(media_url).is_ok_and(|url| url.path().to_ascii_lowercase().ends_with(".mp4"))
 }
 
+fn is_direct_mpd_url(media_url: &str) -> bool {
+  Url::parse(media_url).is_ok_and(|url| url.path().to_ascii_lowercase().ends_with(".mpd"))
+}
+
 fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
   let normalized = body
     .replace("\\/", "/")
@@ -1752,7 +1874,7 @@ fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
     let candidate =
       candidate.trim_matches(|character: char| matches!(character, ',' | ';' | ':' | '!'));
     let lower = candidate.to_ascii_lowercase();
-    if !lower.contains(".m3u8") && !lower.contains(".mp4") {
+    if !lower.contains(".m3u8") && !lower.contains(".mpd") && !lower.contains(".mp4") {
       continue;
     }
     let candidate = candidate.trim_end_matches(['.', ',', ';']);
@@ -1760,7 +1882,7 @@ fn extract_media_urls(body: &str, page_url: &str) -> Vec<String> {
       continue;
     };
     let path = url.path().to_ascii_lowercase();
-    if !lower.contains(".m3u8") && !path.ends_with(".mp4") {
+    if !lower.contains(".m3u8") && !path.ends_with(".mpd") && !path.ends_with(".mp4") {
       continue;
     }
     if matches!(url.scheme(), "http" | "https")

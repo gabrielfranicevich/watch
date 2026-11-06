@@ -3,6 +3,7 @@ pub enum LanguageMetadataSource {
   ProviderDefault,
   SearchMetadata,
   HlsManifest,
+  DashManifest,
   EmbedMetadata,
   HtmlTrack,
 }
