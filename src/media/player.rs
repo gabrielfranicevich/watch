@@ -471,10 +471,8 @@ impl Player {
 
   fn prepare_playback(&self, stream: &Stream, subtitle: Option<&Subtitle>) -> io::Result<()> {
     if matches!(self, Self::AndroidVlc) {
-      if stream.audio_url.is_some() {
-        eprintln!(
-          "watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied"
-        );
+      if let Some(warning) = android_vlc_audio_warning(stream) {
+        eprintln!("{warning}");
       }
       return Ok(());
     }
@@ -727,3 +725,9 @@ fn escape_iina_url(url: &str) -> String {
 #[cfg(test)]
 #[path = "../../tests/unit/media/player.rs"]
 mod tests;
+
+fn android_vlc_audio_warning(stream: &Stream) -> Option<&'static str> {
+  stream.audio_url.as_ref().map(|_| {
+    "watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied"
+  })
+}

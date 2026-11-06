@@ -189,6 +189,27 @@ fn flatpak_mpv_supports_intro_skip_options() {
 }
 
 #[test]
+fn android_vlc_forwards_subtitles_but_reports_external_audio_as_unsupported() {
+  let audio_stream = stream().with_audio(Some("https://cdn.example/audio/ja.m3u8".into()));
+  let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("es".into()));
+  let args = Player::AndroidVlc.arguments(&audio_stream, Some(&subtitle), "Example");
+  let args: Vec<_> = args
+    .iter()
+    .map(|argument| argument.to_string_lossy().into_owned())
+    .collect();
+
+  assert!(args.windows(2).any(|pair| pair == ["-e", "subtitles_location"]));
+  assert!(args.contains(&"https://cdn.example/subtitles/es.vtt".to_owned()));
+  assert!(!args.iter().any(|argument| argument.contains("audio/ja.m3u8")));
+  assert_eq!(
+    android_vlc_audio_warning(&audio_stream),
+    Some("watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied")
+  );
+  let no_audio_stream = stream();
+  assert_eq!(android_vlc_audio_warning(&no_audio_stream), None);
+}
+
+#[test]
 fn android_vlc_forwards_external_subtitles_through_the_supported_intent_extra() {
   let subtitle = Subtitle::new("https://cdn.example/subtitles/es.vtt", Some("es".into()));
   let args = Player::AndroidVlc.arguments(&stream(), Some(&subtitle), "Frieren Episode 4");
