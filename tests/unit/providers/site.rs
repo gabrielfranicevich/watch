@@ -1358,3 +1358,71 @@ fn hdtoday_tv_detail_fixture_has_latest_episode_metadata_but_no_episode_routes()
   assert!(parse_episode_links(html, "https://hdtoday24.at", detail_url.as_str()).is_empty());
   assert!(provider_player_links(&document, html, ProviderId::HDToday).is_empty());
 }
+
+#[test]
+fn hdtoday_movie_and_tv_detail_pages_keep_distinct_episode_behavior() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+  use std::time::Duration;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let movie_html =
+    include_str!("../../fixtures/providers/hdtoday/resident-evil-movie-excerpt.html").to_owned();
+  let tv_html =
+    include_str!("../../fixtures/providers/hdtoday/one-piece-series-excerpt.html").to_owned();
+  let server = std::thread::spawn(move || {
+    for _ in 0..2 {
+      let (mut connection, _) = listener.accept().unwrap();
+      connection
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+      let mut request = Vec::new();
+      let mut buffer = [0_u8; 1024];
+      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = connection.read(&mut buffer).unwrap();
+        if count == 0 {
+          break;
+        }
+        request.extend_from_slice(&buffer[..count]);
+      }
+      let request = String::from_utf8_lossy(&request);
+      let path = request
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/");
+      let body = if path.starts_with("/movie/") {
+        &movie_html
+      } else if path.starts_with("/tv/") {
+        &tv_html
+      } else {
+        panic!("unexpected request path: {path}");
+      };
+      write!(
+        connection,
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+      )
+      .unwrap();
+    }
+  });
+
+  let provider = SiteProvider::new(ProviderId::HDToday);
+  let movie_url = format!("http://{address}/movie/resident-evil-bk7e3sql8bdk");
+  let movie = Anime::new("resident-evil", "Resident Evil", movie_url.clone());
+  let movie_episodes = provider.episodes(&movie).unwrap();
+  let tv_url = format!("http://{address}/tv/one-piece-wrY2FmV29Er");
+  let tv = Anime::new("one-piece", "One Piece", tv_url);
+  let tv_error = provider.episodes(&tv).unwrap_err().to_string();
+  server.join().unwrap();
+
+  assert_eq!(movie_episodes.len(), 1);
+  assert_eq!(movie_episodes[0].number, "1");
+  assert_eq!(movie_episodes[0].url, movie_url);
+  assert!(tv_error.contains("latest-episode metadata"), "{tv_error}");
+  assert!(
+    tv_error.contains("no recognizable episode URLs"),
+    "{tv_error}"
+  );
+}

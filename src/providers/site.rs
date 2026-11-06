@@ -689,6 +689,15 @@ impl SiteProvider {
           )));
         }
       }
+      if self.id == ProviderId::HDToday
+        && body.contains("Latest Episode:")
+        && Url::parse(&anime.url).is_ok_and(|url| url.path().starts_with("/tv/"))
+      {
+        return Err(SiteError(format!(
+          "HDToday exposes latest-episode metadata but no recognizable episode URLs for '{}'",
+          anime.title
+        )));
+      }
       return Err(SiteError(format!(
         "{} returned no recognizable episode links for '{}'; its page structure may have changed",
         self.id.name(),
