@@ -1181,3 +1181,114 @@ fn pelispedia_generic_resolver_accepts_an_explicit_direct_mp4_url() {
   assert_eq!(media.language_pair.label(), "?/?");
   assert!(media.renditions.is_empty());
 }
+
+#[test]
+fn pelisplus_series_detail_fixture_preserves_season_episode_identity_and_order() {
+  let html = include_str!("../../fixtures/providers/pelisplus/mentalista-series.html");
+  let anime_url = "https://pelisplusshd.com/serie/5920/el-mentalista/";
+  let episodes = parse_pelisplus_episodes(html, anime_url);
+
+  assert_eq!(
+    episodes
+      .iter()
+      .map(|episode| episode.number.as_str())
+      .collect::<Vec<_>>(),
+    vec!["7001", "7002"]
+  );
+  assert_eq!(
+    episodes[0].url,
+    "https://pelisplusshd.com/serie/5920-7-1/el-mentalista/"
+  );
+  assert_eq!(
+    episodes[0].title.as_deref(),
+    Some("S7E1 — Tan solo el cielo azul (7x1)2014-11-30")
+  );
+  assert_eq!(
+    episodes[1].url,
+    "https://pelisplusshd.com/serie/5920-7-2/el-mentalista/"
+  );
+}
+
+#[test]
+fn pelisplus_movie_detail_fixture_exposes_watch_now_without_fabricating_media() {
+  let html = include_str!("../../fixtures/providers/pelisplus/batman-movie.html");
+  let detail_url = "https://pelisplusshd.com/peliculas/batman-el-ocaso-del-caballero-oscuro-primera-parte-A1560520Bx2/";
+  let document = Html::parse_document(html);
+  let movie_url = Url::parse(detail_url).unwrap();
+
+  assert!(ProviderId::PelisPlus.is_detail_path(&movie_url));
+  assert!(ProviderId::PelisPlus.is_movie_path(&movie_url));
+  assert_eq!(
+    provider_player_links(&document, html, ProviderId::PelisPlus),
+    vec!["/peliculas/batman-el-ocaso-del-caballero-oscuro-primera-parte-A1560520Bx2/ver/"]
+  );
+  assert!(extract_media_urls(html, detail_url).is_empty());
+}
+
+#[test]
+fn pelisplus_movie_iframe_is_extracted_as_a_player_link() {
+  let document = Html::parse_document(r#"<iframe src="/embed/player"></iframe>"#);
+
+  assert_eq!(
+    provider_player_links(&document, "", ProviderId::PelisPlus),
+    vec!["/embed/player"]
+  );
+}
+
+#[test]
+fn pelisplus_movie_media_resolver_follows_a_redirect_to_mp4() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+  use std::time::Duration;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let server = std::thread::spawn(move || {
+    let mut requested_paths = Vec::new();
+    for _ in 0..2 {
+      let (mut connection, _) = listener.accept().unwrap();
+      connection
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+      let mut request = Vec::new();
+      let mut buffer = [0_u8; 1024];
+      while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = connection.read(&mut buffer).unwrap();
+        if count == 0 {
+          break;
+        }
+        request.extend_from_slice(&buffer[..count]);
+      }
+      let path = String::from_utf8_lossy(&request)
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/")
+        .to_owned();
+      match path.as_str() {
+        "/redirect.mp4" => write!(
+          connection,
+          "HTTP/1.1 302 Found\r\nLocation: /media.mp4\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap(),
+        "/media.mp4" => write!(
+          connection,
+          "HTTP/1.1 206 Partial Content\r\nContent-Type: video/mp4\r\nContent-Range: bytes 0-0/1\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx"
+        )
+        .unwrap(),
+        _ => panic!("unexpected request path: {path}"),
+      }
+      requested_paths.push(path);
+    }
+    requested_paths
+  });
+
+  let redirect_url = format!("http://{address}/redirect.mp4");
+  let media = SiteStreamResolver::new(ProviderId::PelisPlus)
+    .resolve_media_url(&redirect_url, "https://pelisplusshd.com/", "best")
+    .unwrap();
+  let requested_paths = server.join().unwrap();
+
+  assert_eq!(requested_paths, vec!["/redirect.mp4", "/media.mp4"]);
+  assert_eq!(media.stream.url, redirect_url);
+}
