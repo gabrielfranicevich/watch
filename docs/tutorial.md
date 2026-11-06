@@ -45,7 +45,7 @@ See the dedicated [Android / Termux installation guide](android.md) for installi
 On Termux, Cargo may fail with `Text file busy (os error 26)` while executing a build script from its temporary install directory. The following command uses a temporary directory under `$HOME` and limits compilation to one job; this workaround was confirmed to work:
 
 ~~~sh
-mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch android-support --locked --force
+mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop --locked --force
 ~~~
 
 ## 3. Search and play
@@ -73,7 +73,7 @@ watch --subtitles es "Frieren"
 watch --audio Japanese --subtitles Spanish "Frieren"
 ~~~
 
-These filters do not select the active track in the media player, and sources with unknown metadata are excluded. The separate pre-playback track menus apply only to alternative renditions exposed by the selected HLS variant. See [provider support](providers.md) for source-specific language metadata and limitations.
+These filters do not select the active track in the media player, and sources with unknown metadata are excluded. The separate pre-playback track menus apply only to alternative renditions exposed by the selected HLS variant. On desktop, MPV-compatible players with MPV IPC also allow changing external tracks during playback; Android MPV-Android and Android VLC currently support selection before launch only. See [provider support](providers.md) for source-specific language metadata and limitations.
 
 Select a matching title, then choose an episode. The client resolves the stream, offers any available alternative HLS audio/subtitle tracks, and passes the selected URLs and referer to the configured player. External-player support varies by player build and provider.
 

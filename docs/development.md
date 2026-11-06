@@ -49,7 +49,7 @@ Playback and downloading delegate work to external programs. Test command-line a
 
 When a resolved HLS master playlist declares multiple URL-backed audio or subtitle renditions for the selected video variant, the CLI offers a separate selection menu for each available track type before playback. The provider default is kept as the first choice. Manifests without alternate renditions continue directly to playback. Renditions from groups not referenced by the chosen video variant are excluded.
 
-`--audio` and `--subtitles` remain catalog source filters; they do not pick a track. Track selection is a playback-time pre-launch choice. The selected URLs and language metadata are passed to MPV-compatible players and VLC desktop. The external player remains responsible for loading the rendition URLs; this does not guarantee support from every player build or streaming host. HLS subtitle playlists are not downloaded as standalone VTT files.
+`--audio` and `--subtitles` remain catalog source filters; they do not pick a track. Track selection is a playback-time pre-launch choice. The selected URLs and language metadata are passed to MPV-compatible players and VLC desktop. Desktop MPV-compatible players with MPV IPC support can also add or select external tracks during playback. Android MPV-Android receives stream options through its shared configuration, while Android VLC accepts external subtitles but has no documented separate-audio intent extra; neither Android integration currently supports runtime track switching. The external player remains responsible for loading rendition URLs; this does not guarantee support from every player build or streaming host. HLS subtitle playlists are not downloaded as standalone VTT files.
 
 ## Updater behavior
 

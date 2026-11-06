@@ -35,7 +35,7 @@ Install the executable from crates.io with Cargo:
 cargo install watch
 ```
 
-For the Android stabilization build, install directly from the `android-support` branch. On Termux, use this command to avoid Cargo's `Text file busy (os error 26)` temporary-build failure by using a directory under `$HOME` and a single build job:
+Install the current development build from the `develop` branch. On Termux, use a temporary directory under `$HOME` and a single build job to avoid Cargo's `Text file busy (os error 26)` temporary-build failure:
 
 ```sh
 mkdir -p "$HOME/.tmp" && TMPDIR="$HOME/.tmp" CARGO_BUILD_JOBS=1 cargo install --git https://github.com/gabrielfranicevich/watch --branch develop --locked --force
