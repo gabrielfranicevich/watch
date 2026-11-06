@@ -712,6 +712,12 @@ fn is_verification_page(body: &str) -> bool {
   .any(|marker| lower.contains(marker))
 }
 
+fn is_pelisplus_account_gate(body: &str) -> bool {
+  normalize_whitespace(body)
+    .to_ascii_lowercase()
+    .contains("debes registrar una cuenta gratis para continuar viendo")
+}
+
 fn parse_search_results(
   body: &str,
   base_url: &str,
@@ -1346,6 +1352,11 @@ impl SiteStreamResolver {
         "{} returned HTTP status {status} while resolving the stream",
         self.provider.name()
       )));
+    }
+    if self.provider == ProviderId::PelisPlus && is_pelisplus_account_gate(&body) {
+      return Err(StreamResolveError::InvalidData(
+        "PelisPlus requires a free account before it exposes the video player".into(),
+      ));
     }
 
     let document = Html::parse_document(&body);

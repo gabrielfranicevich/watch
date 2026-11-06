@@ -1292,3 +1292,41 @@ fn pelisplus_movie_media_resolver_follows_a_redirect_to_mp4() {
   assert_eq!(requested_paths, vec!["/redirect.mp4", "/media.mp4"]);
   assert_eq!(media.stream.url, redirect_url);
 }
+
+#[test]
+fn pelisplus_account_gate_is_reported_instead_of_missing_media() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let html = include_str!("../../fixtures/providers/pelisplus/watch-login-gate.html").to_owned();
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+      let count = connection.read(&mut buffer).unwrap();
+      if count == 0 {
+        break;
+      }
+      request.extend_from_slice(&buffer[..count]);
+    }
+    write!(
+      connection,
+      "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
+      html.len()
+    )
+    .unwrap();
+  });
+
+  let episode_url = format!("http://{address}/peliculas/movie/ver/");
+  let episode = Episode::new("1", Some("Movie".into()), episode_url);
+  let error = SiteStreamResolver::new(ProviderId::PelisPlus)
+    .resolve(&episode, false, "best")
+    .unwrap_err()
+    .to_string();
+  server.join().unwrap();
+
+  assert!(error.contains("requires a free account"), "{error}");
+}
