@@ -198,12 +198,22 @@ fn android_vlc_forwards_subtitles_but_reports_external_audio_as_unsupported() {
     .map(|argument| argument.to_string_lossy().into_owned())
     .collect();
 
-  assert!(args.windows(2).any(|pair| pair == ["-e", "subtitles_location"]));
+  assert!(
+    args
+      .windows(2)
+      .any(|pair| pair == ["-e", "subtitles_location"])
+  );
   assert!(args.contains(&"https://cdn.example/subtitles/es.vtt".to_owned()));
-  assert!(!args.iter().any(|argument| argument.contains("audio/ja.m3u8")));
+  assert!(
+    !args
+      .iter()
+      .any(|argument| argument.contains("audio/ja.m3u8"))
+  );
   assert_eq!(
     android_vlc_audio_warning(&audio_stream),
-    Some("watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied")
+    Some(
+      "watch: warning: VLC Android's external VIEW intent does not support a separate audio URL; the selected external audio track cannot be applied"
+    )
   );
   let no_audio_stream = stream();
   assert_eq!(android_vlc_audio_warning(&no_audio_stream), None);
@@ -473,16 +483,16 @@ fn android_mpv_config_reports_filesystem_errors() {
 }
 
 #[cfg(unix)]
+static NEXT_MPV_IPC_TEST_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(unix)]
 fn mpv_ipc_test_controller(
   requests: Vec<Value>,
 ) -> (MpvTrackController, std::thread::JoinHandle<Vec<Value>>) {
   let path = std::env::temp_dir().join(format!(
     "watch-mpv-ipc-test-{}-{}.sock",
     std::process::id(),
-    SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .unwrap()
-      .as_nanos()
+    NEXT_MPV_IPC_TEST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
   ));
   let listener = UnixListener::bind(&path).unwrap();
   let server = std::thread::spawn(move || {
@@ -572,7 +582,6 @@ fn runtime_track_switching_is_limited_to_players_with_mpv_ipc_support() {
   assert!(!Player::AndroidVlc.supports_runtime_track_switching());
 }
 
-
 #[test]
 fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
   let config_dir = std::env::temp_dir().join(format!(
@@ -585,8 +594,7 @@ fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
   ));
   std::fs::create_dir_all(&config_dir).unwrap();
 
-  let first_stream = stream()
-    .with_audio(Some("https://cdn.example/audio/ja.m3u8".into()));
+  let first_stream = stream().with_audio(Some("https://cdn.example/audio/ja.m3u8".into()));
   let first_subtitle = Subtitle::new(
     "https://cdn.example/subtitles/es.vtt",
     Some("Spanish".into()),
@@ -597,11 +605,8 @@ fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
   )
   .unwrap();
 
-  let first_args = Player::AndroidMpv.arguments(
-    &first_stream,
-    Some(&first_subtitle),
-    "First episode",
-  );
+  let first_args =
+    Player::AndroidMpv.arguments(&first_stream, Some(&first_subtitle), "First episode");
   let first_args: Vec<_> = first_args
     .iter()
     .map(|argument| argument.to_string_lossy().into_owned())
@@ -624,11 +629,7 @@ fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
     )
   );
 
-  let second_stream = Stream::new(
-    "https://cdn.example/next.mp4",
-    Some("720p".into()),
-    None,
-  );
+  let second_stream = Stream::new("https://cdn.example/next.mp4", Some("720p".into()), None);
   ensure_android_mpv_config(&config_dir, &android_mpv_config(&second_stream, None)).unwrap();
   let second_args = Player::AndroidMpv.arguments(&second_stream, None, "Second episode");
   let second_args: Vec<_> = second_args
@@ -661,7 +662,6 @@ fn android_mpv_handoff_keeps_intent_and_shared_config_in_sync_across_streams() {
 
   std::fs::remove_dir_all(config_dir).unwrap();
 }
-
 
 #[test]
 fn android_mpv_playback_preparation_fails_when_shared_config_cannot_be_written() {
