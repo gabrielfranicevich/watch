@@ -124,3 +124,69 @@ fn audio_and_subtitle_filters_are_applied_independently() {
   assert_eq!(combined.len(), 1);
   assert_eq!(combined[0].sources[0].provider, ProviderId::GoGoAnime);
 }
+
+#[test]
+fn grouped_search_results_keep_language_variants_separate_and_filter_sources() {
+  use crate::providers::catalog::group_results;
+
+  let sources = [
+    (ProviderId::GoGoAnime, "frieren-en"),
+    (ProviderId::AniWatch, "frieren-aniwatch"),
+    (ProviderId::TioAnime, "frieren-es"),
+    (ProviderId::JkAnime, "frieren-jk"),
+  ]
+  .into_iter()
+  .map(|(provider, id)| ProviderAnime {
+    provider,
+    anime: Anime::new(
+      id,
+      "Frieren: Beyond Journey's End",
+      format!("https://example.test/{id}"),
+    ),
+  })
+  .collect();
+
+  let grouped = group_results(sources);
+  assert_eq!(grouped.len(), 2);
+  assert_eq!(grouped[0].label, "(ja/en) Frieren: Beyond Journey's End");
+  assert_eq!(grouped[1].label, "(ja/es) Frieren: Beyond Journey's End");
+  assert_eq!(grouped[0].sources.len(), 2);
+  assert_eq!(grouped[1].sources.len(), 2);
+
+  let english = filter_anime_options(grouped.clone(), Some("ja"), Some("en"));
+  assert_eq!(english.len(), 1);
+  assert_eq!(english[0].sources.len(), 2);
+  assert!(english[0].sources.iter().all(|source| {
+    matches!(
+        source.provider,
+        ProviderId::GoGoAnime | ProviderId::AniWatch
+      )
+  }));
+
+  let spanish = filter_anime_options(grouped, Some("ja"), Some("es"));
+  assert_eq!(spanish.len(), 1);
+  assert_eq!(spanish[0].sources.len(), 2);
+  assert!(
+    spanish[0]
+      .sources
+      .iter()
+      .all(|source| { matches!(source.provider, ProviderId::TioAnime | ProviderId::JkAnime) })
+  );
+}
+
+#[test]
+fn combined_language_filters_remove_results_with_unknown_metadata() {
+  use crate::domain::language::LanguagePair;
+  use crate::providers::catalog::group_results;
+
+  let mut unknown = ProviderAnime {
+    provider: ProviderId::Gnula,
+    anime: Anime::new("unknown", "Unknown title", "https://example.test/unknown"),
+  };
+  unknown.anime.language_pair = Some(LanguagePair::new(None, None));
+
+  let grouped = group_results(vec![unknown]);
+  assert_eq!(grouped.len(), 1);
+  assert_eq!(grouped[0].label, "(?/?) Unknown title");
+  assert!(filter_anime_options(grouped, None, Some("en")).is_empty());
+}

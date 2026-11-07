@@ -118,7 +118,7 @@ struct TitleBucket {
   groups: Vec<(LanguagePair, Vec<ProviderAnime>)>,
 }
 
-fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
+pub(crate) fn group_results(sources: Vec<ProviderAnime>) -> Vec<AnimeOption> {
   let mut buckets: Vec<TitleBucket> = Vec::new();
 
   for mut source in sources {
