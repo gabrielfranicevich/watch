@@ -1,0 +1,5 @@
+watch (0.1.0-1) unstable; urgency=medium
+
+  * Initial Debian package for the Rust watch client.
+
+ -- Watch contributors <watch-maintainers@users.noreply.github.com>  Sat, 07 Nov 2026 00:00:00 -0300

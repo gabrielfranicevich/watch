@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: watch
+Source: https://github.com/gabrielfranicevich/watch
+
+Files: *
+Copyright: 2026 Watch contributors
+License: GPL-3.0-only
+ This package is licensed under the GNU General Public License version 3 only.
+ The complete license text is provided in the upstream LICENSE file.

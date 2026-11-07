@@ -1,0 +1,2 @@
+version=4
+https://github.com/gabrielfranicevich/watch/tags .*/v?([0-9.]+)\.tar\.gz

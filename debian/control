@@ -1,0 +1,18 @@
+Source: watch
+Section: video
+Priority: optional
+Maintainer: Watch contributors <watch-maintainers@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), build-essential, cargo, rustc
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/gabrielfranicevich/watch
+
+Package: watch-anime
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: mpv | vlc, ffmpeg
+Suggests: yt-dlp, syncplay, fzf
+Description: terminal client to browse, stream, and download anime
+ watch searches enabled anime providers, groups matching titles by
+ audio/subtitle language, and delegates playback or downloading to
+ external media tools. It does not host media.
