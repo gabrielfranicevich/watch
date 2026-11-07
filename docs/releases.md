@@ -37,7 +37,7 @@ Download the archive matching the operating system and architecture from the Git
 
 ### Homebrew
 
-After the first matching version tag has been published, install the formula from this repository's tap:
+Install the formula from this repository's tap:
 
 ~~~sh
 brew install gabrielfranicevich/watch/watch

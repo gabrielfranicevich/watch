@@ -17,10 +17,11 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [ ] Define and test the Android behavior of `--here`, which currently works only on desktop platforms.
 - [x] Introduce a reusable library-level application service API for search, episode retrieval, stream resolution, and history, with contract tests for input validation and history updates.
 - [x] Route CLI search, episode retrieval, and stream resolution through the shared application services; history persistence retains the CLI-compatible path.
-- [ ] Add a JNI/UniFFI proof of concept and validate locked Android-target dependency resolution.
-- [ ] Build a Kotlin/Jetpack Compose app shell that calls the shared Rust services.
-- [ ] Add native Android playback with stream headers, subtitles, and separate audio where supported.
-- [ ] Add Android app and bridge CI, then validate installation and playback on a physical device.
+- [x] Add a JNI bridge and validate locked Android-target dependency resolution.
+- [x] Build a Kotlin/Jetpack Compose app shell that calls the shared Rust services.
+- [x] Add native Android playback with stream headers, subtitles, and separate audio where supported.
+- [x] Add Android app and bridge CI with emulator instrumentation coverage.
+- [ ] Complete native playback acceptance on physical Android devices; emulator instrumentation does not validate live provider streams or physical-device media compatibility.
 
 ## Completed development milestones
 
@@ -39,13 +40,17 @@ The Rust CI matrix checks Linux, macOS, and Windows with formatting, compilation
 - [x] Add catalog integrations for Gnula, PelisPedia, PelisPlus, HDToday, and Pelis7 with fixture-based parser tests and source-specific limitations.
 - [x] Add independent `--audio` and `--subtitles` catalog filters, including tests for combined matching and unknown metadata.
 - [x] Document language filtering and derive default HLS audio/subtitle metadata through the shared rendition parser.
+- [x] Add deterministic end-to-end coverage for catalog grouping, language variants, and source filters.
+- [x] Cover player startup, subtitle HTTP, and history persistence failure paths.
+- [x] Build release archives for Linux x86_64/ARM64, macOS Intel/Apple Silicon, and Windows x86_64 through GitHub Actions.
+- [x] Add Homebrew, Debian, and RPM package definitions and document release channels.
 
 ## Remaining work
 
 - Add runtime track switching after playback starts and extend language metadata extraction to non-HLS manifests. Current CLI track selection occurs before the player launches and only includes URL-backed renditions declared by HLS playlists.
 - Verify Pelis7's live routes and add a site-specific episode parser only after its current page structure is observable.
-- Expand acceptance tests for error paths and user-visible workflows without depending on the live provider or launching external media tools.
-- Publish prebuilt binaries and update third-party package definitions only when release automation and platform validation are ready.
+- Extend failure-path coverage to additional downloader fallback and native Android device workflows without depending on live providers.
+- Publish the first tagged release from `main`, then validate the Homebrew formula and Linux package recipes against that release.
 - Keep the README, tutorial, man page, and CLI help synchronized as options change.
 
 ## Validation

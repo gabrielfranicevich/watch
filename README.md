@@ -8,7 +8,7 @@ Search anime, select episodes, and stream or download them from your terminal.
 
 watch searches anime, movie, and TV catalogs across enabled third-party providers, groups duplicate titles by audio/subtitle language pair, and hands resolved media or downloads to tools installed on your machine. It does not host video files.
 
-> **Project status:** `develop` is the active development branch; `main` remains the stable installation target. Prebuilt binaries and updated third-party packages are not published yet.
+> **Project status:** `develop` is the active development branch; `main` remains the stable installation target. The cross-platform release workflow and package recipes are ready; no tagged binary release has been published yet.
 
 Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). This project builds on that original work; credit for the original project belongs to its author and contributors.
 
@@ -17,6 +17,7 @@ Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). 
 
 - [Why watch?](#why-watch)
 - [Quick start](#quick-start)
+- [Release channels and platforms](docs/releases.md)
 - [Examples](#examples)
 - [Interactive selection](#interactive-selection)
 - [What it supports](#what-it-supports)
@@ -31,18 +32,14 @@ Watch is a fork of [pystardust/ani-cli](https://github.com/pystardust/ani-cli). 
 
 ## Quick start
 
-Install stable Rust 1.85 or newer and Cargo, then install the published CLI and search for a title:
-
-~~~sh
-cargo install watch
-watch "Frieren"
-~~~
-
-If the package is not available from crates.io, install the main branch directly:
+Install stable Rust 1.85 or newer and Cargo, then install the stable branch and search for a title:
 
 ~~~sh
 cargo install --locked --git https://github.com/gabrielfranicevich/watch --branch main
+watch "Frieren"
 ~~~
+
+Prebuilt binaries, platform support, and package installation instructions are documented in [release channels and supported platforms](docs/releases.md).
 
 Choose a result and an episode from the interactive menus. Playback requires a supported media player, such as MPV or VLC, installed and available on `PATH`. On Windows, install the player in the same environment where you run watch. See the [tutorial](docs/tutorial.md) for setup and troubleshooting.
 
@@ -169,6 +166,7 @@ Install players and command-line tools with your operating system's package mana
 
 ## Documentation and support
 
+- [Release channels and supported platforms](docs/releases.md)
 - [Android / Termux installation guide](docs/android.md)
 - [Native Android application](docs/native-android.md)
 - [Step-by-step tutorial](docs/tutorial.md)
