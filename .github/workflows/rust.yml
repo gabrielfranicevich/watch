@@ -78,7 +78,7 @@ jobs:
       - name: Install Rust target
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android x86_64-linux-android
 
       - name: Configure Android NDK compiler
         shell: bash
@@ -90,3 +90,80 @@ jobs:
 
       - name: Check Android target
         run: cargo check --locked --all-targets --target aarch64-linux-android
+
+  android-app:
+    name: Android app and Rust JNI bridge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: sdkmanager "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - name: Install Rust and Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android x86_64-linux-android
+
+      - name: Configure Android NDK
+        shell: bash
+        run: |
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CC_x86_64_linux_android=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Test Rust bridge and application services
+        run: cargo test --locked --all-targets
+
+      - name: Build Android application and run JVM tests
+        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest
+
+      - name: Run Android instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          cores: 2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            adb wait-for-device
+            adb shell getprop sys.boot_completed
+            adb logcat -c
+            set +e
+            gradle --no-daemon :app:connectedDebugAndroidTest
+            test_status=$?
+            adb logcat -d -v threadtime > "$GITHUB_WORKSPACE/android-logcat.txt"
+            adb shell dumpsys activity processes > "$GITHUB_WORKSPACE/android-processes.txt" || true
+            exit "$test_status"
+
+      - name: Upload Android instrumentation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-instrumentation-diagnostics
+          path: |
+            android-logcat.txt
+            android-processes.txt
+            app/build/reports/androidTests/connected/debug/
+            app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
+          retention-days: 7

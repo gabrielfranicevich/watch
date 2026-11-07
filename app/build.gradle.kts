@@ -7,6 +7,7 @@ plugins {
 android {
   namespace = "com.gabrielfranicevich.watch"
   compileSdk = 35
+  ndkVersion = "27.2.12479018"
 
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -74,10 +75,11 @@ val rustLinker = providers.environmentVariable("ANDROID_NDK_HOME")
   .map { "$it/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" }
 
 tasks.register<Exec>("buildRustAndroid") {
-  workingDir = rootProject.projectDir.parentFile
+  workingDir = rootProject.projectDir
   commandLine("cargo", "build", "--locked", "--release", "--lib", "--target", rustTarget)
   environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", rustLinker.get())
   environment("CC_aarch64_linux_android", rustLinker.get())
+  environment("AR_aarch64_linux_android", rustLinker.map { it.substringBeforeLast("/") + "/llvm-ar" }.get())
 }
 
 tasks.configureEach {
