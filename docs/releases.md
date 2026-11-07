@@ -4,36 +4,54 @@
 
 | Channel | Source | Distribution |
 | --- | --- | --- |
-| Stable | Version tags on `main`, named `vMAJOR.MINOR.PATCH` | GitHub Releases with platform archives and SHA-256 checksums |
-| Development | `develop` | Source installation only; commits are not stable release artifacts |
+| Stable | Version tags on `main`, named `vMAJOR.MINOR.PATCH` | GitHub Releases with platform archives, Android APK, and SHA-256 checksums |
+| Development | Pushes to `develop` | GitHub Actions artifacts for 14 days |
+| Pull requests | Pull requests targeting `main` or `develop` | GitHub Actions artifacts for 14 days |
 
-The release workflow validates that the tag version matches the Cargo package version. Pushes to `main` and `develop`, pull requests targeting either branch, and tag pushes build all supported release targets and store the archives as CI artifacts. A tag push additionally publishes the resulting archives to a GitHub Release. Manually dispatching the workflow builds and stores CI artifacts but does not publish a release.
+The release workflow builds the desktop targets and native Android application on pushes to `main` and `develop`, pull requests targeting either branch, tag pushes, and manual dispatches. The resulting archives and APK are available from the corresponding workflow run for 14 days. A tag push additionally publishes the desktop archives and Android APK to a GitHub Release, together with `SHA256SUMS`.
 
-No tagged binary release is published by the current development branch. The first stable release must be tagged from `main`.
+The release workflow validates that the tag version matches the Cargo package version. A stable release should be tagged from `main`. Manually dispatching the workflow builds and stores CI artifacts but does not publish a release.
+
+GitHub Packages is not used for these downloads: its registries require supported package formats such as npm, Maven, NuGet, RubyGems, or Docker images. The CLI archives and APK are ordinary binary release assets, so GitHub Actions artifacts and GitHub Releases are the appropriate distribution channels.
 
 ## Release binaries
 
-| Operating system | Architecture | Rust target | Archive |
+| Operating system | Architecture | Target | Archive |
 | --- | --- | --- | --- |
 | Linux (glibc 2.39+) | x86_64 | `x86_64-unknown-linux-gnu` | `.tar.gz` |
 | Linux (glibc 2.39+) | ARM64 | `aarch64-unknown-linux-gnu` | `.tar.gz` |
 | macOS | Intel | `x86_64-apple-darwin` | `.tar.gz` |
 | macOS | Apple Silicon | `aarch64-apple-darwin` | `.tar.gz` |
 | Windows | x86_64 | `x86_64-pc-windows-msvc` | `.zip` |
+| Android | ARM64 and x86_64 | Rust JNI bridge + Kotlin application | Universal debug `.apk` |
 
-Each archive contains the `watch` executable (or `watch.exe`), the man page where applicable, the README, and the license. The release also contains `SHA256SUMS`; verify an archive before extracting it:
+Each desktop archive contains the `watch` executable (or `watch.exe`), the man page, the README, and the license. The Android APK contains native Rust/JNI libraries for ARM64 physical devices and x86_64 emulators. It targets Android API 26 or newer.
+
+Desktop release archives are built on Ubuntu 24.04, macOS, and Windows. The Linux binaries require glibc 2.39 or newer; they are not musl-static builds. Windows ARM64, 32-bit targets, and other Unix platforms are not currently release targets.
+
+The Android workflow currently publishes a debug-signed APK for CI and manual testing. Each GitHub-hosted runner generates its own debug signing key, so a later APK from another workflow run may not install as an in-place update over an earlier build. Uninstall the previous debug build before installing a replacement. A stable Android distribution channel requires a dedicated release keystore configured as repository Actions secrets; that signing material is intentionally not committed to the repository.
+
+The release contains `SHA256SUMS`; verify a downloaded file before using it:
 
 ~~~sh
 sha256sum -c SHA256SUMS
 ~~~
-
-The Linux release binaries are built on Ubuntu 24.04 and require glibc 2.39 or newer; they are not musl-static builds. Windows ARM64, 32-bit targets, and other Unix platforms are not currently release targets.
 
 ## Installation
 
 ### Linux and Windows archives
 
 Download the archive matching the operating system and architecture from the GitHub Releases page. Extract it and place the executable in a directory on `PATH`. On Linux, the executable is named `watch`; the system process-monitoring utility may use the same name, so ensure the intended binary appears first on `PATH`. On Windows, add the directory containing `watch.exe` to `PATH`.
+
+### Android APK
+
+Download `watch-<version>-android-universal-debug.apk` from the GitHub Release or the `watch-android` artifact from the workflow run. Install it with Android's package installer or:
+
+~~~sh
+adb install watch-<version>-android-universal-debug.apk
+~~~
+
+The debug APK is intended for development and testing. See the [native Android application guide](native-android.md) for architecture, prerequisites, and physical-device acceptance coverage.
 
 ### Homebrew
 
@@ -69,9 +87,10 @@ Like the Debian package, the RPM installs the executable as `watch-anime` to avo
 
 Android is supported separately from the desktop release matrix:
 
-- The Rust CLI is cross-checked for `aarch64-linux-android` in CI, but an Android CLI release archive is not currently published.
-- The native Android application is built and instrumented in CI. Emulator tests validate app startup and the packaged JNI/Rust bridge; they do not establish physical-device playback compatibility.
-- Termux users should follow the [Android / Termux guide](android.md). Install from source using the supported Rust/Termux toolchain.
+- The Rust CLI is cross-checked for `aarch64-linux-android` in CI, but a standalone Android CLI release archive is not currently published.
+- The native Android application is built for ARM64 physical devices and x86_64 emulators. CI validates the build; the separate Rust workflow runs emulator instrumentation tests.
+- The debug APK is a testing build and does not have a stable release signing key. It may need to be uninstalled before replacing it with an APK from another workflow run.
+- Termux users should follow the [Android / Termux guide](android.md). Install the CLI from source using the supported Rust/Termux toolchain.
 
 ## Runtime requirements and limitations
 
