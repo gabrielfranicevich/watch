@@ -158,9 +158,9 @@ fn grouped_search_results_keep_language_variants_separate_and_filter_sources() {
   assert_eq!(english[0].sources.len(), 2);
   assert!(english[0].sources.iter().all(|source| {
     matches!(
-        source.provider,
-        ProviderId::GoGoAnime | ProviderId::AniWatch
-      )
+      source.provider,
+      ProviderId::GoGoAnime | ProviderId::AniWatch
+    )
   }));
 
   let spanish = filter_anime_options(grouped, Some("ja"), Some("es"));

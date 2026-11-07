@@ -189,3 +189,41 @@ fn media_downloader_uses_yt_dlp_only_for_single_streams() {
   assert!(MediaDownloader::should_try_yt_dlp(&video_only));
   assert!(!MediaDownloader::should_try_yt_dlp(&separate_audio));
 }
+
+#[test]
+fn subtitle_download_rejects_http_errors_without_creating_a_file() {
+  use std::io::{Read, Write};
+  use std::net::TcpListener;
+  use std::time::{SystemTime, UNIX_EPOCH};
+
+  let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+  let address = listener.local_addr().unwrap();
+  let server = std::thread::spawn(move || {
+    let (mut connection, _) = listener.accept().unwrap();
+    let mut request = [0_u8; 2048];
+    let _ = connection.read(&mut request).unwrap();
+    connection
+      .write_all(
+        b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+      )
+      .unwrap();
+  });
+
+  let nonce = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap()
+    .as_nanos();
+  let destination = std::env::temp_dir().join(format!(
+    "watch-subtitle-failure-{}-{nonce}.vtt",
+    std::process::id()
+  ));
+  let result = SubtitleDownloader::download(
+    &format!("http://{address}/subtitle.vtt"),
+    None,
+    &destination,
+  );
+  server.join().unwrap();
+
+  assert!(result.is_err());
+  assert!(!destination.exists());
+}
