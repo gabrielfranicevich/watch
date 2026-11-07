@@ -5,8 +5,8 @@ on:
       - main
       - develop
       - android-support
-    paths:
-      - "**.md"
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main

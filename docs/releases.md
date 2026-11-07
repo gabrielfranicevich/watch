@@ -5,12 +5,12 @@
 | Channel | Source | Distribution |
 | --- | --- | --- |
 | Stable | Version tags on `main`, named `vMAJOR.MINOR.PATCH` | GitHub Releases with platform archives, Android APK, and SHA-256 checksums |
-| Development | Pushes to `develop` | GitHub Actions artifacts for 14 days |
+| Development | Pushes to `develop` | Rolling GitHub pre-release (`develop`) plus Actions artifacts for 14 days |
 | Pull requests | Pull requests targeting `main` or `develop` | GitHub Actions artifacts for 14 days |
 
-The release workflow builds the desktop targets and native Android application on pushes to `main` and `develop`, pull requests targeting either branch, tag pushes, and manual dispatches. The resulting archives and APK are available from the corresponding workflow run for 14 days. A tag push additionally publishes the desktop archives and Android APK to a GitHub Release, together with `SHA256SUMS`.
+The release workflow builds the desktop targets and native Android application on pushes to `main` and `develop`, pull requests targeting either branch, tag pushes, and manual dispatches. The resulting archives and APK are available from the corresponding workflow run for 14 days. For pushes to `develop`, a rolling GitHub pre-release named **Watch Development** is updated after the Rust and Markdown workflows and all release build jobs succeed. For a `vMAJOR.MINOR.PATCH` tag, the workflow publishes a stable GitHub Release after those same checks pass, together with `SHA256SUMS`.
 
-The release workflow validates that the tag version matches the Cargo package version. A stable release should be tagged from `main`. Manually dispatching the workflow builds and stores CI artifacts but does not publish a release.
+The release workflow waits for the Rust quality and Markdown workflows for the exact same commit SHA. If either workflow fails, is cancelled, or does not start within the timeout, publication is skipped. The release is also gated on every platform build and the Android APK build succeeding. A stable release tag must match the Cargo package version and should be created from `main`. Pull requests and manual dispatches build and store CI artifacts but do not publish a release.
 
 GitHub Packages is not used for these downloads: its registries require supported package formats such as npm, Maven, NuGet, RubyGems, or Docker images. The CLI archives and APK are ordinary binary release assets, so GitHub Actions artifacts and GitHub Releases are the appropriate distribution channels.
 
@@ -41,11 +41,11 @@ sha256sum -c SHA256SUMS
 
 ### Linux and Windows archives
 
-Download the archive matching the operating system and architecture from the GitHub Releases page. Extract it and place the executable in a directory on `PATH`. On Linux, the executable is named `watch`; the system process-monitoring utility may use the same name, so ensure the intended binary appears first on `PATH`. On Windows, add the directory containing `watch.exe` to `PATH`.
+Download the archive matching the operating system and architecture from the [GitHub Releases page](https://github.com/gabrielfranicevich/watch/releases). Development builds are listed under the **Watch Development** pre-release. Extract it and place the executable in a directory on `PATH`. On Linux, the executable is named `watch`; the system process-monitoring utility may use the same name, so ensure the intended binary appears first on `PATH`. On Windows, add the directory containing `watch.exe` to `PATH`.
 
 ### Android APK
 
-Download `watch-<version>-android-universal-debug.apk` from the GitHub Release or the `watch-android` artifact from the workflow run. Install it with Android's package installer or:
+Download `watch-<version>-android-universal-debug.apk` from the [GitHub Releases page](https://github.com/gabrielfranicevich/watch/releases) or the `watch-android` artifact from the workflow run. Install it with Android's package installer or:
 
 ~~~sh
 adb install watch-<version>-android-universal-debug.apk
