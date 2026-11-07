@@ -24,9 +24,10 @@ android {
     targetSdk = 35
     versionCode = 1
     versionName = "0.1.0"
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     ndk {
-      abiFilters += listOf("arm64-v8a")
+      abiFilters += listOf("arm64-v8a", "x86_64")
     }
 
     externalNativeBuild {
@@ -65,21 +66,42 @@ dependencies {
   implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
   implementation("androidx.media3:media3-ui:1.5.1")
   debugImplementation("androidx.compose.ui:ui-tooling")
+  androidTestImplementation("androidx.test.ext:junit:1.2.1")
+  androidTestImplementation("androidx.test:runner:1.6.2")
+  androidTestImplementation("androidx.test:core:1.6.1")
 }
 
 val ndkVersionForRust = "27.2.12479018"
-val rustTarget = "aarch64-linux-android"
-val rustLinker = providers.environmentVariable("ANDROID_NDK_HOME")
+val rustNdkRoot = providers.environmentVariable("ANDROID_NDK_HOME")
   .orElse(providers.environmentVariable("ANDROID_NDK_ROOT"))
   .orElse(providers.environmentVariable("ANDROID_HOME").map { "$it/ndk/$ndkVersionForRust" })
-  .map { "$it/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" }
+val hostTag = when {
+  System.getProperty("os.name").startsWith("Windows") -> "windows-x86_64"
+  System.getProperty("os.name").startsWith("Mac") -> "darwin-x86_64"
+  else -> "linux-x86_64"
+}
+val rustNdkBin = rustNdkRoot.map {
+  "$it/toolchains/llvm/prebuilt/$hostTag/bin"
+}
 
-tasks.register<Exec>("buildRustAndroid") {
+tasks.register<Exec>("buildRustAndroidArm64") {
   workingDir = rootProject.projectDir
-  commandLine("cargo", "build", "--locked", "--release", "--lib", "--target", rustTarget)
-  environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", rustLinker.get())
-  environment("CC_aarch64_linux_android", rustLinker.get())
-  environment("AR_aarch64_linux_android", rustLinker.map { it.substringBeforeLast("/") + "/llvm-ar" }.get())
+  commandLine("cargo", "build", "--locked", "--release", "--lib", "--target", "aarch64-linux-android")
+  environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", rustNdkBin.map { "$it/aarch64-linux-android24-clang" }.get())
+  environment("CC_aarch64_linux_android", rustNdkBin.map { "$it/aarch64-linux-android24-clang" }.get())
+  environment("AR_aarch64_linux_android", rustNdkBin.map { "$it/llvm-ar" }.get())
+}
+
+tasks.register<Exec>("buildRustAndroidX64") {
+  workingDir = rootProject.projectDir
+  commandLine("cargo", "build", "--locked", "--release", "--lib", "--target", "x86_64-linux-android")
+  environment("CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER", rustNdkBin.map { "$it/x86_64-linux-android24-clang" }.get())
+  environment("CC_x86_64_linux_android", rustNdkBin.map { "$it/x86_64-linux-android24-clang" }.get())
+  environment("AR_x86_64_linux_android", rustNdkBin.map { "$it/llvm-ar" }.get())
+}
+
+tasks.register("buildRustAndroid") {
+  dependsOn("buildRustAndroidArm64", "buildRustAndroidX64")
 }
 
 tasks.configureEach {

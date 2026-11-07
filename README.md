@@ -170,6 +170,7 @@ Install players and command-line tools with your operating system's package mana
 ## Documentation and support
 
 - [Android / Termux installation guide](docs/android.md)
+- [Native Android application](docs/native-android.md)
 - [Step-by-step tutorial](docs/tutorial.md)
 - [Provider support and language metadata](docs/providers.md)
 - [Development guide](docs/development.md)

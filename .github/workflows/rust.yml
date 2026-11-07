@@ -144,16 +144,7 @@ jobs:
           arch: x86_64
           cores: 2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            adb wait-for-device
-            adb shell getprop sys.boot_completed
-            adb logcat -c
-            set +e
-            gradle --no-daemon :app:connectedDebugAndroidTest
-            test_status=$?
-            adb logcat -d -v threadtime > "$GITHUB_WORKSPACE/android-logcat.txt"
-            adb shell dumpsys activity processes > "$GITHUB_WORKSPACE/android-processes.txt" || true
-            exit "$test_status"
+          script: bash .github/scripts/android-instrumentation.sh
 
       - name: Upload Android instrumentation diagnostics
         if: always()

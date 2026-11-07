@@ -124,6 +124,10 @@ Keep the `include` line in MPV-Android’s `mpv.conf`. `watch` will add it when 
 `--inline` and its alias `--here` are not supported in Termux: detecting MPV output drivers does not prove that the terminal can render their graphics protocols. Omit these options to use Android external playback. Inline playback remains a desktop feature and depends on the terminal and MPV build.
 
 
+## Native Android application
+
+The Kotlin/Jetpack Compose application and Rust JNI bridge are documented in the [native Android guide](native-android.md). The app is a separate frontend; the Termux CLI workflow below remains supported.
+
 ## 7. Compatibility and known limitations
 
 The Android CI job cross-compiles the Rust CLI for `aarch64-linux-android`; it does not run MPV-Android, validate Android intents on a device, or prove that a provider's stream can be played. There is not yet a maintained device/version compatibility matrix. Record the Android version, device model, Termux version, MPV-Android release, player choice, provider, and stream type when reporting a playback result.

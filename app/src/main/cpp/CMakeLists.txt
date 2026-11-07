@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(watch_jni LANGUAGES CXX)
 
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+  set(RUST_TARGET "aarch64-linux-android")
+elseif(ANDROID_ABI STREQUAL "x86_64")
+  set(RUST_TARGET "x86_64-linux-android")
+else()
+  message(FATAL_ERROR "Unsupported Android ABI: ${ANDROID_ABI}")
+endif()
+
 add_library(watch_rust STATIC IMPORTED)
 set_target_properties(watch_rust PROPERTIES
-  IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../../../../target/aarch64-linux-android/release/libani_cli.a"
+  IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../../../../target/${RUST_TARGET}/release/libani_cli.a"
 )
 
 add_library(watch_jni SHARED watch_jni.cpp)
